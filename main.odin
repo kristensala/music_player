@@ -97,7 +97,7 @@ main :: proc() {
 
     rl.SetTargetFPS(60)
 
-    font := rl.LoadFontEx("res/IBMPlexMono-Regular.ttf", 20, nil, 250)
+    font := rl.LoadFontEx("res/IBMPlexMono-Regular.ttf", 30, nil, 250)
     defer rl.UnloadFont(font)
 
     app_state := dummy_data()
@@ -136,12 +136,17 @@ main :: proc() {
 draw :: proc(app_state: ^App_State) {
     rl.DrawTextEx(app_state.font, "test", {10, 10}, f32(app_state.font.baseSize), 1, rl.BLACK)
 
+    foo := button(app_state.font ,"this is a button", {200, 200})
+    if foo {
+        fmt.println("custom button pressed: ", foo)
+    }
+
     // Progress bar
     {
-        cursor: f32
+        cursor: f32 = 0
         ma.sound_get_cursor_in_seconds(app_state.ma_sound, &cursor)
 
-        length: f32
+        length: f32 = 1
         ma.sound_get_length_in_seconds(app_state.ma_sound, &length)
 
         progress_bar_rect := rl.Rectangle{
@@ -150,7 +155,7 @@ draw :: proc(app_state: ^App_State) {
             width = f32(rl.GetScreenWidth() - 100),
             height = 10
         }
-        rl.GuiProgressBar(progress_bar_rect,"", "", &cursor, 0, length)
+        rl.GuiProgressBar(progress_bar_rect, "cursor", "length", &cursor, 0, length)
     }
 
     // play/pause button
@@ -164,12 +169,16 @@ draw :: proc(app_state: ^App_State) {
         pressed := rl.GuiButton(play_btn, "Play")
         if pressed {
             if app_state.audio_state == .Playing {
-                ma.sound_stop(app_state.ma_sound)
-                app_state.audio_state = .Paused
+                stop_res := ma.sound_stop(app_state.ma_sound)
+                if stop_res == .SUCCESS {
+                    app_state.audio_state = .Paused
+                }
             } else {
                 if app_state.ma_sound != nil {
                     sound_start_result := ma.sound_start(app_state.ma_sound)
-                    app_state.audio_state = .Playing
+                    if sound_start_result == .SUCCESS {
+                        app_state.audio_state = .Playing
+                    }
                 } else {
                     app_state.ma_sound = new(ma.sound)
 
@@ -178,8 +187,9 @@ draw :: proc(app_state: ^App_State) {
                         fmt.println("Could not init sound: ", res)
                     } else {
                         sound_start_result := ma.sound_start(app_state.ma_sound)
-                        app_state.audio_state = .Playing
-                        fmt.println("sound start res: ", sound_start_result)
+                        if sound_start_result == .SUCCESS {
+                            app_state.audio_state = .Playing
+                        }
                     }
                 }
             }
