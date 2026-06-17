@@ -2,6 +2,12 @@ package main
 
 import rl "vendor:raylib"
 
+albums_grid :: proc() {
+}
+
+tracks_list :: proc() {
+}
+
 progress_bar :: proc(value: f32, max_value: f32, pos: [2]f32, w, h: f32) {
     bounds := rl.Rectangle{
         x = pos.x,
@@ -19,7 +25,7 @@ progress_bar :: proc(value: f32, max_value: f32, pos: [2]f32, w, h: f32) {
             width = progress,
             height = h
         }
-        rl.DrawRectangleRounded(progress_rect, roundness, 0, rl.PURPLE)
+        rl.DrawRectangleRec(progress_rect, rl.PURPLE)
     }
 
     rl.DrawRectangleRoundedLinesEx(

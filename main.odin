@@ -29,10 +29,10 @@ AudioState :: enum {
 // Use DeaDBeef as an example
 Playlist :: struct {
     title: string,
-    songs: [dynamic]Song
+    tracks: [dynamic]Track
 }
 
-Song :: struct {
+Track :: struct {
     title: string,
     artist: string,
     duration_seconds: i8,
@@ -45,7 +45,7 @@ Album :: struct {
     title: string,
     artist: string,
     cover_art: string,
-    songs: [dynamic]Song,
+    tracks: [dynamic]Track,
 
     rect: rl.Rectangle
 }
@@ -58,33 +58,33 @@ dummy_data :: proc() -> ^App_State {
         title = "Keep It Quiet",
         artist = "Greyhaven",
     }
-    song_one := Song{
+    song_one := Track{
         title = "Burn a Miracle",
         artist = "Greyhaven",
     }
-    song_two := Song{
+    song_two := Track{
         title = "Cemetery Sun",
         artist = "Greyhaven",
     }
 
-    append(&album_one.songs, song_one)
-    append(&album_one.songs, song_two)
+    append(&album_one.tracks, song_one)
+    append(&album_one.tracks, song_two)
     append(&app_state.albums, album_one)
 
     album_two := Album{
         title = "Keep It Quiet",
         artist = "Greyhaven",
     }
-    s2 := Song{
+    s2 := Track{
         title = "Burn a Miracle",
         artist = "Greyhaven",
     }
-    s3 := Song{
+    s3 := Track{
         title = "Cemetery Sun",
         artist = "Greyhaven",
     }
-    append(&album_two.songs, s2)
-    append(&album_two.songs, s3)
+    append(&album_two.tracks, s2)
+    append(&album_two.tracks, s3)
     append(&app_state.albums, album_two)
 
     return app_state
