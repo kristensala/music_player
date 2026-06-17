@@ -5,8 +5,10 @@ import rl "vendor:raylib"
 import "core:os"
 import ma "vendor:miniaudio"
 
+GUI_PADDING :: 50
+
 App_State :: struct {
-    font: rl.Font,
+    font: map[i32]rl.Font,
     music_dir: string,
     albums: [dynamic]Album,
     playlists: [dynamic]Playlist,
@@ -97,11 +99,21 @@ main :: proc() {
 
     rl.SetTargetFPS(60)
 
-    font := rl.LoadFontEx("res/IBMPlexMono-Regular.ttf", 30, nil, 250)
-    defer rl.UnloadFont(font)
+    font_20 := rl.LoadFontEx("res/IBMPlexMono-Regular.ttf", 20, nil, 0)
+    defer rl.UnloadFont(font_20)
+
+    font_30 := rl.LoadFontEx("res/IBMPlexMono-Regular.ttf", 30, nil, 0)
+    defer rl.UnloadFont(font_30)
+
+    fonts := make(map[i32]rl.Font)
+    defer delete(fonts)
+
+    fonts[20] = font_20
+    fonts[30] = font_30
+
 
     app_state := dummy_data()
-    app_state.font = font
+    app_state.font = fonts
     app_state.ma_sound = nil
     app_state.audio_state = .Stopped
 
@@ -112,7 +124,6 @@ main :: proc() {
         return
     }
     defer ma.engine_uninit(&app_state.ma_engine)
-
 
     for !rl.WindowShouldClose() {
         rl.BeginDrawing()
@@ -134,9 +145,9 @@ main :: proc() {
 
 @private
 draw :: proc(app_state: ^App_State) {
-    rl.DrawTextEx(app_state.font, "test", {10, 10}, f32(app_state.font.baseSize), 1, rl.BLACK)
+    rl.DrawTextEx(app_state.font[20], "test", {10, 10}, f32(app_state.font[20].baseSize), 1, rl.BLACK)
 
-    foo := button(app_state.font ,"this is a button", {200, 200})
+    foo := button(app_state.font[30] ,"this is a button", {200, 200})
     if foo {
         fmt.println("custom button pressed: ", foo)
     }
@@ -149,13 +160,12 @@ draw :: proc(app_state: ^App_State) {
         length: f32 = 1
         ma.sound_get_length_in_seconds(app_state.ma_sound, &length)
 
-        progress_bar_rect := rl.Rectangle{
-            x = 50,
-            y = f32(rl.GetScreenHeight() - 50),
-            width = f32(rl.GetScreenWidth() - 100),
-            height = 10
-        }
-        rl.GuiProgressBar(progress_bar_rect, "cursor", "length", &cursor, 0, length)
+        progress_bar(
+            cursor,
+            length,
+            {GUI_PADDING, f32(rl.GetScreenHeight() - GUI_PADDING)},
+            f32(rl.GetScreenWidth() - 100),
+            10)
     }
 
     // play/pause button
