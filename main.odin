@@ -6,17 +6,34 @@ import "core:os"
 import ma "vendor:miniaudio"
 
 GUI_PADDING :: 50
+SCROLL :: 200
 
 App_State :: struct {
     font: map[i32]rl.Font,
     music_dir: string,
+
+    tracks: [dynamic]Track,
     albums: [dynamic]Album,
     playlists: [dynamic]Playlist,
 
     ma_engine: ma.engine,
     ma_sound: ^ma.sound,
 
-    audio_state: AudioState
+    audio_state: AudioState,
+    currently_playing: ^Track,
+
+    main_panel: rl.Rectangle,
+    main_panel_scroll_offset: i32,
+    main_panel_content: Content,
+
+    bottom_bar: rl.Rectangle, // track progress, playback buttons etc
+    right_panel: rl.Rectangle, // if album selected, display album tracks
+}
+
+Content :: enum {
+    Track_List,
+    Albums,
+    Playlists
 }
 
 AudioState :: enum {
@@ -35,6 +52,7 @@ Playlist :: struct {
 Track :: struct {
     title: string,
     artist: string,
+    album: Album,
     duration_seconds: i8,
     file_path: string,
 
@@ -91,6 +109,31 @@ dummy_data :: proc() -> ^App_State {
 
 }
 
+init_app :: proc() -> ^App_State {
+    app_state := new(App_State)
+
+    // walk_music_dir()
+    // build tracks list and based on it albums
+
+    return app_state
+}
+
+@private
+clean_state :: proc(app_state: ^App_State) {
+    delete(app_state.tracks)
+
+    for a in app_state.albums {
+        delete(a.tracks)
+    }
+    delete(app_state.albums)
+
+    for p in app_state.playlists {
+        delete(p.tracks)
+    }
+    delete(app_state.playlists)
+    free(app_state)
+}
+
 main :: proc() {
     rl.SetConfigFlags({.WINDOW_RESIZABLE})
 
@@ -111,11 +154,15 @@ main :: proc() {
     fonts[20] = font_20
     fonts[30] = font_30
 
-
     app_state := dummy_data()
     app_state.font = fonts
     app_state.ma_sound = nil
     app_state.audio_state = .Stopped
+    app_state.main_panel = rl.Rectangle{
+        x = 20,
+        y = 20
+    }
+    app_state.main_panel_scroll_offset = 200
 
     engine_init_result := ma.engine_init(nil, &app_state.ma_engine)
     if engine_init_result != .SUCCESS {
@@ -129,6 +176,9 @@ main :: proc() {
         rl.BeginDrawing()
         rl.ClearBackground(rl.RAYWHITE)
 
+        app_state.main_panel.width = f32(rl.GetScreenWidth() - 40)
+        app_state.main_panel.height = f32(rl.GetScreenHeight() - 100)
+
         draw(app_state)
 
         rl.EndDrawing()
@@ -137,19 +187,17 @@ main :: proc() {
     // cleanup
     {
         ma.sound_uninit(app_state.ma_sound)
-
-        free(app_state)
+        clean_state(app_state)
     }
 
 }
 
+
 @private
 draw :: proc(app_state: ^App_State) {
-    rl.DrawTextEx(app_state.font[20], "test", {10, 10}, f32(app_state.font[20].baseSize), 1, rl.BLACK)
-
-    foo := button(app_state.font[30] ,"this is a button", {200, 200})
-    if foo {
-        fmt.println("custom button pressed: ", foo)
+    button_pressed := button(app_state.font[30] ,"this is a button", {200, 200})
+    if button_pressed {
+        fmt.println("custom button pressed")
     }
 
     // Progress bar
@@ -166,6 +214,31 @@ draw :: proc(app_state: ^App_State) {
             {GUI_PADDING, f32(rl.GetScreenHeight() - GUI_PADDING)},
             f32(rl.GetScreenWidth() - 100),
             10)
+    }
+
+    // @todo: scroll test
+    {
+        rl.DrawRectangleLinesEx(app_state.main_panel, 1, rl.GREEN)
+        rl.BeginScissorMode(
+            i32(app_state.main_panel.x),
+            i32(app_state.main_panel.y),
+            i32(app_state.main_panel.width),
+            i32(app_state.main_panel.height))
+
+        // @todo: draw tack list, album grid and playlist grid
+        rl.DrawRectangle(50, app_state.main_panel_scroll_offset, 50,50, rl.RED)
+
+        rl.EndScissorMode()
+
+        wheel := rl.GetMouseWheelMove()
+        if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel) {
+            if wheel > 0 {
+                app_state.main_panel_scroll_offset = app_state.main_panel_scroll_offset + 20
+            } else if (wheel < 0) {
+                app_state.main_panel_scroll_offset = app_state.main_panel_scroll_offset - 20
+            }
+        }
+
     }
 
     // play/pause button
@@ -224,10 +297,6 @@ draw :: proc(app_state: ^App_State) {
             pos_y = pos_y + padding + card_height
         }
     }*/
-}
-
-@private
-progress_bar_draw :: proc() {
 }
 
 @private

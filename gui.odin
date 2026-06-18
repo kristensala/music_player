@@ -2,10 +2,13 @@ package main
 
 import rl "vendor:raylib"
 
-albums_grid :: proc() {
+albums_grid :: proc() -> (pressed: bool, album: ^Album) {
+    return false, nil
 }
 
-tracks_list :: proc() {
+tracks_list :: proc(tracks: []Track) -> (pressed: bool, track: ^Track) {
+
+    return false, nil
 }
 
 progress_bar :: proc(value: f32, max_value: f32, pos: [2]f32, w, h: f32) {
