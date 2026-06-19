@@ -1,5 +1,6 @@
 package main
 
+import "core:math"
 import "core:fmt"
 import rl "vendor:raylib"
 import "core:os"
@@ -105,6 +106,15 @@ dummy_data :: proc() -> ^App_State {
     append(&album_two.tracks, s3)
     append(&app_state.albums, album_two)
 
+    for i in 0..<100 {
+        t := Track{
+            title = fmt.tprintf("track_%d", i),
+            artist = fmt.tprintf("artist_%d", i),
+        }
+
+        append(&app_state.tracks, t)
+    }
+
     return app_state
 
 }
@@ -162,7 +172,7 @@ main :: proc() {
         x = 20,
         y = 20
     }
-    app_state.main_panel_scroll_offset = 200
+    app_state.main_panel_scroll_offset = 20
 
     engine_init_result := ma.engine_init(nil, &app_state.ma_engine)
     if engine_init_result != .SUCCESS {
@@ -225,17 +235,41 @@ draw :: proc(app_state: ^App_State) {
             i32(app_state.main_panel.width),
             i32(app_state.main_panel.height))
 
-        // @todo: draw tack list, album grid and playlist grid
-        rl.DrawRectangle(50, app_state.main_panel_scroll_offset, 50,50, rl.RED)
+        pos_x := app_state.main_panel.x
+        pos_y := f32(app_state.main_panel_scroll_offset)
+
+        card_width :f32 = 200
+        card_height :f32 = 250
+
+        padding : f32 = 10
+
+        f := app_state.main_panel.width / f32(card_width + padding)
+        padding = app_state.main_panel.width / f / (f - 1)
+
+        row_count := 0
+
+        for t in app_state.tracks {
+            rl.DrawRectangle(i32(pos_x), i32(pos_y), i32(card_width), i32(card_height), rl.RED)
+            pos_x = pos_x + card_width + padding
+
+            window_width := rl.GetScreenWidth()
+            if i32(pos_x + card_width + padding) > window_width {
+                pos_x = app_state.main_panel.x
+                pos_y = pos_y + padding + card_height
+                row_count = row_count + 1
+            }
+        }
 
         rl.EndScissorMode()
 
+        stop_scroll_at_end := i32(f32(row_count) * (card_height + padding) - app_state.main_panel.height)
+
         wheel := rl.GetMouseWheelMove()
         if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel) {
-            if wheel > 0 {
-                app_state.main_panel_scroll_offset = app_state.main_panel_scroll_offset + 20
-            } else if (wheel < 0) {
-                app_state.main_panel_scroll_offset = app_state.main_panel_scroll_offset - 20
+            if wheel > 0 && app_state.main_panel_scroll_offset != 20 {
+                app_state.main_panel_scroll_offset = app_state.main_panel_scroll_offset + 50
+            } else if wheel < 0 && math.abs(app_state.main_panel_scroll_offset) <= stop_scroll_at_end {
+                app_state.main_panel_scroll_offset = app_state.main_panel_scroll_offset - 50
             }
         }
 
@@ -279,24 +313,6 @@ draw :: proc(app_state: ^App_State) {
         }
     }
 
-    pos_x := 10
-    pos_y := 10
-
-    card_width := 200
-    card_height := 250
-
-    padding := 10
-
-    /*for i in 0..<100 {
-        rl.DrawRectangle(i32(pos_x), i32(pos_y), i32(card_width), i32(card_height), rl.RED)
-        pos_x = pos_x + card_width + padding
-
-        window_width := rl.GetScreenWidth()
-        if i32(pos_x + card_width + padding) > window_width {
-            pos_x = 10
-            pos_y = pos_y + padding + card_height
-        }
-    }*/
 }
 
 @private
