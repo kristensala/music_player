@@ -72,7 +72,7 @@ Album :: struct {
 }
 
 
-init_app :: proc() -> ^App_State {
+init_player :: proc() -> ^App_State {
     app_state := new(App_State)
 
     // walk_music_dir()
@@ -168,27 +168,6 @@ main :: proc() {
 
 @private
 draw :: proc(app_state: ^App_State) {
-    // Progress bar
-    {
-        cursor: f32 = 0
-        ma.sound_get_cursor_in_seconds(app_state.ma_sound, &cursor)
-
-        length: f32 = 1
-        ma.sound_get_length_in_seconds(app_state.ma_sound, &length)
-        
-        currently_playing : cstring = ""
-        if app_state.currently_playing != nil {
-            currently_playing = app_state.currently_playing.file_name
-        }
-        rl.DrawTextEx(app_state.font[20], currently_playing, {GUI_PADDING, f32(rl.GetScreenHeight() - GUI_PADDING - 25)}, 20, 0, rl.BLACK)
-        progress_bar(
-            cursor,
-            length,
-            {GUI_PADDING, f32(rl.GetScreenHeight() - GUI_PADDING)},
-            f32(rl.GetScreenWidth() - 100),
-            10)
-    }
-
     // @todo: scroll test
     {
 
@@ -212,6 +191,26 @@ draw :: proc(app_state: ^App_State) {
                 }
             }
         }
+    }
+    // Progress bar
+    {
+        cursor: f32 = 0
+        ma.sound_get_cursor_in_seconds(app_state.ma_sound, &cursor)
+
+        length: f32 = 1
+        ma.sound_get_length_in_seconds(app_state.ma_sound, &length)
+        
+        currently_playing : cstring = ""
+        if app_state.currently_playing != nil {
+            currently_playing = app_state.currently_playing.file_name
+        }
+        rl.DrawTextEx(app_state.font[20], currently_playing, {GUI_PADDING, f32(rl.GetScreenHeight() - GUI_PADDING - 25)}, 20, 0, rl.BLACK)
+        progress_bar(
+            cursor,
+            length,
+            {GUI_PADDING, f32(rl.GetScreenHeight() - GUI_PADDING)},
+            f32(rl.GetScreenWidth() - 100),
+            10)
     }
 }
 

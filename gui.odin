@@ -27,15 +27,15 @@ tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, track: ^Track) {
             height = 50
         }
 
-        txt := strings.clone_to_cstring(fmt.tprintf("%s / (%s)", track.file_name, track.file_path))
-        defer delete(txt)
+        /*txt := strings.clone_to_cstring(fmt.aprintf("%s / (%s)", track.file_name, track.file_path))
+        defer delete(txt)*/
 
-        text_measurement := rl.MeasureTextEx(app_state.font[30], txt, 30, 0)
+        text_measurement := rl.MeasureTextEx(app_state.font[30], track.file_name, 30, 0)
         txt_y := ((list_item.height - text_measurement.y) / 2) + list_item.y
 
         rl.DrawTextEx(
             app_state.font[30],
-            txt,
+            track.file_name,
             { list_item.x, txt_y},
             30,
             0,
