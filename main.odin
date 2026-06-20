@@ -56,8 +56,8 @@ Track :: struct {
     artist: string,
     album: Album,
     duration_seconds: i8,
-    file_path: string,
-    file_name: string,
+    file_path: cstring,
+    file_name: cstring,
 
     is_playing: bool
 }
@@ -82,7 +82,13 @@ init_app :: proc() -> ^App_State {
 }
 
 @private
-clean_state :: proc(app_state: ^App_State) {
+destroy_state :: proc(app_state: ^App_State) {
+    ma.sound_uninit(app_state.ma_sound)
+
+    for t in app_state.tracks {
+        delete(t.file_name)
+        delete(t.file_path)
+    }
     delete(app_state.tracks)
 
     for a in app_state.albums {
@@ -154,8 +160,7 @@ main :: proc() {
 
     // cleanup
     {
-        ma.sound_uninit(app_state.ma_sound)
-        clean_state(app_state)
+        destroy_state(app_state)
     }
 
 }
@@ -171,13 +176,11 @@ draw :: proc(app_state: ^App_State) {
         length: f32 = 1
         ma.sound_get_length_in_seconds(app_state.ma_sound, &length)
         
-        current_song_name : cstring = ""
+        currently_playing : cstring = ""
         if app_state.currently_playing != nil {
-            current_song_name = strings.clone_to_cstring(app_state.currently_playing.file_name)
-            defer delete(current_song_name)
+            currently_playing = app_state.currently_playing.file_name
         }
-
-        rl.DrawTextEx(app_state.font[20], current_song_name, {GUI_PADDING, f32(rl.GetScreenHeight() - GUI_PADDING - 25)}, 20, 0, rl.BLACK)
+        rl.DrawTextEx(app_state.font[20], currently_playing, {GUI_PADDING, f32(rl.GetScreenHeight() - GUI_PADDING - 25)}, 20, 0, rl.BLACK)
         progress_bar(
             cursor,
             length,
@@ -197,11 +200,8 @@ draw :: proc(app_state: ^App_State) {
                 app_state.ma_sound = nil
             }
 
-            c_file_path := strings.clone_to_cstring(t.file_path)
-            defer delete(c_file_path)
-
             app_state.ma_sound = new(ma.sound)
-            res := ma.sound_init_from_file(&app_state.ma_engine, c_file_path, {.STREAM}, nil, nil, app_state.ma_sound)
+            res := ma.sound_init_from_file(&app_state.ma_engine, t.file_path, {.STREAM}, nil, nil, app_state.ma_sound)
             if res != .SUCCESS {
                 fmt.println("Could not init sound: ", res)
             } else {
@@ -233,8 +233,8 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
             }
 
             track := Track{
-                file_name = d.name,
-                file_path = d.fullpath
+                file_name = strings.clone_to_cstring(d.name),
+                file_path = strings.clone_to_cstring(d.fullpath)
             }
 
             append(&app_state.tracks, track)
