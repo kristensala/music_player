@@ -1,8 +1,9 @@
 package main
 
-import "core:strings"
-import "core:fmt"
+import "core:math"
 import rl "vendor:raylib"
+
+SCROLL_VALUE :: 100
 
 albums_grid :: proc() -> (pressed: bool, album: ^Album) {
     return false, nil
@@ -16,19 +17,17 @@ tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, track: ^Track) {
         i32(app_state.main_panel.height))
 
     pos_y : f32 = f32(app_state.main_panel_scroll_offset)
-    foo := false
+    track_pressed := false
     pressed_track : ^Track = nil
 
+    list_item_height : f32 = 50
     for &track in app_state.tracks {
         list_item := rl.Rectangle{
             x = app_state.main_panel.x,
             y = pos_y,
             width = app_state.main_panel.width,
-            height = 50
+            height = list_item_height
         }
-
-        /*txt := strings.clone_to_cstring(fmt.aprintf("%s / (%s)", track.file_name, track.file_path))
-        defer delete(txt)*/
 
         text_measurement := rl.MeasureTextEx(app_state.font[30], track.file_name, 30, 0)
         txt_y := ((list_item.height - text_measurement.y) / 2) + list_item.y
@@ -48,9 +47,12 @@ tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, track: ^Track) {
             i32(list_item.y + list_item.height + 1),
             rl.BLACK)
 
-        if rl.CheckCollisionPointRec(rl.GetMousePosition(), list_item) {
+
+        if rl.CheckCollisionPointRec(rl.GetMousePosition(), list_item) &&
+            rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel)
+        {
             if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
-                foo = true
+                track_pressed = true
                 pressed_track = &track
             }
         }
@@ -58,20 +60,29 @@ tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, track: ^Track) {
         pos_y = pos_y + list_item.height
     }
 
-
     rl.EndScissorMode()
 
+    row_count := len(app_state.tracks)
+    max_offset := (f32(row_count) * list_item_height) - app_state.main_panel.height
 
     wheel := rl.GetMouseWheelMove()
     if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel) {
-        if wheel > 0 {
-            app_state.main_panel_scroll_offset = app_state.main_panel_scroll_offset + 100
-        } else if wheel < 0 {
-            app_state.main_panel_scroll_offset = app_state.main_panel_scroll_offset - 100
+        if wheel > 0 && f32(app_state.main_panel_scroll_offset) < app_state.main_panel.y {
+            app_state.main_panel_scroll_offset = app_state.main_panel_scroll_offset + SCROLL_VALUE
+
+            if f32(app_state.main_panel_scroll_offset) > app_state.main_panel.y {
+                app_state.main_panel_scroll_offset = i32(app_state.main_panel.y)
+            }
+        } else if wheel < 0 && math.abs(app_state.main_panel_scroll_offset) < i32(max_offset) {
+            app_state.main_panel_scroll_offset = app_state.main_panel_scroll_offset - SCROLL_VALUE
+
+            if math.abs(app_state.main_panel_scroll_offset) > i32(max_offset) {
+                app_state.main_panel_scroll_offset = i32(-max_offset)
+            }
         }
     }
 
-    return foo, pressed_track
+    return track_pressed, pressed_track
 }
 
 progress_bar :: proc(value: f32, max_value: f32, pos: [2]f32, w, h: f32) {
