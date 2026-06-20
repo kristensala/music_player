@@ -1,14 +1,77 @@
 package main
 
+import "core:strings"
+import "core:fmt"
 import rl "vendor:raylib"
 
 albums_grid :: proc() -> (pressed: bool, album: ^Album) {
     return false, nil
 }
 
-tracks_list :: proc(tracks: []Track) -> (pressed: bool, track: ^Track) {
+tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, track: ^Track) {
+    rl.BeginScissorMode(
+        i32(app_state.main_panel.x),
+        i32(app_state.main_panel.y),
+        i32(app_state.main_panel.width),
+        i32(app_state.main_panel.height))
 
-    return false, nil
+    pos_y : f32 = f32(app_state.main_panel_scroll_offset)
+    foo := false
+    pressed_track : ^Track = nil
+
+    for &track in app_state.tracks {
+        list_item := rl.Rectangle{
+            x = app_state.main_panel.x,
+            y = pos_y,
+            width = app_state.main_panel.width,
+            height = 50
+        }
+
+        txt := strings.clone_to_cstring(fmt.tprintf("%s / (%s)", track.file_name, track.file_path))
+        defer delete(txt)
+
+        text_measurement := rl.MeasureTextEx(app_state.font[30], txt, 30, 0)
+        txt_y := ((list_item.height - text_measurement.y) / 2) + list_item.y
+
+        rl.DrawTextEx(
+            app_state.font[30],
+            txt,
+            { list_item.x, txt_y},
+            30,
+            0,
+            rl.BLACK)
+
+        rl.DrawLine(
+            0, 
+            i32(list_item.y + list_item.height + 1),
+            i32(app_state.main_panel.width),
+            i32(list_item.y + list_item.height + 1),
+            rl.BLACK)
+
+        if rl.CheckCollisionPointRec(rl.GetMousePosition(), list_item) {
+            if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
+                foo = true
+                pressed_track = &track
+            }
+        }
+
+        pos_y = pos_y + list_item.height
+    }
+
+
+    rl.EndScissorMode()
+
+
+    wheel := rl.GetMouseWheelMove()
+    if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel) {
+        if wheel > 0 {
+            app_state.main_panel_scroll_offset = app_state.main_panel_scroll_offset + 100
+        } else if wheel < 0 {
+            app_state.main_panel_scroll_offset = app_state.main_panel_scroll_offset - 100
+        }
+    }
+
+    return foo, pressed_track
 }
 
 progress_bar :: proc(value: f32, max_value: f32, pos: [2]f32, w, h: f32) {
