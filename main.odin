@@ -173,7 +173,6 @@ draw :: proc(app_state: ^App_State) {
 
         pressed, t := tracks_list(app_state)
         if pressed {
-            fmt.println(pressed, t)
             if app_state.ma_sound != nil {
                 ma.sound_uninit(app_state.ma_sound)
                 app_state.ma_sound = nil
@@ -192,19 +191,58 @@ draw :: proc(app_state: ^App_State) {
             }
         }
     }
-    // Progress bar
+    // bottom bar
     {
+        // currently playing track
+        {
+            currently_playing : cstring = ""
+            if app_state.currently_playing != nil {
+                currently_playing = app_state.currently_playing.file_name
+            }
+            rl.DrawTextEx(app_state.font[20], currently_playing, {GUI_PADDING, f32(rl.GetScreenHeight() - GUI_PADDING - 25)}, 20, 0, rl.BLACK)
+        }
+
+        // playback conrols
+        {
+            button_txt : cstring = "play"
+            if app_state.audio_state == .Playing {
+                button_txt = "pause"
+            } else if app_state.audio_state == .Paused || app_state.audio_state == .Stopped {
+                button_txt = "play"
+            }
+
+            play_button_pressed := button(
+                             app_state.font[20],
+                             button_txt,
+                             { f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() - 120) }
+                         )
+            if play_button_pressed {
+                fmt.println("play pressed", app_state.audio_state)
+                if app_state.audio_state == .Playing {
+                    fmt.println("stop attempt")
+                    stop_response := ma.sound_stop(app_state.ma_sound)
+                    if stop_response == .SUCCESS {
+                        app_state.audio_state = .Paused
+                    } else {
+                        fmt.eprintln("Could not stop the sound: ", stop_response)
+                    }
+                } else if app_state.audio_state == .Paused && app_state.ma_sound != nil {
+                    start_response := ma.sound_start(app_state.ma_sound)
+                    if start_response == .SUCCESS {
+                        app_state.audio_state = .Playing
+                    } else {
+                        fmt.eprintln("Could not start the sound: ", start_response)
+                    }
+                }
+            }
+        }
+
         cursor: f32 = 0
         ma.sound_get_cursor_in_seconds(app_state.ma_sound, &cursor)
 
         length: f32 = 1
         ma.sound_get_length_in_seconds(app_state.ma_sound, &length)
-        
-        currently_playing : cstring = ""
-        if app_state.currently_playing != nil {
-            currently_playing = app_state.currently_playing.file_name
-        }
-        rl.DrawTextEx(app_state.font[20], currently_playing, {GUI_PADDING, f32(rl.GetScreenHeight() - GUI_PADDING - 25)}, 20, 0, rl.BLACK)
+
         progress_bar(
             cursor,
             length,
