@@ -1,6 +1,5 @@
 package main
 
-import "core:time"
 import "core:strings"
 import "core:path/filepath"
 import "core:fmt"
@@ -61,7 +60,7 @@ Playlist :: struct {
 Track :: struct {
     title: cstring,
     artist: cstring,
-    album: Album,
+    album: cstring,
     file_path: cstring,
     file_name: cstring,
 }
@@ -102,6 +101,9 @@ destroy_state :: proc(app_state: ^App_State) {
     for t in app_state.tracks {
         delete(t.file_name)
         delete(t.file_path)
+        delete(t.title)
+        delete(t.artist)
+        delete(t.album)
     }
     delete(app_state.tracks)
 
@@ -138,7 +140,7 @@ main :: proc() {
     fonts[30] = font_30
 
     app_state := new(App_State)
-    app_state.music_dir = "/home/salakris/Music/"
+    app_state.music_dir = "/home/salakris/Music/Michael_Jackson/History Past, Present And Future, Book 1/"
     app_state.font = fonts
     app_state.ma_sound = nil
     app_state.audio_state = .Stopped
@@ -147,16 +149,6 @@ main :: proc() {
         y = 20
     }
     app_state.main_panel_scroll_offset = 20
-
-    // @todo: mutex
-    /*t := thread.create(bg)
-    t.data = app_state
-
-    if t != nil {
-        t.init_context = context
-        t.user_index = 0
-        thread.start(t)
-    }*/
 
     walk_music_dir(app_state, app_state.music_dir)
 
@@ -169,11 +161,6 @@ main :: proc() {
     defer ma.engine_uninit(&app_state.ma_engine)
 
     for !rl.WindowShouldClose() {
-        /*if thread.is_done(t) && app_state.reading_music_dir {
-            fmt.println("thread done")
-            thread.destroy(t)
-            app_state.reading_music_dir = false
-        }*/
         rl.BeginDrawing()
         rl.ClearBackground(rl.RAYWHITE)
 
@@ -295,14 +282,20 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
             }
 
             //fmt.printfln(d.fullpath)
-            md, tl_error := tl.get_tag(d.fullpath)
+            tag, tl_error := tl.get_tag(d.fullpath)
+            //fmt.printfln("md.title len=%d value=%q", len(tag.title), tag.title)
 
             track := Track{
+                title = strings.clone_to_cstring(tag.title),
+                artist = strings.clone_to_cstring(tag.artist),
+                album = strings.clone_to_cstring(tag.album),
                 file_name = strings.clone_to_cstring(d.name),
                 file_path = strings.clone_to_cstring(d.fullpath)
             }
 
             append(&app_state.tracks, track)
+
+            tl.tag_destroy(&tag)
         }
     }
 }

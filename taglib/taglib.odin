@@ -54,52 +54,116 @@ set_tag_fields :: proc(filepath: string, values: map[Tag_Field]string) {
 set_tag_field :: proc(filepath: string, tag_field: Tag_Field) {
 }
 
-// @ref: https://datatracker.ietf.org/doc/rfc9639/
-// @ref: https://www.ietf.org/archive/id/draft-ietf-cellar-flac-03.html
-@private
-@require_results
-parse_flac :: proc(file_path: string) -> (metadata: Tag, error: Taglib_Error) {
-    flac_data, err := os.read_entire_file_from_path(file_path, context.allocator)
+parse_mp3 :: proc(filepath: string) -> (_tag: Tag, error: Taglib_Error) {
+    file, err := os.open(filepath)
     if err != nil {
-        // @todo
+        fmt.eprintln("Could not open file: ", err)
+        return {}, .Failed_To_Read_File
     }
-    defer delete(flac_data)
+    defer os.close(file)
 
-    if string(flac_data[:4]) != "fLaC" {
+    header := make([]byte, 10)
+    defer delete(header)
+
+    _, read_err := os.read(file, header)
+    if read_err != nil {
+        fmt.eprintln("Could not read file header: ", err)
+        return {}, .Failed_To_Read_File
+    }
+
+    file_identifier := header[:3]
+    if string(file_identifier) != "ID3" {
+        fmt.println("Could not find ID3 tag")
+        return {}, nil
+    }
+
+    // @todo: if major version is 2 then need to parse differently
+    major_version := header[3]
+    fmt.println("major_version: ", major_version)
+    revision_number := header[4]
+    fmt.println("revision_number: ", revision_number)
+
+    // flags: if byte is 0 then no flags
+    // else conver to 8bit binary
+    // need an example
+    flags := header[5]
+
+    tag := header[6:10]
+    assert(len(tag) == 4, "Tag length has to be 4")
+
+    tag_size := synchsafe_to_u32(tag)
+
+    tag_data := make([]byte, tag_size)
+    defer delete(tag_data)
+
+    _, read_err = os.read(file, tag_data)
+    if read_err != nil {
+        fmt.eprintln("Could not read tag_data: ", read_err)
+        return {}, nil
+    }
+
+    md := mp3_parse_tag(tag_data[:tag_size], tag_size)
+    return md, nil
+}
+
+parse_flac :: proc(filepath: string) -> (_tag: Tag, error: Taglib_Error) {
+    file, err := os.open(filepath)
+    if err != nil {
+        fmt.eprintln("Could not open file: ", err)
+        return {}, nil
+    }
+    defer os.close(file)
+
+    header := make([]byte, 4)
+    defer delete(header)
+
+    _, read_err := os.read(file, header)
+    if read_err != nil {
+        fmt.eprintln("Could not read header data from file: ", err)
+        return {}, nil
+    }
+
+    if string(header[:4]) != "fLaC" {
         fmt.println("invalid signature")
         return {}, nil
     }
 
-    // Streaminginfo is always first and its length
-    // is always 34. Rest of the blocks are in random order
-    // Streaminginfo block type is 0
-    metadata_block_header := flac_data[4:7]
-    block_type := metadata_block_header[0] & 0x7F
-    if block_type != 0 {
-        fmt.println("First block has to be Streaminginfo")
-        return {}, nil
-    }
-
-    pos := FLAC_STREAMING_INFO_START_BYTE + FLAC_STREAMING_INFO_BLOCK_LENGTH
     for ;; {
-        if pos > len(flac_data) {
-            break;
+        header := make([]byte, 4)
+        defer delete(header)
+
+        _, read_err := os.read(file, header)
+        if read_err != nil {
+            fmt.eprintln("Could not read header: ", err)
+            return
         }
 
-        header := flac_data[pos]
-        block_data_start := pos + FLAC_METADATA_BLOCK_HEADER_LENGTH
-        block_length := read_u32_be(flac_data, pos)
+        is_last := (header[0] & 0x80) != 0
+        block_type := header[0] & 0x7F
+        block_length := read_u32_be(header)
 
-        // 4 = Vorbis comment (Metadata Block Type)
-        if header & 0x7F == 4 {
-            vorbis_data := flac_data[block_data_start:block_data_start+int(block_length)]
-            flac_parse_vorbis_comment(vorbis_data)
-            // @todo: return tag
-            break;
+        // found vorbis
+        if block_type == 4 {
+            block_data := make([]byte, block_length)
+            defer delete(block_data)
+
+            _, read_err = os.read(file, block_data)
+            if read_err != nil {
+                fmt.eprintln("Error")
+                return
+            }
+
+            return flac_parse_vorbis_comment(block_data), nil
+        } else {
+            os.seek(file, i64(block_length), .Current)
         }
 
-        pos = block_data_start + int(block_length)
+        if is_last {
+            break
+        }
     }
+
+
     return {}, nil
 }
 
@@ -107,7 +171,7 @@ parse_flac :: proc(file_path: string) -> (metadata: Tag, error: Taglib_Error) {
 // Then comes comment count: ARTIST, ALBUM, TITLE etc
 // @todo: return tag
 @private
-flac_parse_vorbis_comment :: proc(vorbis_data: []u8) -> ^Tag {
+flac_parse_vorbis_comment :: proc(vorbis_data: []u8) -> Tag {
     pos := 0
     vendor_length := int(read_u32_le(vorbis_data, pos))
     pos += FLAC_METADATA_BLOCK_HEADER_LENGTH
@@ -118,16 +182,26 @@ flac_parse_vorbis_comment :: proc(vorbis_data: []u8) -> ^Tag {
     comment_count := int(read_u32_le(vorbis_data, pos))
     pos += FLAC_METADATA_BLOCK_HEADER_LENGTH
 
+    tag := Tag{}
+
     for i in 0..<comment_count {
         comment_length := int(read_u32_le(vorbis_data, pos))
         pos += FLAC_METADATA_BLOCK_HEADER_LENGTH
 
         comment := string(vorbis_data[pos:pos + comment_length])
         pos += comment_length
-        fmt.println("Comment: ", comment)
+        //fmt.println("Comment: ", comment)
+
+        if strings.has_prefix(comment, "TITLE=") {
+            tag.title = strings.clone(comment[len("TITLE="):])
+        } else if strings.has_prefix(comment, "ARTIST=") {
+            tag.artist = strings.clone(comment[len("ARTIST="):])
+        } else if strings.has_prefix(comment, "ALBUM=") {
+            tag.album = strings.clone(comment[len("ALBUM="):])
+        }
     }
 
-    return nil
+    return tag
 }
 
 @private
@@ -135,44 +209,10 @@ parse_wav :: proc(file_path: string) {
     // @todo
 }
 
-// @specification: https://id3.org/id3v2.4.0-structure
-// @todo: Check the PADDING. Seems random
-@private
-@require_results
-parse_mp3 :: proc(file_path: string) -> (_tag: Tag, error: Taglib_Error) {
-    mp3_file_data, err := os.read_entire_file_from_path(file_path, context.allocator)
-    if err != nil {
-        return {}, .Failed_To_Read_File
-    }
-    defer delete(mp3_file_data)
-
-    file_identifier := mp3_file_data[:3]
-    if string(file_identifier) != "ID3" {
-        fmt.println("Could not find ID3 tag")
-        return {}, .ID3_Tag_Not_Found
-    }
-
-    major_version := mp3_file_data[3]
-    revision_number := mp3_file_data[4]
-
-    // flags: if byte is 0 then no flags
-    // else conver to 8bit binary
-    // need an example
-    flags := mp3_file_data[5]
-
-    tag := mp3_file_data[6:10]
-    assert(len(tag) == 4, "Tag length has to be 4")
-
-    tag_size := synchsafe_to_u32(tag)
-
-    fmt.println("file: ", file_path)
-    md := mp3_parse_tag(mp3_file_data[10:10+tag_size], tag_size)
-    return md, nil
-}
-
 @private
 @require_results
 mp3_parse_tag :: proc(tag_data: []byte, tag_size: u32) -> Tag {
+    fmt.println("parse tag start: ", tag_size)
     frame_length := 4
     result := Tag{}
 
@@ -197,6 +237,11 @@ mp3_parse_tag :: proc(tag_data: []byte, tag_size: u32) -> Tag {
 
         frame_data := tag_data[frame_data_start:frame_data_end]
 
+        // @note(ksala): strip text encoding byte
+        if len(frame_data) > 1 {
+            frame_data = frame_data[1:]
+        }
+
         fmt.printfln("%s: %s", frame, string(frame_data))
 
         switch frame {
@@ -212,6 +257,16 @@ mp3_parse_tag :: proc(tag_data: []byte, tag_size: u32) -> Tag {
     }
 
     return result
+}
+
+tag_destroy :: proc(tag: ^Tag) {
+    delete(tag.title)
+    delete(tag.album)
+    delete(tag.artist)
+
+    tag.title = ""
+    tag.album = ""
+    tag.artist = ""
 }
 
 @private

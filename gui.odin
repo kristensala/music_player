@@ -1,5 +1,6 @@
 package main
 
+import "core:fmt"
 import "core:math"
 import rl "vendor:raylib"
 
@@ -29,12 +30,15 @@ tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, track: ^Track) {
             height = list_item_height
         }
 
-        text_measurement := rl.MeasureTextEx(app_state.font[30], track.file_name, 30, 0)
+        formated_str := fmt.caprintf("%s - %s - %s", track.album, track.artist, track.title)
+        defer delete(formated_str)
+
+        text_measurement := rl.MeasureTextEx(app_state.font[30], formated_str, 30, 0)
         txt_y := ((list_item.height - text_measurement.y) / 2) + list_item.y
 
         rl.DrawTextEx(
             app_state.font[30],
-            track.file_name,
+            formated_str,
             { list_item.x, txt_y},
             30,
             0,
