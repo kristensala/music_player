@@ -68,12 +68,17 @@ Album :: struct {
     title: cstring,
     artist: cstring,
     cover_art: string,
-    track_indices: [dynamic]i32
+    track_indices: [dynamic]i32 // reference to the app_state.tracks
 }
 
 @private
 destroy_state :: proc(app_state: ^App_State) {
     ma.sound_uninit(app_state.ma_sound)
+
+    for a in app_state.albums {
+        delete(a.track_indices)
+    }
+    delete(app_state.albums)
 
     for t in app_state.tracks {
         delete(t.file_name)
@@ -84,12 +89,6 @@ destroy_state :: proc(app_state: ^App_State) {
     }
     delete(app_state.tracks)
 
-    for a in app_state.albums {
-        delete(a.artist)
-        delete(a.title)
-        delete(a.track_indices)
-    }
-    delete(app_state.albums)
 
     for p in app_state.playlists {
         delete(p.tracks)
@@ -263,6 +262,10 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
             if filepath.ext(d.fullpath) != ".mp3" && filepath.ext(d.fullpath) != ".flac" {
                 continue
             }
+
+            // @todo: if image found `cover.jpeg/png` save to a map with base path as key
+            // map[string]string and value as path to the cover art
+            // after the tracks are found, use track file_path and match with the cover art path
 
             //fmt.printfln(d.fullpath)
             tag, tl_error := tl.get_tag(d.fullpath)

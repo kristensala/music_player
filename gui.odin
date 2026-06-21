@@ -10,7 +10,7 @@ albums_grid :: proc() -> (pressed: bool, album: ^Album) {
     return false, nil
 }
 
-tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, track: ^Track) {
+tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, _track: ^Track) {
     rl.BeginScissorMode(
         i32(app_state.main_panel.x),
         i32(app_state.main_panel.y),
@@ -22,51 +22,68 @@ tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, track: ^Track) {
     pressed_track : ^Track = nil
 
     list_item_height : f32 = 40
-    for &track in app_state.tracks {
-        list_item := rl.Rectangle{
-            x = app_state.main_panel.x,
-            y = pos_y,
-            width = app_state.main_panel.width,
-            height = list_item_height
-        }
+    for album in app_state.albums {
+        pos_y = pos_y + 20 // add a small margin before each album
 
-        formated_str := fmt.caprintf("%s - %s - %s", track.album, track.artist, track.title)
-        defer delete(formated_str)
-
-        text_measurement := rl.MeasureTextEx(app_state.font[20], formated_str, 20, 0)
-        txt_y := ((list_item.height - text_measurement.y) / 2) + list_item.y
-
+        text_measurement := rl.MeasureTextEx(app_state.font[30], album.title, 30, 0)
         rl.DrawTextEx(
-            app_state.font[20],
-            formated_str,
-            { list_item.x, txt_y},
-            20,
+            app_state.font[30],
+            album.title,
+            { app_state.main_panel.x, pos_y},
+            30,
             0,
             rl.BLACK)
 
-        rl.DrawLine(
-            0, 
-            i32(list_item.y + list_item.height + 1),
-            i32(app_state.main_panel.width),
-            i32(list_item.y + list_item.height + 1),
-            rl.BLACK)
+        pos_y = pos_y + list_item_height
 
-        if rl.CheckCollisionPointRec(rl.GetMousePosition(), list_item) &&
-            rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel)
-        {
-            if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
-                track_pressed = true
-                pressed_track = &track
+        for track_idx in album.track_indices {
+            track := &app_state.tracks[track_idx]
+            list_item := rl.Rectangle{
+                x = app_state.main_panel.x,
+                y = pos_y,
+                width = app_state.main_panel.width,
+                height = list_item_height
             }
-        }
 
-        pos_y = pos_y + list_item.height
+            formated_str := fmt.caprintf("%s - %s - %s", track.album, track.artist, track.title)
+            defer delete(formated_str)
+
+            text_measurement := rl.MeasureTextEx(app_state.font[20], formated_str, 20, 0)
+            txt_y := ((list_item.height - text_measurement.y) / 2) + list_item.y
+
+            rl.DrawTextEx(
+                app_state.font[20],
+                formated_str,
+                { list_item.x, txt_y},
+                20,
+                0,
+                rl.BLACK)
+
+            rl.DrawLine(
+                0, 
+                i32(list_item.y + list_item.height + 1),
+                i32(app_state.main_panel.width),
+                i32(list_item.y + list_item.height + 1),
+                rl.LIGHTGRAY)
+
+            if rl.CheckCollisionPointRec(rl.GetMousePosition(), list_item) &&
+                rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel)
+            {
+                if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
+                    track_pressed = true
+                    pressed_track = track
+                }
+            }
+
+            pos_y = pos_y + list_item.height
+        }
     }
 
     rl.EndScissorMode()
 
     row_count := len(app_state.tracks)
-    max_offset := (f32(row_count) * list_item_height) - app_state.main_panel.height
+    albums_count := len(app_state.albums)
+    max_offset := (f32(row_count) * list_item_height) + (f32(albums_count) * (list_item_height + 20)) - app_state.main_panel.height
 
     wheel := rl.GetMouseWheelMove()
     if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel) {
