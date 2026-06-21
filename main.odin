@@ -1,22 +1,29 @@
 package main
 
+import "core:time"
 import "core:strings"
 import "core:path/filepath"
 import "core:fmt"
+import "core:thread"
 import rl "vendor:raylib"
 import "core:os"
 import ma "vendor:miniaudio"
 
+import tl "taglib"
+
 GUI_PADDING :: 50
-SCROLL :: 200
 
 App_State :: struct {
     font: map[i32]rl.Font,
     music_dir: string,
 
+    reading_music_dir: bool,
+
     tracks: [dynamic]Track,
     albums: [dynamic]Album,
     playlists: [dynamic]Playlist,
+
+    queue: [^]Track, // @todo
 
     ma_engine: ma.engine,
     ma_sound: ^ma.sound,
@@ -52,25 +59,32 @@ Playlist :: struct {
 }
 
 Track :: struct {
-    title: string,
-    artist: string,
+    title: cstring,
+    artist: cstring,
     album: Album,
-    duration_seconds: i8,
     file_path: cstring,
     file_name: cstring,
-
-    is_playing: bool
 }
 
 Album :: struct {
-    title: string,
-    artist: string,
+    title: cstring,
+    artist: cstring,
     cover_art: string,
     tracks: [dynamic]Track,
-
-    rect: rl.Rectangle
 }
 
+
+bg :: proc(t: ^thread.Thread) {
+    app_state := cast(^App_State)t.data
+    app_state.reading_music_dir = true
+    fmt.println("thread data: ", cast(^App_State)t.data)
+
+    walk_music_dir(app_state, app_state.music_dir)
+    /*for iteration in 1..=5 {
+        fmt.printf("Thread %d is on iteration %d\n", t.user_index, iteration)
+        time.sleep(1 * time.Second)
+    }*/
+}
 
 init_player :: proc() -> ^App_State {
     app_state := new(App_State)
@@ -120,11 +134,11 @@ main :: proc() {
     fonts := make(map[i32]rl.Font)
     defer delete(fonts)
 
-
     fonts[20] = font_20
     fonts[30] = font_30
 
     app_state := new(App_State)
+    app_state.music_dir = "/home/salakris/Music/"
     app_state.font = fonts
     app_state.ma_sound = nil
     app_state.audio_state = .Stopped
@@ -134,9 +148,17 @@ main :: proc() {
     }
     app_state.main_panel_scroll_offset = 20
 
-    walk_music_dir(app_state, "/home/salakris/Music/")
-    fmt.println(len(app_state.tracks))
-    //fmt.println(app_state.tracks)
+    // @todo: mutex
+    /*t := thread.create(bg)
+    t.data = app_state
+
+    if t != nil {
+        t.init_context = context
+        t.user_index = 0
+        thread.start(t)
+    }*/
+
+    walk_music_dir(app_state, app_state.music_dir)
 
     engine_init_result := ma.engine_init(nil, &app_state.ma_engine)
     if engine_init_result != .SUCCESS {
@@ -147,6 +169,11 @@ main :: proc() {
     defer ma.engine_uninit(&app_state.ma_engine)
 
     for !rl.WindowShouldClose() {
+        /*if thread.is_done(t) && app_state.reading_music_dir {
+            fmt.println("thread done")
+            thread.destroy(t)
+            app_state.reading_music_dir = false
+        }*/
         rl.BeginDrawing()
         rl.ClearBackground(rl.RAYWHITE)
 
@@ -162,7 +189,6 @@ main :: proc() {
     {
         destroy_state(app_state)
     }
-
 }
 
 
@@ -170,7 +196,6 @@ main :: proc() {
 draw :: proc(app_state: ^App_State) {
     // @todo: scroll test
     {
-
         pressed, t := tracks_list(app_state)
         if pressed {
             if app_state.ma_sound != nil {
@@ -265,9 +290,12 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
         if d.type == .Directory {
             walk_music_dir(app_state, d.fullpath)
         } else if d.type == .Regular {
-            if filepath.ext(d.fullpath) != ".mp3" && filepath.ext(d.fullpath) != ".flac" && filepath.ext(d.fullpath) != ".wav" {
+            if filepath.ext(d.fullpath) != ".mp3" && filepath.ext(d.fullpath) != ".flac" {
                 continue
             }
+
+            //fmt.printfln(d.fullpath)
+            md, tl_error := tl.get_tag(d.fullpath)
 
             track := Track{
                 file_name = strings.clone_to_cstring(d.name),
