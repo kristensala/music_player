@@ -242,7 +242,7 @@ mp3_parse_tag :: proc(tag_data: []byte, tag_size: u32) -> Tag {
             frame_data = frame_data[1:]
         }
 
-        fmt.printfln("%s: %s", frame, string(frame_data))
+        //fmt.printfln("%s: %s", frame, string(frame_data))
 
         switch frame {
         case "TIT2": 

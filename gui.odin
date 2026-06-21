@@ -21,7 +21,7 @@ tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, track: ^Track) {
     track_pressed := false
     pressed_track : ^Track = nil
 
-    list_item_height : f32 = 50
+    list_item_height : f32 = 40
     for &track in app_state.tracks {
         list_item := rl.Rectangle{
             x = app_state.main_panel.x,
@@ -33,14 +33,14 @@ tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, track: ^Track) {
         formated_str := fmt.caprintf("%s - %s - %s", track.album, track.artist, track.title)
         defer delete(formated_str)
 
-        text_measurement := rl.MeasureTextEx(app_state.font[30], formated_str, 30, 0)
+        text_measurement := rl.MeasureTextEx(app_state.font[20], formated_str, 20, 0)
         txt_y := ((list_item.height - text_measurement.y) / 2) + list_item.y
 
         rl.DrawTextEx(
-            app_state.font[30],
+            app_state.font[20],
             formated_str,
             { list_item.x, txt_y},
-            30,
+            20,
             0,
             rl.BLACK)
 
@@ -50,7 +50,6 @@ tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, track: ^Track) {
             i32(app_state.main_panel.width),
             i32(list_item.y + list_item.height + 1),
             rl.BLACK)
-
 
         if rl.CheckCollisionPointRec(rl.GetMousePosition(), list_item) &&
             rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel)

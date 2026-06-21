@@ -3,7 +3,6 @@ package main
 import "core:strings"
 import "core:path/filepath"
 import "core:fmt"
-import "core:thread"
 import rl "vendor:raylib"
 import "core:os"
 import ma "vendor:miniaudio"
@@ -69,29 +68,7 @@ Album :: struct {
     title: cstring,
     artist: cstring,
     cover_art: string,
-    tracks: [dynamic]Track,
-}
-
-
-bg :: proc(t: ^thread.Thread) {
-    app_state := cast(^App_State)t.data
-    app_state.reading_music_dir = true
-    fmt.println("thread data: ", cast(^App_State)t.data)
-
-    walk_music_dir(app_state, app_state.music_dir)
-    /*for iteration in 1..=5 {
-        fmt.printf("Thread %d is on iteration %d\n", t.user_index, iteration)
-        time.sleep(1 * time.Second)
-    }*/
-}
-
-init_player :: proc() -> ^App_State {
-    app_state := new(App_State)
-
-    // walk_music_dir()
-    // build tracks list and based on it albums
-
-    return app_state
+    track_indices: [dynamic]i32
 }
 
 @private
@@ -108,7 +85,9 @@ destroy_state :: proc(app_state: ^App_State) {
     delete(app_state.tracks)
 
     for a in app_state.albums {
-        delete(a.tracks)
+        delete(a.artist)
+        delete(a.title)
+        delete(a.track_indices)
     }
     delete(app_state.albums)
 
@@ -140,7 +119,8 @@ main :: proc() {
     fonts[30] = font_30
 
     app_state := new(App_State)
-    app_state.music_dir = "/home/salakris/Music/Michael_Jackson/History Past, Present And Future, Book 1/"
+    //app_state.music_dir = "/home/salakris/Music/Michael_Jackson/History Past, Present And Future, Book 1/"
+    app_state.music_dir = "/home/salakris/Music/"
     app_state.font = fonts
     app_state.ma_sound = nil
     app_state.audio_state = .Stopped
@@ -151,6 +131,9 @@ main :: proc() {
     app_state.main_panel_scroll_offset = 20
 
     walk_music_dir(app_state, app_state.music_dir)
+    app_state.albums = create_albums(app_state)
+
+    fmt.println(len(app_state.albums))
 
     engine_init_result := ma.engine_init(nil, &app_state.ma_engine)
     if engine_init_result != .SUCCESS {
@@ -298,5 +281,28 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
             tl.tag_destroy(&tag)
         }
     }
+}
+
+@private
+create_albums :: proc(app_state: ^App_State) -> [dynamic]Album {
+    album_map := make(map[cstring]int)
+    defer delete(album_map)
+
+    albums := make([dynamic]Album, 0)
+
+    for track, i in app_state.tracks {
+        idx, exists := album_map[track.album]
+        if !exists {
+            idx = len(albums)
+            append(&albums, Album{
+                title = track.album,
+                artist = track.artist
+            })
+            album_map[track.album] = idx
+        }
+
+        append(&albums[idx].track_indices, i32(i))
+    }
+    return albums
 }
 
