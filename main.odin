@@ -106,6 +106,7 @@ main :: proc() {
     defer rl.CloseWindow()
 
     rl.SetTargetFPS(60)
+    rl.SetExitKey(.KEY_NULL)
 
     font_20 := rl.LoadFontEx("res/IBMPlexMono-Regular.ttf", 20, nil, 0)
     defer rl.UnloadFont(font_20)
@@ -163,7 +164,21 @@ main :: proc() {
     }
 }
 
+@private
+handle_keyboard_events :: proc(app_state: ^App_State) {
+    if rl.IsKeyPressed(rl.KeyboardKey.SPACE) {
+        if app_state.ma_sound == nil {
+            return
+        }
+
+        handle_play_pause(app_state)
+    }
+}
+
+@private
 update :: proc(app_state: ^App_State) {
+    handle_keyboard_events(app_state)
+
     if ma.sound_at_end(app_state.ma_sound) {
         handle_next_song_pick(app_state)
     }
@@ -196,21 +211,7 @@ draw :: proc(app_state: ^App_State) {
 
             play_button_pressed := button(app_state.font[20],button_txt, {f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() - 120)})
             if play_button_pressed {
-                if app_state.audio_state == .Playing {
-                    stop_response := ma.sound_stop(app_state.ma_sound)
-                    if stop_response == .SUCCESS {
-                        app_state.audio_state = .Paused
-                    } else {
-                        fmt.eprintln("Could not stop the sound: ", stop_response)
-                    }
-                } else if app_state.audio_state == .Paused && app_state.ma_sound != nil {
-                    start_response := ma.sound_start(app_state.ma_sound)
-                    if start_response == .SUCCESS {
-                        app_state.audio_state = .Playing
-                    } else {
-                        fmt.eprintln("Could not start the sound: ", start_response)
-                    }
-                }
+                handle_play_pause(app_state)
             }
         }
 
@@ -370,6 +371,25 @@ handle_next_song_pick :: proc(app_state: ^App_State) {
                 app_state.audio_state = .Playing
                 app_state.currently_playing = next_track
             }
+        }
+    }
+}
+
+@private
+handle_play_pause :: proc(app_state: ^App_State) {
+    if app_state.audio_state == .Playing {
+        stop_response := ma.sound_stop(app_state.ma_sound)
+        if stop_response == .SUCCESS {
+            app_state.audio_state = .Paused
+        } else {
+            fmt.eprintln("Could not stop the sound: ", stop_response)
+        }
+    } else if app_state.audio_state == .Paused && app_state.ma_sound != nil {
+        start_response := ma.sound_start(app_state.ma_sound)
+        if start_response == .SUCCESS {
+            app_state.audio_state = .Playing
+        } else {
+            fmt.eprintln("Could not start the sound: ", start_response)
         }
     }
 }
