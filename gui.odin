@@ -22,8 +22,9 @@ tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, _track: ^Track) {
     pressed_track : ^Track = nil
 
     list_item_height : f32 = 40
+    album_padding_top : f32 = 20
     for album in app_state.albums {
-        pos_y = pos_y + 20 // add a small margin before each album
+        pos_y = pos_y + album_padding_top
 
         // Only draw what is visible to the user
         if pos_y >= app_state.main_panel.y && pos_y <= app_state.main_panel.height {
@@ -92,7 +93,7 @@ tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, _track: ^Track) {
 
     row_count := len(app_state.tracks)
     albums_count := len(app_state.albums)
-    max_offset := (f32(row_count) * list_item_height) + (f32(albums_count) * (list_item_height + 20)) - app_state.main_panel.height
+    max_offset := (f32(row_count) * list_item_height) + (f32(albums_count) * (list_item_height + album_padding_top)) - app_state.main_panel.height
 
     wheel := rl.GetMouseWheelMove()
     if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel) {
