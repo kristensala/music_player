@@ -15,13 +15,9 @@ App_State :: struct {
     font: map[i32]rl.Font,
     music_dir: string,
 
-    reading_music_dir: bool,
-
-    tracks: [dynamic]Track,
-    albums: [dynamic]Album,
+    tracks: [dynamic]^Track,
+    albums: [dynamic]^Album,
     playlists: [dynamic]Playlist,
-
-    queue: [^]Track, // @todo
 
     default_album_cover_texture: rl.Texture2D,
 
@@ -59,8 +55,11 @@ Track :: struct {
     title: cstring,
     artist: cstring,
     album: cstring,
+    album_idx: i32,
     file_path: cstring,
     file_name: cstring,
+
+    order_nr_in_album: i32
 }
 
 Album :: struct {
@@ -94,7 +93,6 @@ destroy_state :: proc(app_state: ^App_State) {
     }
     delete(app_state.playlists)
 
-
     rl.UnloadTexture(app_state.default_album_cover_texture)
 
     free(app_state)
@@ -122,7 +120,7 @@ main :: proc() {
 
     app_state := new(App_State)
     //app_state.music_dir = "/home/salakris/Music/Michael_Jackson/History Past, Present And Future, Book 1/"
-    app_state.music_dir = "/home/salakris/Music/"
+    app_state.music_dir = "/home/salakris/Music/Skinny_Living/"
     app_state.font = fonts
     app_state.ma_sound = nil
     app_state.audio_state = .Stopped
@@ -153,6 +151,7 @@ main :: proc() {
         app_state.main_panel.width = f32(rl.GetScreenWidth() - 40)
         app_state.main_panel.height = f32(rl.GetScreenHeight() - 150)
 
+        update(app_state)
         draw(app_state)
 
         rl.EndDrawing()
@@ -164,34 +163,20 @@ main :: proc() {
     }
 }
 
+update :: proc(app_state: ^App_State) {
+    if ma.sound_at_end(app_state.ma_sound) {
+        handle_next_song_pick(app_state)
+    }
+}
+
 
 @private
 draw :: proc(app_state: ^App_State) {
-    // @todo: scroll test
-    {
-        pressed, t := tracks_list(app_state)
-        if pressed {
-            if app_state.ma_sound != nil {
-                ma.sound_uninit(app_state.ma_sound)
-                app_state.ma_sound = nil
-            }
+    draw_and_handle_album_list(app_state)
 
-            app_state.ma_sound = new(ma.sound)
-            res := ma.sound_init_from_file(&app_state.ma_engine, t.file_path, {.STREAM}, nil, nil, app_state.ma_sound)
-            if res != .SUCCESS {
-                fmt.println("Could not init sound: ", res)
-            } else {
-                sound_start_result := ma.sound_start(app_state.ma_sound)
-                if sound_start_result == .SUCCESS {
-                    app_state.audio_state = .Playing
-                    app_state.currently_playing = t
-                }
-            }
-        }
-    }
-    // bottom bar
+    // Bottom bar
     {
-        // currently playing track
+        // Display currently playing track
         {
             currently_playing : cstring = ""
             if app_state.currently_playing != nil {
@@ -200,7 +185,7 @@ draw :: proc(app_state: ^App_State) {
             rl.DrawTextEx(app_state.font[20], currently_playing, {GUI_PADDING, f32(rl.GetScreenHeight() - GUI_PADDING - 25)}, 20, 0, rl.BLACK)
         }
 
-        // playback conrols
+        // Playback conrols
         {
             button_txt : cstring = "play"
             if app_state.audio_state == .Playing {
@@ -229,18 +214,21 @@ draw :: proc(app_state: ^App_State) {
             }
         }
 
-        cursor: f32 = 0
-        ma.sound_get_cursor_in_seconds(app_state.ma_sound, &cursor)
+        // Progress bar
+        {
+            cursor: f32 = 0
+            ma.sound_get_cursor_in_seconds(app_state.ma_sound, &cursor)
 
-        length: f32 = 1
-        ma.sound_get_length_in_seconds(app_state.ma_sound, &length)
+            length: f32 = 1
+            ma.sound_get_length_in_seconds(app_state.ma_sound, &length)
 
-        progress_bar(
-            cursor,
-            length,
-            {GUI_PADDING, f32(rl.GetScreenHeight() - GUI_PADDING)},
-            f32(rl.GetScreenWidth() - 100),
-            10)
+            draw_progress_bar(
+                cursor,
+                length,
+                {GUI_PADDING, f32(rl.GetScreenHeight() - GUI_PADDING)},
+                f32(rl.GetScreenWidth() - 100),
+                10)
+        }
     }
 }
 
@@ -269,13 +257,12 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
             tag, tl_error := tl.get_tag(d.fullpath)
             //fmt.printfln("md.title len=%d value=%q", len(tag.title), tag.title)
 
-            track := Track{
-                title = strings.clone_to_cstring(tag.title),
-                artist = strings.clone_to_cstring(tag.artist),
-                album = strings.clone_to_cstring(tag.album),
-                file_name = strings.clone_to_cstring(d.name),
-                file_path = strings.clone_to_cstring(d.fullpath)
-            }
+            track := new(Track)
+            track.title = strings.clone_to_cstring(tag.title)
+            track.artist = strings.clone_to_cstring(tag.artist)
+            track.album = strings.clone_to_cstring(tag.album)
+            track.file_name = strings.clone_to_cstring(d.name)
+            track.file_path = strings.clone_to_cstring(d.fullpath)
 
             append(&app_state.tracks, track)
 
@@ -285,26 +272,106 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
 }
 
 @private
-create_albums :: proc(app_state: ^App_State) -> [dynamic]Album {
+create_albums :: proc(app_state: ^App_State) -> [dynamic]^Album {
     album_map := make(map[cstring]int)
     defer delete(album_map)
 
-    albums := make([dynamic]Album, 0)
+    albums : [dynamic]^Album
 
     for track, i in app_state.tracks {
         idx, exists := album_map[track.album]
         if !exists {
             idx = len(albums)
-            append(&albums, Album{
-                title = track.album,
-                artist = track.artist,
-                cover_img_texture = app_state.default_album_cover_texture
-            })
+
+            album := new(Album)
+            album.title = track.album
+            album.artist = track.artist
+            album.cover_img_texture = app_state.default_album_cover_texture
+
+            append(&albums, album)
             album_map[track.album] = idx
         }
-
+        track.album_idx = i32(idx)
         append(&albums[idx].track_indices, i32(i))
+
+        track_pos := len(albums[idx].track_indices) - 1
+        track.order_nr_in_album = i32(track_pos)
     }
     return albums
+}
+
+@private
+draw_and_handle_album_list :: proc(app_state: ^App_State) {
+    pressed, selected_track := draw_tracks_list(app_state)
+    if pressed {
+        fmt.println("selected_track: ", selected_track.order_nr_in_album)
+        if app_state.ma_sound != nil {
+            ma.sound_uninit(app_state.ma_sound)
+            app_state.ma_sound = nil
+        }
+
+        app_state.ma_sound = new(ma.sound)
+        res := ma.sound_init_from_file(&app_state.ma_engine, selected_track.file_path, {.STREAM}, nil, nil, app_state.ma_sound)
+        if res != .SUCCESS {
+            app_state.ma_sound = nil
+            fmt.println("Could not init sound: ", res)
+        } else {
+            sound_start_result := ma.sound_start(app_state.ma_sound)
+            if sound_start_result == .SUCCESS {
+                app_state.audio_state = .Playing
+                app_state.currently_playing = selected_track
+            }
+        }
+    }
+}
+
+@private
+handle_next_song_pick :: proc(app_state: ^App_State) {
+    assert(ma.sound_at_end(app_state.ma_sound) == true)
+
+    ma.sound_uninit(app_state.ma_sound)
+    app_state.ma_sound = nil
+    app_state.audio_state = .Stopped
+
+    current_album := app_state.albums[app_state.currently_playing.album_idx]
+    next_track : ^Track = nil
+
+    assert(app_state.currently_playing != nil)
+
+    // @testing
+    // @todo: handle if last album
+    // Is last song of the album. Switch to the next one
+    if len(current_album.track_indices) - 1 == int(app_state.currently_playing.order_nr_in_album) {
+        is_last_album := len(app_state.albums) - 1  == int(app_state.currently_playing.album_idx)
+        if is_last_album {
+            app_state.currently_playing = nil
+            app_state.ma_sound = nil
+            app_state.audio_state = .Stopped
+            return
+        }
+
+        next_track_idx := app_state.albums[app_state.currently_playing.album_idx + 1].track_indices[0]
+        next_track = app_state.tracks[next_track_idx]
+    } else {
+        next_track_idx := current_album.track_indices[app_state.currently_playing.order_nr_in_album + 1]
+        next_track = app_state.tracks[next_track_idx]
+    }
+
+    app_state.currently_playing = nil
+
+    if next_track != nil {
+        app_state.ma_sound = new(ma.sound)
+        res := ma.sound_init_from_file(&app_state.ma_engine, next_track.file_path, {.STREAM}, nil, nil, app_state.ma_sound)
+        if res != .SUCCESS {
+            app_state.ma_sound = nil
+            fmt.println("Could not start the next track")
+        } else {
+            sound_start_result := ma.sound_start(app_state.ma_sound)
+            if sound_start_result == .SUCCESS {
+                app_state.audio_state = .Playing
+                app_state.currently_playing = next_track
+            }
+        }
+    }
 }
 

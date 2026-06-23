@@ -10,7 +10,7 @@ albums_grid :: proc() -> (pressed: bool, album: ^Album) {
     return false, nil
 }
 
-tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, _track: ^Track) {
+draw_tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, _track: ^Track) {
     rl.BeginScissorMode(
         i32(app_state.main_panel.x),
         i32(app_state.main_panel.y),
@@ -23,10 +23,23 @@ tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, _track: ^Track) {
 
     list_item_height : f32 = 40
     album_padding_top : f32 = 20
+    album_height : f32 = 0
+
+    max_content_height : f32 = 0
     for album, album_idx in app_state.albums {
+        // get album height
+        album_height = f32(len(album.track_indices)) * list_item_height
+        album_cover_height := f32(album.cover_img_texture.height) * 0.75
+        if album_height < album_cover_height {
+            album_height = album_cover_height
+        }
+
+        max_content_height = max_content_height + album_height + list_item_height
+
         pos_y = pos_y + album_padding_top
 
-        // get album height in px
+        // get previous album height in px
+        // min height is the album cover
         // @todo: bug if there is more than 1 track and the height of the tracks do not exceed the album cover height
         if album_idx > 0 {
             tracks_count := len(app_state.albums[album_idx - 1].track_indices)
@@ -57,7 +70,7 @@ tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, _track: ^Track) {
         // @todo: filter tracks and loop over the ones which are visible,
         // not all of them
         track_left_margin : f32 = 250
-        for track_idx in album.track_indices {
+        for track_idx, idx_in_album in album.track_indices {
             list_item := rl.Rectangle{
                 x = app_state.main_panel.x + track_left_margin,
                 y = pos_y,
@@ -67,7 +80,7 @@ tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, _track: ^Track) {
 
             // Only draw tracks which are visible to the user
             if pos_y >= app_state.main_panel.y && pos_y <= app_state.main_panel.height {
-                track := &app_state.tracks[track_idx]
+                track := app_state.tracks[track_idx]
 
                 formated_str := fmt.caprintf("%s - %s - %s", track.album, track.artist, track.title)
                 defer delete(formated_str)
@@ -108,7 +121,9 @@ tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, _track: ^Track) {
 
     track_count := len(app_state.tracks)
     albums_count := len(app_state.albums)
-    max_offset := (f32(track_count) * list_item_height) + (f32(albums_count) * (list_item_height + album_padding_top)) - app_state.main_panel.height
+    //max_offset := (f32(track_count) * list_item_height) + (f32(albums_count) * (list_item_height + album_padding_top)) - app_state.main_panel.height
+    max_offset := max_content_height
+    fmt.println("max: ", max_offset)
 
     wheel := rl.GetMouseWheelMove()
     if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel) {
@@ -130,7 +145,7 @@ tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, _track: ^Track) {
     return track_pressed, pressed_track
 }
 
-progress_bar :: proc(value: f32, max_value: f32, pos: [2]f32, w, h: f32) {
+draw_progress_bar :: proc(value: f32, max_value: f32, pos: [2]f32, w, h: f32) {
     bounds := rl.Rectangle{
         x = pos.x,
         y = pos.y,

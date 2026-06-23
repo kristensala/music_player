@@ -79,9 +79,9 @@ parse_mp3 :: proc(filepath: string) -> (_tag: Tag, error: Taglib_Error) {
 
     // @todo: if major version is 2 then need to parse differently
     major_version := header[3]
-    fmt.println("major_version: ", major_version)
+    //fmt.println("major_version: ", major_version)
     revision_number := header[4]
-    fmt.println("revision_number: ", revision_number)
+    //fmt.println("revision_number: ", revision_number)
 
     // flags: if byte is 0 then no flags
     // else conver to 8bit binary
@@ -212,7 +212,7 @@ parse_wav :: proc(file_path: string) {
 @private
 @require_results
 mp3_parse_tag :: proc(tag_data: []byte, tag_size: u32) -> Tag {
-    fmt.println("parse tag start: ", tag_size)
+    //fmt.println("parse tag start: ", tag_size)
     frame_length := 4
     result := Tag{}
 
