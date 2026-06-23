@@ -109,8 +109,6 @@ tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, _track: ^Track) {
                 app_state.main_panel_scroll_offset = i32(-max_offset)
             }
         }
-
-        fmt.println(pos_y, app_state.main_panel.y, app_state.main_panel_scroll_offset)
     }
 
     return track_pressed, pressed_track
