@@ -23,6 +23,8 @@ App_State :: struct {
 
     queue: [^]Track, // @todo
 
+    default_album_cover_texture: rl.Texture2D,
+
     ma_engine: ma.engine,
     ma_sound: ^ma.sound,
 
@@ -64,7 +66,7 @@ Track :: struct {
 Album :: struct {
     title: cstring,
     artist: cstring,
-    cover_art: string,
+    cover_img_texture: rl.Texture2D,
     track_indices: [dynamic]i32 // reference to the app_state.tracks
 }
 
@@ -91,6 +93,10 @@ destroy_state :: proc(app_state: ^App_State) {
         delete(p.tracks)
     }
     delete(app_state.playlists)
+
+
+    rl.UnloadTexture(app_state.default_album_cover_texture)
+
     free(app_state)
 }
 
@@ -125,6 +131,7 @@ main :: proc() {
         y = 20
     }
     app_state.main_panel_scroll_offset = 20
+    app_state.default_album_cover_texture = rl.LoadTexture("./res/album_placeholder.png")
 
     walk_music_dir(app_state, app_state.music_dir)
     app_state.albums = create_albums(app_state)
@@ -204,9 +211,7 @@ draw :: proc(app_state: ^App_State) {
 
             play_button_pressed := button(app_state.font[20],button_txt, {f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() - 120)})
             if play_button_pressed {
-                fmt.println("play pressed", app_state.audio_state)
                 if app_state.audio_state == .Playing {
-                    fmt.println("stop attempt")
                     stop_response := ma.sound_stop(app_state.ma_sound)
                     if stop_response == .SUCCESS {
                         app_state.audio_state = .Paused
@@ -292,7 +297,8 @@ create_albums :: proc(app_state: ^App_State) -> [dynamic]Album {
             idx = len(albums)
             append(&albums, Album{
                 title = track.album,
-                artist = track.artist
+                artist = track.artist,
+                cover_img_texture = app_state.default_album_cover_texture
             })
             album_map[track.album] = idx
         }

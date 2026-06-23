@@ -23,12 +23,24 @@ tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, _track: ^Track) {
 
     list_item_height : f32 = 40
     album_padding_top : f32 = 20
-    for album in app_state.albums {
+    for album, album_idx in app_state.albums {
         pos_y = pos_y + album_padding_top
+
+        // get album height in px
+        // @todo: bug if there is more than 1 track and the height of the tracks do not exceed the album cover height
+        if album_idx > 0 {
+            tracks_count := len(app_state.albums[album_idx - 1].track_indices)
+            tracks_height := f32(tracks_count) * list_item_height
+            if tracks_height < (f32(album.cover_img_texture.height) * 0.75) {
+                //fmt.println("texture_height:", tracks_height, f32(album.cover_img_texture.height) * 0.75)
+                pos_y = pos_y + (f32(album.cover_img_texture.height) * 0.75)
+            }
+        }
 
         // Only draw what is visible to the user
         if pos_y >= app_state.main_panel.y && pos_y <= app_state.main_panel.height {
             text_measurement := rl.MeasureTextEx(app_state.font[30], album.title, 30, 0)
+
             rl.DrawTextEx(
                 app_state.font[30],
                 album.title,
@@ -36,15 +48,18 @@ tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, _track: ^Track) {
                 30,
                 0,
                 rl.BLACK)
+
+            rl.DrawTextureEx(app_state.default_album_cover_texture, {0, pos_y + list_item_height}, 0, 0.75, rl.WHITE)
         }
 
         pos_y = pos_y + list_item_height
 
         // @todo: filter tracks and loop over the ones which are visible,
         // not all of them
+        track_left_margin : f32 = 250
         for track_idx in album.track_indices {
             list_item := rl.Rectangle{
-                x = app_state.main_panel.x,
+                x = app_state.main_panel.x + track_left_margin,
                 y = pos_y,
                 width = app_state.main_panel.width,
                 height = list_item_height
@@ -69,7 +84,7 @@ tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, _track: ^Track) {
                     rl.BLACK)
 
                 rl.DrawLine(
-                    0, 
+                    i32(track_left_margin), 
                     i32(list_item.y + list_item.height + 1),
                     i32(app_state.main_panel.width),
                     i32(list_item.y + list_item.height + 1),
