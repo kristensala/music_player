@@ -32,7 +32,7 @@ draw_tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, _track: ^Trac
 
     for album, album_idx in app_state.albums {
         // Only draw what is visible to the user
-        if pos_y >= app_state.main_panel.y && pos_y <= app_state.main_panel.height {
+        if is_in_view(pos_y, app_state.main_panel) {
             text_measurement := rl.MeasureTextEx(app_state.font[album_title_font_size], album.title, f32(album_title_font_size), 0)
 
             rl.DrawTextEx(
@@ -49,8 +49,15 @@ draw_tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, _track: ^Trac
                 i32(app_state.main_panel.width),
                 i32(pos_y + f32(album_title_font_size / 2)),
                 rl.PURPLE)
+        }
 
-            rl.DrawTextureEx(app_state.default_album_cover_texture, {0, pos_y + list_item_height}, 0, ALBUM_COVER_SCALE, rl.WHITE)
+        // Draw album cover
+        {
+            // Draw texture even if it is showing on screen half way
+            texture_height := f32(app_state.default_album_cover_texture.height)
+            if pos_y + texture_height >= app_state.main_panel.y && pos_y <= app_state.main_panel.height {
+                rl.DrawTextureEx(app_state.default_album_cover_texture, {0, pos_y + list_item_height}, 0, ALBUM_COVER_SCALE, rl.WHITE)
+            }
         }
 
         pos_y = pos_y + album_content_start
@@ -60,45 +67,74 @@ draw_tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, _track: ^Trac
         // not all of them
         for track_idx, idx in album.track_indices {
             list_item := rl.Rectangle{
-                x = app_state.main_panel.x + tracks_start_pos_x,
+                x = tracks_start_pos_x,
                 y = pos_y,
                 width = app_state.main_panel.width,
                 height = list_item_height
             }
 
             // Only draw tracks which are visible to the user
-            if pos_y >= app_state.main_panel.y && pos_y <= app_state.main_panel.height {
+            if is_in_view(pos_y, app_state.main_panel) {
                 track := app_state.tracks[track_idx]
 
-                formated_str := fmt.caprintf("%s - %s - %s", track.album, track.artist, track.title)
-                defer delete(formated_str)
+                if (
+                    rl.CheckCollisionPointRec(rl.GetMousePosition(), list_item) &&
+                    rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel)
+                ) {
+                    rl.DrawRectangleRec(list_item, rl.ORANGE)
 
-                text_measurement := rl.MeasureTextEx(app_state.font[20], formated_str, 20, 0)
+                    if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
+                        track_pressed = true
+                        pressed_track = track
+                    }
+                }
+
+                text_measurement := rl.MeasureTextEx(app_state.font[20], "placeholder", 20, 0)
                 txt_y := ((list_item.height - text_measurement.y) / 2) + list_item.y
 
-                rl.DrawTextEx(
-                    app_state.font[20],
-                    formated_str,
-                    { list_item.x, txt_y},
-                    20,
-                    0,
-                    rl.BLACK)
+                txt_color := rl.BLACK
+                is_playing := app_state.currently_playing != nil && track.file_path == app_state.currently_playing.file_path
+                if is_playing {
+                    txt_color = rl.PURPLE
+                }
+
+                // display track text
+                {
+                    rl.DrawTextEx(
+                        app_state.font[20],
+                        track.album,
+                        { list_item.x + 10, txt_y},
+                        20,
+                        0,
+                        txt_color)
+
+                    rl.DrawTextEx(
+                        app_state.font[20],
+                        track.artist,
+                        { list_item.x + 500, txt_y},
+                        20,
+                        0,
+                        txt_color)
+
+                    title := track.title
+                    if len(title) == 0 {
+                        title = track.file_name
+                    }
+                    rl.DrawTextEx(
+                        app_state.font[20],
+                        title,
+                        { list_item.x + 1000, txt_y},
+                        20,
+                        0,
+                        txt_color)
+                }
 
                 rl.DrawLine(
                     i32(tracks_start_pos_x), 
-                    i32(list_item.y + list_item.height + 1),
-                    i32(app_state.main_panel.width),
-                    i32(list_item.y + list_item.height + 1),
+                    i32(list_item.y + list_item.height),
+                    i32(app_state.main_panel.width + 20),
+                    i32(list_item.y + list_item.height),
                     rl.LIGHTGRAY)
-
-                if rl.CheckCollisionPointRec(rl.GetMousePosition(), list_item) &&
-                    rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel)
-                    {
-                        if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
-                            track_pressed = true
-                            pressed_track = track
-                        }
-                    }
             }
 
             pos_y = pos_y + list_item.height
@@ -190,4 +226,9 @@ button :: proc(font: rl.Font, text: cstring, pos: [2]f32) -> bool {
     }
 
     return false
+}
+
+@private
+is_in_view :: proc(point: f32, panel: rl.Rectangle) -> bool {
+    return point >= panel.y && point <= panel.height 
 }

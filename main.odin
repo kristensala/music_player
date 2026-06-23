@@ -150,7 +150,7 @@ main :: proc() {
         rl.ClearBackground(rl.RAYWHITE)
 
         app_state.main_panel.width = f32(rl.GetScreenWidth() - 40)
-        app_state.main_panel.height = f32(rl.GetScreenHeight() - 150)
+        app_state.main_panel.height = f32(rl.GetScreenHeight() - 200)
 
         update(app_state)
         draw(app_state)
@@ -184,13 +184,18 @@ update :: proc(app_state: ^App_State) {
     }
 }
 
-
 @private
 draw :: proc(app_state: ^App_State) {
     draw_and_handle_album_list(app_state)
 
     // Bottom bar
     {
+        rl.DrawLineEx(
+            {0, app_state.main_panel.y + app_state.main_panel.height}, 
+            {f32(rl.GetScreenWidth()), app_state.main_panel.y + app_state.main_panel.height},
+            1.5,
+            rl.BLACK
+        )
         // Display currently playing track
         {
             currently_playing : cstring = ""
@@ -202,17 +207,29 @@ draw :: proc(app_state: ^App_State) {
 
         // Playback conrols
         {
-            button_txt : cstring = "play"
+            play_button_icon : rl.GuiIconName = .ICON_PLAYER_PLAY
             if app_state.audio_state == .Playing {
-                button_txt = "pause"
+                play_button_icon = .ICON_PLAYER_PAUSE
             } else if app_state.audio_state == .Paused || app_state.audio_state == .Stopped {
-                button_txt = "play"
+                play_button_icon = .ICON_PLAYER_PLAY
             }
 
-            play_button_pressed := button(app_state.font[20],button_txt, {f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() - 120)})
-            if play_button_pressed {
-                handle_play_pause(app_state)
+            play_button_bounds := rl.Rectangle{
+                x = f32(rl.GetScreenWidth() / 2) - 15,
+                y = f32(rl.GetScreenHeight() - 120),
+                width = 30,
+                height = 30
             }
+
+            rl.GuiDrawIcon(play_button_icon, i32(play_button_bounds.x - 1), i32(play_button_bounds.y), 2, rl.BLACK)
+            if rl.CheckCollisionPointRec(rl.GetMousePosition(), play_button_bounds) {
+                if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
+                    handle_play_pause(app_state)
+                }
+            }
+
+            rl.GuiDrawIcon(.ICON_PLAYER_PREVIOUS, i32(play_button_bounds.x - 55), i32(play_button_bounds.y), 2, rl.BLACK)
+            rl.GuiDrawIcon(.ICON_PLAYER_NEXT, i32(play_button_bounds.x + 50), i32(play_button_bounds.y), 2, rl.BLACK)
         }
 
         // Progress bar
