@@ -44,6 +44,7 @@ AudioState :: enum {
     Paused
 }
 
+// @todo
 // custom files
 // Use DeaDBeef as an example
 Playlist :: struct {
@@ -119,8 +120,7 @@ main :: proc() {
     fonts[30] = font_30
 
     app_state := new(App_State)
-    //app_state.music_dir = "/home/salakris/Music/Michael_Jackson/History Past, Present And Future, Book 1/"
-    app_state.music_dir = "/home/salakris/Music/Skinny_Living/"
+    app_state.music_dir = "/home/salakris/Music/"
     app_state.font = fonts
     app_state.ma_sound = nil
     app_state.audio_state = .Stopped
@@ -304,7 +304,6 @@ create_albums :: proc(app_state: ^App_State) -> [dynamic]^Album {
 draw_and_handle_album_list :: proc(app_state: ^App_State) {
     pressed, selected_track := draw_tracks_list(app_state)
     if pressed {
-        fmt.println("selected_track: ", selected_track.order_nr_in_album)
         if app_state.ma_sound != nil {
             ma.sound_uninit(app_state.ma_sound)
             app_state.ma_sound = nil
