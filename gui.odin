@@ -25,19 +25,23 @@ tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, _track: ^Track) {
     for album in app_state.albums {
         pos_y = pos_y + 20 // add a small margin before each album
 
-        text_measurement := rl.MeasureTextEx(app_state.font[30], album.title, 30, 0)
-        rl.DrawTextEx(
-            app_state.font[30],
-            album.title,
-            { app_state.main_panel.x, pos_y},
-            30,
-            0,
-            rl.BLACK)
+        // Only draw what is visible to the user
+        if pos_y >= app_state.main_panel.y && pos_y <= app_state.main_panel.height {
+            text_measurement := rl.MeasureTextEx(app_state.font[30], album.title, 30, 0)
+            rl.DrawTextEx(
+                app_state.font[30],
+                album.title,
+                { app_state.main_panel.x, pos_y},
+                30,
+                0,
+                rl.BLACK)
+        }
 
         pos_y = pos_y + list_item_height
 
+        // @todo: filter tracks and loop over the ones which are visible,
+        // not all of them
         for track_idx in album.track_indices {
-            track := &app_state.tracks[track_idx]
             list_item := rl.Rectangle{
                 x = app_state.main_panel.x,
                 y = pos_y,
@@ -45,34 +49,39 @@ tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, _track: ^Track) {
                 height = list_item_height
             }
 
-            formated_str := fmt.caprintf("%s - %s - %s", track.album, track.artist, track.title)
-            defer delete(formated_str)
+            // Only draw tracks which are visible to the user
+            if pos_y >= app_state.main_panel.y && pos_y <= app_state.main_panel.height {
+                track := &app_state.tracks[track_idx]
 
-            text_measurement := rl.MeasureTextEx(app_state.font[20], formated_str, 20, 0)
-            txt_y := ((list_item.height - text_measurement.y) / 2) + list_item.y
+                formated_str := fmt.caprintf("%s - %s - %s", track.album, track.artist, track.title)
+                defer delete(formated_str)
 
-            rl.DrawTextEx(
-                app_state.font[20],
-                formated_str,
-                { list_item.x, txt_y},
-                20,
-                0,
-                rl.BLACK)
+                text_measurement := rl.MeasureTextEx(app_state.font[20], formated_str, 20, 0)
+                txt_y := ((list_item.height - text_measurement.y) / 2) + list_item.y
 
-            rl.DrawLine(
-                0, 
-                i32(list_item.y + list_item.height + 1),
-                i32(app_state.main_panel.width),
-                i32(list_item.y + list_item.height + 1),
-                rl.LIGHTGRAY)
+                rl.DrawTextEx(
+                    app_state.font[20],
+                    formated_str,
+                    { list_item.x, txt_y},
+                    20,
+                    0,
+                    rl.BLACK)
 
-            if rl.CheckCollisionPointRec(rl.GetMousePosition(), list_item) &&
-                rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel)
-            {
-                if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
-                    track_pressed = true
-                    pressed_track = track
-                }
+                rl.DrawLine(
+                    0, 
+                    i32(list_item.y + list_item.height + 1),
+                    i32(app_state.main_panel.width),
+                    i32(list_item.y + list_item.height + 1),
+                    rl.LIGHTGRAY)
+
+                if rl.CheckCollisionPointRec(rl.GetMousePosition(), list_item) &&
+                    rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel)
+                    {
+                        if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
+                            track_pressed = true
+                            pressed_track = track
+                        }
+                    }
             }
 
             pos_y = pos_y + list_item.height
@@ -100,6 +109,8 @@ tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, _track: ^Track) {
                 app_state.main_panel_scroll_offset = i32(-max_offset)
             }
         }
+
+        fmt.println(pos_y, app_state.main_panel.y, app_state.main_panel_scroll_offset)
     }
 
     return track_pressed, pressed_track

@@ -32,9 +32,6 @@ App_State :: struct {
     main_panel: rl.Rectangle,
     main_panel_scroll_offset: i32,
     main_panel_content: Content,
-
-    bottom_bar: rl.Rectangle, // track progress, playback buttons etc
-    right_panel: rl.Rectangle, // if album selected, display album tracks
 }
 
 Content :: enum {
