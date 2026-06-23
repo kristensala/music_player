@@ -91,9 +91,9 @@ tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, _track: ^Track) {
 
     rl.EndScissorMode()
 
-    row_count := len(app_state.tracks)
+    track_count := len(app_state.tracks)
     albums_count := len(app_state.albums)
-    max_offset := (f32(row_count) * list_item_height) + (f32(albums_count) * (list_item_height + album_padding_top)) - app_state.main_panel.height
+    max_offset := (f32(track_count) * list_item_height) + (f32(albums_count) * (list_item_height + album_padding_top)) - app_state.main_panel.height
 
     wheel := rl.GetMouseWheelMove()
     if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel) {
@@ -163,8 +163,7 @@ button :: proc(font: rl.Font, text: cstring, pos: [2]f32) -> bool {
 
     if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
         mouse_pos := rl.GetMousePosition()
-        return mouse_pos.x >= pos.x && mouse_pos.x <= pos.x + bounds.width &&
-            mouse_pos.y >= pos.y && mouse_pos.y <= pos.y + bounds.height
+        return rl.CheckCollisionPointRec(rl.GetMousePosition(), bounds)
     }
 
     return false

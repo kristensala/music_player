@@ -202,11 +202,7 @@ draw :: proc(app_state: ^App_State) {
                 button_txt = "play"
             }
 
-            play_button_pressed := button(
-                             app_state.font[20],
-                             button_txt,
-                             { f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() - 120) }
-                         )
+            play_button_pressed := button(app_state.font[20],button_txt, {f32(rl.GetScreenWidth() / 2), f32(rl.GetScreenHeight() - 120)})
             if play_button_pressed {
                 fmt.println("play pressed", app_state.audio_state)
                 if app_state.audio_state == .Playing {
