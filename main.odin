@@ -66,6 +66,7 @@ Track :: struct {
 Album :: struct {
     title: cstring,
     artist: cstring,
+    cover_art_path: cstring,
     cover_img_texture: rl.Texture2D,
     track_indices: [dynamic]i32 // reference to the app_state.tracks
 }
@@ -76,6 +77,9 @@ destroy_state :: proc(app_state: ^App_State) {
 
     for a in app_state.albums {
         delete(a.track_indices)
+        delete(a.cover_art_path)
+
+        rl.UnloadTexture(a.cover_img_texture)
     }
     delete(app_state.albums)
 
@@ -133,7 +137,6 @@ main :: proc() {
     app_state.default_album_cover_texture = rl.LoadTexture("./res/album_placeholder.png")
 
     walk_music_dir(app_state, app_state.music_dir)
-    app_state.albums = create_albums(app_state)
 
     fmt.println(len(app_state.albums))
 
@@ -259,63 +262,66 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
     }
     defer delete(data)
 
+    album_map := make(map[cstring]int)
+    defer delete(album_map)
+
+    current_album: ^Album = nil
+
     for d in data {
         if d.type == .Directory {
             walk_music_dir(app_state, d.fullpath)
         } else if d.type == .Regular {
-            if filepath.ext(d.fullpath) != ".mp3" && filepath.ext(d.fullpath) != ".flac" {
-                continue
+            if filepath.ext(d.fullpath) == ".mp3" || filepath.ext(d.fullpath) == ".flac" {
+                // @todo: if image found `cover.jpeg/png` save to a map with base path as key
+                // map[string]string and value as path to the cover art
+                // after the tracks are found, use track file_path and match with the cover art path
+
+                //fmt.printfln(d.fullpath)
+                tag, tl_error := tl.get_tag(d.fullpath)
+                //fmt.printfln("md.title len=%d value=%q", len(tag.title), tag.title)
+
+                track := new(Track)
+                track.title = strings.clone_to_cstring(tag.title)
+                track.artist = strings.clone_to_cstring(tag.artist)
+                track.album = strings.clone_to_cstring(tag.album)
+                track.file_name = strings.clone_to_cstring(d.name)
+                track.file_path = strings.clone_to_cstring(d.fullpath)
+
+                append(&app_state.tracks, track)
+                tl.tag_destroy(&tag)
+
+                // create album
+                {
+                    idx, album_exists := album_map[track.album]
+                    if !album_exists {
+                        idx = len(app_state.albums)
+
+                        album := new(Album)
+                        album.title = track.album
+                        album.artist = track.artist
+                        //album.cover_img_texture = app_state.default_album_cover_texture
+
+                        append(&app_state.albums, album)
+                        album_map[track.album] = idx
+                    }
+                    track.album_idx = i32(idx)
+                    track_idx := len(app_state.tracks) - 1
+                    append(&app_state.albums[idx].track_indices, i32(track_idx))
+
+                    track_pos := len(app_state.albums[idx].track_indices) - 1
+                    track.order_nr_in_album = i32(track_pos)
+
+                    current_album = app_state.albums[len(app_state.albums) - 1]
+                }
+
+            } else if filepath.ext(d.fullpath) == ".jpg" || filepath.ext(d.fullpath) == ".jpeg" || filepath.ext(d.fullpath) == ".png" {
+                // found an image. Assume this is the cover for the album
+                if current_album != nil {
+                    current_album.cover_art_path = strings.clone_to_cstring(d.fullpath)
+                }
             }
-
-            // @todo: if image found `cover.jpeg/png` save to a map with base path as key
-            // map[string]string and value as path to the cover art
-            // after the tracks are found, use track file_path and match with the cover art path
-
-            //fmt.printfln(d.fullpath)
-            tag, tl_error := tl.get_tag(d.fullpath)
-            //fmt.printfln("md.title len=%d value=%q", len(tag.title), tag.title)
-
-            track := new(Track)
-            track.title = strings.clone_to_cstring(tag.title)
-            track.artist = strings.clone_to_cstring(tag.artist)
-            track.album = strings.clone_to_cstring(tag.album)
-            track.file_name = strings.clone_to_cstring(d.name)
-            track.file_path = strings.clone_to_cstring(d.fullpath)
-
-            append(&app_state.tracks, track)
-
-            tl.tag_destroy(&tag)
         }
     }
-}
-
-@private
-create_albums :: proc(app_state: ^App_State) -> [dynamic]^Album {
-    album_map := make(map[cstring]int)
-    defer delete(album_map)
-
-    albums : [dynamic]^Album
-
-    for track, i in app_state.tracks {
-        idx, exists := album_map[track.album]
-        if !exists {
-            idx = len(albums)
-
-            album := new(Album)
-            album.title = track.album
-            album.artist = track.artist
-            album.cover_img_texture = app_state.default_album_cover_texture
-
-            append(&albums, album)
-            album_map[track.album] = idx
-        }
-        track.album_idx = i32(idx)
-        append(&albums[idx].track_indices, i32(i))
-
-        track_pos := len(albums[idx].track_indices) - 1
-        track.order_nr_in_album = i32(track_pos)
-    }
-    return albums
 }
 
 @private
@@ -409,5 +415,10 @@ handle_play_pause :: proc(app_state: ^App_State) {
             fmt.eprintln("Could not start the sound: ", start_response)
         }
     }
+}
+
+@private
+get_track_cover_art :: proc(app_state: ^App_State, track: ^Track) -> ^cstring {
+    return &app_state.albums[track.album_idx].cover_art_path
 }
 

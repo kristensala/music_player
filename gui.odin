@@ -1,11 +1,10 @@
 package main
 
-import "core:fmt"
 import "core:math"
 import rl "vendor:raylib"
 
 SCROLL_VALUE :: 100
-ALBUM_COVER_SCALE :: 0.75
+ALBUM_COVER_SCALE :: 2
 
 albums_grid :: proc() -> (pressed: bool, album: ^Album) {
     return false, nil
@@ -53,11 +52,20 @@ draw_tracks_list :: proc(app_state: ^App_State) -> (pressed: bool, _track: ^Trac
 
         // Draw album cover
         {
-            // Draw texture even if it is showing on screen half way
-            texture_height := f32(app_state.default_album_cover_texture.height)
+            /*texture_height : f32 = 200
             if pos_y + texture_height >= app_state.main_panel.y && pos_y <= app_state.main_panel.height {
-                rl.DrawTextureEx(app_state.default_album_cover_texture, {0, pos_y + list_item_height}, 0, ALBUM_COVER_SCALE, rl.WHITE)
-            }
+                if len(album.cover_art_path) > 0 && album.cover_img_texture.id == 0 {
+                    fmt.println("loading texture for album: ", album.title)
+                    img := rl.LoadImage(album.cover_art_path)
+                    rl.ImageResize(&img, 100, 100)
+
+                    album.cover_img_texture = rl.LoadTextureFromImage(img)
+                    rl.UnloadImage(img)
+                }
+
+                //rl.DrawTexture(album.cover_img_texture, i32(app_state.main_panel.x), i32(pos_y + list_item_height), rl.WHITE)
+                rl.DrawTextureEx(album.cover_img_texture, {app_state.main_panel.x, pos_y + list_item_height}, 0, ALBUM_COVER_SCALE, rl.WHITE)
+            }*/
         }
 
         pos_y = pos_y + album_content_start
