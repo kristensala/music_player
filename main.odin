@@ -6,10 +6,11 @@ import "core:fmt"
 import rl "vendor:raylib"
 import "core:os"
 import ma "vendor:miniaudio"
-
 import tl "taglib"
 
-GUI_PADDING :: 50
+BOTTOM_BAR_PADDING   :: 50
+FONT_20              :: 20
+FONT_30              :: 30
 
 App_State :: struct {
     font: map[i32]rl.Font,
@@ -18,6 +19,8 @@ App_State :: struct {
     tracks: [dynamic]^Track,
     albums: [dynamic]^Album,
     playlists: [dynamic]Playlist,
+
+    rows: [dynamic]^Row,
 
     default_album_cover_texture: rl.Texture2D,
 
@@ -30,6 +33,14 @@ App_State :: struct {
     main_panel: rl.Rectangle,
     main_panel_scroll_offset: i32,
     main_panel_content: Content,
+
+    current_scroll_idx: i32,
+    max_rows_count_to_render: i32
+}
+
+// @todo
+// with cache eviction
+Cover_Art_Texture_Atlas :: struct {
 }
 
 Content :: enum {
@@ -75,6 +86,8 @@ Album :: struct {
 destroy_state :: proc(app_state: ^App_State) {
     ma.sound_uninit(app_state.ma_sound)
 
+    delete(app_state.rows)
+
     for a in app_state.albums {
         delete(a.track_indices)
         delete(a.cover_art_path)
@@ -112,17 +125,17 @@ main :: proc() {
     rl.SetTargetFPS(60)
     rl.SetExitKey(.KEY_NULL)
 
-    font_20 := rl.LoadFontEx("res/IBMPlexMono-Regular.ttf", 20, nil, 0)
+    font_20 := rl.LoadFontEx("res/IBMPlexMono-Regular.ttf", FONT_20, nil, 0)
     defer rl.UnloadFont(font_20)
 
-    font_30 := rl.LoadFontEx("res/IBMPlexMono-Regular.ttf", 30, nil, 0)
+    font_30 := rl.LoadFontEx("res/IBMPlexMono-Regular.ttf", FONT_30, nil, 0)
     defer rl.UnloadFont(font_30)
 
     fonts := make(map[i32]rl.Font)
     defer delete(fonts)
 
-    fonts[20] = font_20
-    fonts[30] = font_30
+    fonts[FONT_20] = font_20
+    fonts[FONT_30] = font_30
 
     app_state := new(App_State)
     app_state.music_dir = "/home/salakris/Music/"
@@ -137,8 +150,7 @@ main :: proc() {
     app_state.default_album_cover_texture = rl.LoadTexture("./res/album_placeholder.png")
 
     walk_music_dir(app_state, app_state.music_dir)
-
-    fmt.println(len(app_state.albums))
+    build_rows(app_state) // for ui
 
     engine_init_result := ma.engine_init(nil, &app_state.ma_engine)
     if engine_init_result != .SUCCESS {
@@ -148,9 +160,25 @@ main :: proc() {
     }
     defer ma.engine_uninit(&app_state.ma_engine)
 
+    was_focused := true
+
     for !rl.WindowShouldClose() {
+        if rl.IsWindowResized() {
+            // @todo
+            // 40 - row height
+            // 350 - padding from the bottom
+            app_state.max_rows_count_to_render = ((rl.GetScreenHeight() - 350) / 40) - 1
+        }
+
+        // hack to lower CPU usage when window is not focused
+        is_focused := rl.IsWindowFocused()
+        if is_focused != was_focused {
+            rl.SetTargetFPS(is_focused ? 60 : 10)
+            was_focused = is_focused
+        }
+
         rl.BeginDrawing()
-        rl.ClearBackground(rl.RAYWHITE)
+        rl.ClearBackground(rl.LIGHTGRAY)
 
         app_state.main_panel.width = f32(rl.GetScreenWidth() - 40)
         app_state.main_panel.height = f32(rl.GetScreenHeight() - 200)
@@ -190,7 +218,6 @@ update :: proc(app_state: ^App_State) {
 @private
 draw :: proc(app_state: ^App_State) {
     draw_and_handle_album_list(app_state)
-
     // Bottom bar
     {
         rl.DrawLineEx(
@@ -205,7 +232,11 @@ draw :: proc(app_state: ^App_State) {
             if app_state.currently_playing != nil {
                 currently_playing = app_state.currently_playing.file_name
             }
-            rl.DrawTextEx(app_state.font[20], currently_playing, {GUI_PADDING, f32(rl.GetScreenHeight() - GUI_PADDING - 25)}, 20, 0, rl.BLACK)
+            rl.DrawTextEx(
+                app_state.font[FONT_20],
+                currently_playing,
+                {BOTTOM_BAR_PADDING, f32(rl.GetScreenHeight() - BOTTOM_BAR_PADDING - 25)},
+                FONT_20, 0, rl.BLACK)
         }
 
         // Playback conrols
@@ -246,7 +277,7 @@ draw :: proc(app_state: ^App_State) {
             draw_progress_bar(
                 cursor,
                 length,
-                {GUI_PADDING, f32(rl.GetScreenHeight() - GUI_PADDING)},
+                {BOTTOM_BAR_PADDING, f32(rl.GetScreenHeight() - BOTTOM_BAR_PADDING)},
                 f32(rl.GetScreenWidth() - 100),
                 10)
         }
@@ -326,7 +357,7 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
 
 @private
 draw_and_handle_album_list :: proc(app_state: ^App_State) {
-    pressed, selected_track := draw_tracks_list(app_state)
+    selected_track, pressed := draw_content(app_state)
     if pressed {
         if app_state.ma_sound != nil {
             ma.sound_uninit(app_state.ma_sound)
