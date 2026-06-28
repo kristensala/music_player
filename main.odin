@@ -379,6 +379,8 @@ draw_and_handle_album_list :: proc(app_state: ^App_State) {
     }
 }
 
+
+// @todo: could use app_state.rows now
 @private
 handle_next_song_pick :: proc(app_state: ^App_State) {
     assert(ma.sound_at_end(app_state.ma_sound) == true)
