@@ -2,7 +2,6 @@ package main
 
 import rl "vendor:raylib"
 
-SCROLL_VALUE :: 100
 SCROLL_INCREMENT :: 5 // five rows
 ALBUM_COVER_SCALE :: 2
 
