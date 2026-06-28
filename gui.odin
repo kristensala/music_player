@@ -6,12 +6,12 @@ SCROLL_VALUE :: 100
 SCROLL_INCREMENT :: 5 // five rows
 ALBUM_COVER_SCALE :: 2
 
+ROW_HEIGHT :: 40
+
 Row :: struct {
     is_album_title_row : bool,
     album_title        : ^cstring,
     track              : ^Track,
-
-    height             : i32
 }
 
 draw_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: bool) {
@@ -30,12 +30,12 @@ draw_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: bool) {
 
     for row in app_state.rows[start:end] {
         if row.is_album_title_row {
-            pos_y = pos_y + 40
+            pos_y = pos_y + ROW_HEIGHT
             list_item := rl.Rectangle{
                 x = app_state.main_panel.x,
                 y = pos_y,
                 width = app_state.main_panel.width,
-                height = f32(row.height)
+                height = ROW_HEIGHT
             }
             text_measurement := rl.MeasureTextEx(app_state.font[FONT_30], row.album_title^, FONT_30, 0)
 
@@ -54,14 +54,14 @@ draw_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: bool) {
                 i32(pos_y + FONT_30 / 2),
                 rl.PURPLE)
 
-            pos_y = pos_y + f32(row.height)
+            pos_y = pos_y + ROW_HEIGHT
 
         } else {
             list_item := rl.Rectangle{
                 x = 250,
                 y = pos_y,
                 width = app_state.main_panel.width,
-                height = f32(row.height)
+                height = ROW_HEIGHT
             }
 
             // handle row clicked
@@ -118,7 +118,7 @@ draw_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: bool) {
                     0,
                     txt_color)
             }
-            pos_y = pos_y + f32(row.height)
+            pos_y = pos_y + ROW_HEIGHT
         }
 
     }
@@ -158,10 +158,8 @@ build_rows :: proc(app_state: ^App_State) {
         album_title_row := new(Row)
         album_title_row.is_album_title_row = true
         album_title_row.album_title = &album.title
-        //album_title_row.pos_y = pos_y
-        album_title_row.height = 40
 
-        pos_y = pos_y + album_title_row.height
+        pos_y = pos_y + ROW_HEIGHT
 
         append(&rows, album_title_row)
 
@@ -173,9 +171,8 @@ build_rows :: proc(app_state: ^App_State) {
 
             track_row := new(Row)
             track_row.track = track
-            track_row.height = 40
 
-            pos_y = pos_y + track_row.height
+            pos_y = pos_y + ROW_HEIGHT
 
             append(&rows, track_row)
         }
