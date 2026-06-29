@@ -34,11 +34,12 @@ App_State :: struct {
     currently_playing: ^Track,
 
     main_panel: rl.Rectangle,
-    main_panel_scroll_offset: i32,
     main_panel_content: Content,
 
+    side_panel: rl.Rectangle,
+
     current_scroll_idx: i32,
-    max_rows_count_to_render: i32,
+    max_rows_visible: i32,
 
     // filtering
     artist_list: [dynamic]cstring,
@@ -94,6 +95,7 @@ destroy_state :: proc(app_state: ^App_State) {
     ma.sound_uninit(app_state.ma_sound)
 
     delete(app_state.rows)
+    delete(app_state.artist_list)
 
     for a in app_state.albums {
         delete(a.track_indices)
@@ -155,11 +157,18 @@ main :: proc() {
     app_state.font = fonts
     app_state.ma_sound = nil
     app_state.audio_state = .Stopped
+
+    app_state.side_panel = rl.Rectangle{
+        x = 0,
+        y = 0,
+        width = 300
+    }
+
     app_state.main_panel = rl.Rectangle{
-        x = 20,
+        x = app_state.side_panel.width + 20,
         y = 20
     }
-    app_state.main_panel_scroll_offset = 20
+
     app_state.default_album_cover_texture = rl.LoadTexture("./res/album_placeholder.png")
     app_state.selected_artist = "Sleep Token"
 
@@ -221,13 +230,14 @@ main :: proc() {
 
         app_state.main_panel.width = f32(rl.GetScreenWidth() - 40)
         app_state.main_panel.height = f32(rl.GetScreenHeight() - 200)
+        app_state.side_panel.height = app_state.main_panel.height
 
         if rl.IsWindowResized() {
             // @todo
             // 40 - row height
             // 100 - padding from the bottom hack
             calculated_rows_count := ((i32(app_state.main_panel.height) - 100) / 40) - 1
-            app_state.max_rows_count_to_render = math.min(calculated_rows_count, i32(len(app_state.rows) - 1)) 
+            app_state.max_rows_visible = calculated_rows_count
         }
 
         update_main(app_state)
@@ -253,6 +263,87 @@ update_main :: proc(app_state: ^App_State) {
 
 @(private = "file")
 draw_main :: proc(app_state: ^App_State) {
+
+    // side panel
+    {
+        rl.DrawLineEx(
+            {app_state.side_panel.x + app_state.side_panel.width, 0},
+            {app_state.side_panel.x + app_state.side_panel.width, app_state.main_panel.y + app_state.main_panel.height},
+            1.5,
+            rl.LIGHTGRAY
+        )
+
+        rl.BeginScissorMode(
+            i32(app_state.side_panel.x),
+            i32(app_state.side_panel.y),
+            i32(app_state.side_panel.width),
+            i32(app_state.main_panel.height))
+
+        pos_y : f32 = 20
+        txt_measurement := rl.MeasureTextEx(app_state.font[20], "All", FONT_20, 0)
+
+        all_music_bounds := rl.Rectangle{
+            x = 20,
+            y = pos_y,
+            width = f32(txt_measurement.x),
+            height = 35
+        }
+        // center text
+        txt_y := ((all_music_bounds.height - txt_measurement.y) / 2) + all_music_bounds.y
+
+        rl.DrawTextEx(
+            app_state.font[FONT_20],
+            "All",
+            {all_music_bounds.x, txt_y},
+            FONT_20, 0, rl.BLACK)
+
+        pos_y = pos_y + all_music_bounds.height
+
+        if rl.CheckCollisionPointRec(rl.GetMousePosition(), all_music_bounds) {
+            if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
+                fmt.println("selected_artist: ", "ALL")
+                app_state.selected_artist = nil
+                build_rows(app_state)
+            }
+        }
+
+
+        for artist, i in app_state.artist_list {
+            artist_txt_measurements := rl.MeasureTextEx(app_state.font[20], artist, FONT_20, 0)
+
+            artist_item_bounds := rl.Rectangle{
+                x = 20,
+                y = pos_y,
+                width = f32(artist_txt_measurements.x),
+                height = 35
+            }
+            //rl.DrawRectangleRec(artist_item_bounds, rl.GRAY)
+
+            // center text
+            txt_y := ((artist_item_bounds.height - artist_txt_measurements.y) / 2) + artist_item_bounds.y
+
+            rl.DrawTextEx(
+                app_state.font[FONT_20],
+                artist,
+                {artist_item_bounds.x, txt_y},
+                FONT_20, 0, rl.BLACK)
+
+            pos_y = pos_y + artist_item_bounds.height
+
+            if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel) {
+                if rl.CheckCollisionPointRec(rl.GetMousePosition(), artist_item_bounds) {
+                    if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
+                        fmt.println("selected_artist: ", artist)
+                        app_state.selected_artist = artist
+                        build_rows(app_state)
+                    }
+                }
+            }
+        }
+
+        rl.EndScissorMode()
+    }
+
     draw_and_handle_album_list(app_state)
 
     // Bottom bar
@@ -261,7 +352,7 @@ draw_main :: proc(app_state: ^App_State) {
             {0, app_state.main_panel.y + app_state.main_panel.height}, 
             {f32(rl.GetScreenWidth()), app_state.main_panel.y + app_state.main_panel.height},
             1.5,
-            rl.BLACK
+            rl.LIGHTGRAY
         )
         draw_playback_controls(app_state)
 
@@ -289,7 +380,7 @@ draw_main :: proc(app_state: ^App_State) {
             draw_progress_bar(
                 cursor,
                 length,
-                {BOTTOM_BAR_PADDING, f32(rl.GetScreenHeight() - BOTTOM_BAR_PADDING)},
+                {BOTTOM_BAR_PADDING, f32(rl.GetScreenHeight() - 100)},
                 f32(rl.GetScreenWidth() - 100),
                 10)
         }
@@ -388,14 +479,13 @@ draw_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: bool) {
         i32(app_state.main_panel.height))
 
     start := app_state.current_scroll_idx
-    end := app_state.current_scroll_idx + math.min(app_state.max_rows_count_to_render, i32(len(app_state.rows) - 1)) 
+    end := app_state.current_scroll_idx + math.min(app_state.max_rows_visible, i32(len(app_state.rows))) 
 
-    // failsafe
-    if end > i32(len(app_state.rows) - 1) {
-        end = i32(len(app_state.rows) - 1)
+    if end >= i32(len(app_state.rows)) {
+        end = i32(len(app_state.rows))
     }
 
-    pos_y := app_state.main_panel.x
+    pos_y := app_state.main_panel.y
 
     for row in app_state.rows[start:end] {
         if row.is_album_title_row {
@@ -427,7 +517,7 @@ draw_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: bool) {
 
         } else {
             list_item := rl.Rectangle{
-                x = 250,
+                x = app_state.main_panel.x + 250,
                 y = pos_y,
                 width = app_state.main_panel.width,
                 height = ROW_HEIGHT
@@ -497,15 +587,18 @@ draw_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: bool) {
     wheel := rl.GetMouseWheelMove()
     if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel) {
         if wheel < 0 { // scroll down
-            value := app_state.current_scroll_idx + SCROLL_INCREMENT
-            max_allowed_value := i32(len(app_state.rows)) - 1 - app_state.max_rows_count_to_render
-            assert(max_allowed_value >= 0)
-
-            if value >= max_allowed_value {
-                app_state.current_scroll_idx = max_allowed_value
-            } else {
-                app_state.current_scroll_idx = value
+            new_start_value := app_state.current_scroll_idx + SCROLL_INCREMENT
+            max_start_value : i32 = 0
+            if i32(len(app_state.rows)) > app_state.max_rows_visible {
+                max_start_value = math.abs(app_state.max_rows_visible - i32(len(app_state.rows)))
             }
+
+            if new_start_value > max_start_value {
+                app_state.current_scroll_idx = max_start_value
+            } else {
+                app_state.current_scroll_idx = new_start_value
+            }
+
         } else if wheel > 0 { // scroll up
             value := app_state.current_scroll_idx - SCROLL_INCREMENT
             if value <= 0 {

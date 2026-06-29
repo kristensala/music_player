@@ -1,5 +1,6 @@
 package main
 
+import "core:slice"
 import "core:strings"
 import "core:path/filepath"
 import "core:fmt"
@@ -124,6 +125,12 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
 
                     current_album = app_state.albums[len(app_state.albums) - 1]
                 }
+
+                {
+                    if !slice.contains(app_state.artist_list[:], current_album.artist) {
+                        append(&app_state.artist_list, current_album.artist)
+                    }
+                }
             } else if filepath.ext(d.fullpath) == ".jpg" || filepath.ext(d.fullpath) == ".jpeg" || filepath.ext(d.fullpath) == ".png" {
                 // found an image. Assume this is the cover for the album
                 if current_album != nil {
@@ -213,6 +220,9 @@ get_track_cover_art :: proc(app_state: ^App_State, track: ^Track) -> ^cstring {
 // if selected_artist != nil then rebuild rows from app_state.artists
 @private
 build_rows :: proc(app_state: ^App_State) {
+    // reset scroll index
+    app_state.current_scroll_idx = 0
+
     rows : [dynamic]^Row
 
     pos_y : i32 = i32(app_state.main_panel.y)
@@ -222,6 +232,7 @@ build_rows :: proc(app_state: ^App_State) {
                 continue
             }
         }
+        fmt.println("fond albums: ", album)
 
         album_title_row := new(Row)
         album_title_row.is_album_title_row = true
@@ -247,6 +258,6 @@ build_rows :: proc(app_state: ^App_State) {
 
         pos_y = pos_y + ROW_HEIGHT // padding after the album
     }
-
     app_state.rows = rows
+    fmt.println("rows: ", app_state.rows[:])
 }
