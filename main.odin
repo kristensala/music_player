@@ -1,16 +1,13 @@
 package main
 
-import "core:strings"
-import "core:path/filepath"
 import "core:fmt"
 import rl "vendor:raylib"
-import "core:os"
 import ma "vendor:miniaudio"
-import tl "taglib"
 
 BOTTOM_BAR_PADDING   :: 50
 FONT_20              :: 20
 FONT_30              :: 30
+PLAYBACK_BUTTON_SIZE :: 30
 
 App_State :: struct {
     font: map[i32]rl.Font,
@@ -23,6 +20,11 @@ App_State :: struct {
     rows: [dynamic]^Row,
 
     default_album_cover_texture: rl.Texture2D,
+
+    play_button_texture: rl.Texture2D,
+    pause_button_texture: rl.Texture2D,
+    next_button_texture: rl.Texture2D,
+    previous_button_texture: rl.Texture2D,
 
     ma_engine: ma.engine,
     ma_sound: ^ma.sound,
@@ -112,6 +114,10 @@ destroy_state :: proc(app_state: ^App_State) {
     delete(app_state.playlists)
 
     rl.UnloadTexture(app_state.default_album_cover_texture)
+    rl.UnloadTexture(app_state.play_button_texture)
+    rl.UnloadTexture(app_state.pause_button_texture)
+    rl.UnloadTexture(app_state.next_button_texture)
+    rl.UnloadTexture(app_state.previous_button_texture)
 
     free(app_state)
 }
@@ -149,6 +155,38 @@ main :: proc() {
     app_state.main_panel_scroll_offset = 20
     app_state.default_album_cover_texture = rl.LoadTexture("./res/album_placeholder.png")
 
+    // Load play button image
+    {
+        play_btn_img := rl.LoadImage("./res/play.png")
+        rl.ImageResize(&play_btn_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
+        app_state.play_button_texture =  rl.LoadTextureFromImage(play_btn_img)
+        rl.UnloadImage(play_btn_img)
+    }
+
+    // Load pause button image
+    {
+        pause_btn_img := rl.LoadImage("./res/pause.png")
+        rl.ImageResize(&pause_btn_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
+        app_state.pause_button_texture =  rl.LoadTextureFromImage(pause_btn_img)
+        rl.UnloadImage(pause_btn_img)
+    }
+
+    // Load next button image
+    {
+        next_btn_img := rl.LoadImage("./res/next.png")
+        rl.ImageResize(&next_btn_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
+        app_state.next_button_texture =  rl.LoadTextureFromImage(next_btn_img)
+        rl.UnloadImage(next_btn_img)
+    }
+
+    // Load previous button image
+    {
+        prev_btn_img := rl.LoadImage("./res/previous.png")
+        rl.ImageResize(&prev_btn_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
+        app_state.previous_button_texture =  rl.LoadTextureFromImage(prev_btn_img)
+        rl.UnloadImage(prev_btn_img)
+    }
+
     walk_music_dir(app_state, app_state.music_dir)
     build_rows(app_state) // for ui
 
@@ -178,13 +216,13 @@ main :: proc() {
         }
 
         rl.BeginDrawing()
-        rl.ClearBackground(rl.LIGHTGRAY)
+        rl.ClearBackground(rl.RAYWHITE)
 
         app_state.main_panel.width = f32(rl.GetScreenWidth() - 40)
         app_state.main_panel.height = f32(rl.GetScreenHeight() - 200)
 
-        update(app_state)
-        draw(app_state)
+        update_main(app_state)
+        draw_main(app_state)
 
         rl.EndDrawing()
     }
@@ -195,19 +233,8 @@ main :: proc() {
     }
 }
 
-@private
-handle_keyboard_events :: proc(app_state: ^App_State) {
-    if rl.IsKeyPressed(rl.KeyboardKey.SPACE) {
-        if app_state.ma_sound == nil {
-            return
-        }
-
-        handle_play_pause(app_state)
-    }
-}
-
-@private
-update :: proc(app_state: ^App_State) {
+@(private = "file")
+update_main :: proc(app_state: ^App_State) {
     handle_keyboard_events(app_state)
 
     if ma.sound_at_end(app_state.ma_sound) {
@@ -215,9 +242,10 @@ update :: proc(app_state: ^App_State) {
     }
 }
 
-@private
-draw :: proc(app_state: ^App_State) {
+@(private = "file")
+draw_main :: proc(app_state: ^App_State) {
     draw_and_handle_album_list(app_state)
+
     // Bottom bar
     {
         rl.DrawLineEx(
@@ -226,6 +254,8 @@ draw :: proc(app_state: ^App_State) {
             1.5,
             rl.BLACK
         )
+        draw_playback_controls(app_state)
+
         // Display currently playing track
         {
             currently_playing : cstring = ""
@@ -237,33 +267,6 @@ draw :: proc(app_state: ^App_State) {
                 currently_playing,
                 {BOTTOM_BAR_PADDING, f32(rl.GetScreenHeight() - BOTTOM_BAR_PADDING - 25)},
                 FONT_20, 0, rl.BLACK)
-        }
-
-        // Playback conrols
-        {
-            play_button_icon : rl.GuiIconName = .ICON_PLAYER_PLAY
-            if app_state.audio_state == .Playing {
-                play_button_icon = .ICON_PLAYER_PAUSE
-            } else if app_state.audio_state == .Paused || app_state.audio_state == .Stopped {
-                play_button_icon = .ICON_PLAYER_PLAY
-            }
-
-            play_button_bounds := rl.Rectangle{
-                x = f32(rl.GetScreenWidth() / 2) - 15,
-                y = f32(rl.GetScreenHeight() - 120),
-                width = 30,
-                height = 30
-            }
-
-            rl.GuiDrawIcon(play_button_icon, i32(play_button_bounds.x - 1), i32(play_button_bounds.y), 2, rl.BLACK)
-            if rl.CheckCollisionPointRec(rl.GetMousePosition(), play_button_bounds) {
-                if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
-                    handle_play_pause(app_state)
-                }
-            }
-
-            rl.GuiDrawIcon(.ICON_PLAYER_PREVIOUS, i32(play_button_bounds.x - 55), i32(play_button_bounds.y), 2, rl.BLACK)
-            rl.GuiDrawIcon(.ICON_PLAYER_NEXT, i32(play_button_bounds.x + 50), i32(play_button_bounds.y), 2, rl.BLACK)
         }
 
         // Progress bar
@@ -284,78 +287,63 @@ draw :: proc(app_state: ^App_State) {
     }
 }
 
-@private
-walk_music_dir :: proc(app_state: ^App_State, path: string) {
-    data, err := os.read_directory_by_path(path, 0, context.allocator)
-    if err != nil {
-        fmt.printf("Could not read the dir", err)
-        return
+@(private = "file")
+draw_playback_controls :: proc(app_state: ^App_State) {
+    play_pause_button_bounds := rl.Rectangle{
+        x = f32(rl.GetScreenWidth() / 2) - (PLAYBACK_BUTTON_SIZE / 2),
+        y = f32(rl.GetScreenHeight() - 150),
+        width = 50,
+        height = 50
     }
-    defer delete(data)
 
-    album_map := make(map[cstring]int)
-    defer delete(album_map)
+    if app_state.audio_state == .Playing {
+        rl.DrawTexture(
+            app_state.pause_button_texture,
+            i32(play_pause_button_bounds.x), i32(play_pause_button_bounds.y),
+            rl.BLACK)
+    } else if app_state.audio_state == .Paused || app_state.audio_state == .Stopped {
+        rl.DrawTexture(
+            app_state.play_button_texture,
+            i32(play_pause_button_bounds.x), i32(play_pause_button_bounds.y),
+            rl.BLACK)
+    }
 
-    current_album: ^Album = nil
-
-    for d in data {
-        if d.type == .Directory {
-            walk_music_dir(app_state, d.fullpath)
-        } else if d.type == .Regular {
-            if filepath.ext(d.fullpath) == ".mp3" || filepath.ext(d.fullpath) == ".flac" {
-                // @todo: if image found `cover.jpeg/png` save to a map with base path as key
-                // map[string]string and value as path to the cover art
-                // after the tracks are found, use track file_path and match with the cover art path
-
-                //fmt.printfln(d.fullpath)
-                tag, tl_error := tl.get_tag(d.fullpath)
-                //fmt.printfln("md.title len=%d value=%q", len(tag.title), tag.title)
-
-                track := new(Track)
-                track.title = strings.clone_to_cstring(tag.title)
-                track.artist = strings.clone_to_cstring(tag.artist)
-                track.album = strings.clone_to_cstring(tag.album)
-                track.file_name = strings.clone_to_cstring(d.name)
-                track.file_path = strings.clone_to_cstring(d.fullpath)
-
-                append(&app_state.tracks, track)
-                tl.tag_destroy(&tag)
-
-                // create album
-                {
-                    idx, album_exists := album_map[track.album]
-                    if !album_exists {
-                        idx = len(app_state.albums)
-
-                        album := new(Album)
-                        album.title = track.album
-                        album.artist = track.artist
-                        //album.cover_img_texture = app_state.default_album_cover_texture
-
-                        append(&app_state.albums, album)
-                        album_map[track.album] = idx
-                    }
-                    track.album_idx = i32(idx)
-                    track_idx := len(app_state.tracks) - 1
-                    append(&app_state.albums[idx].track_indices, i32(track_idx))
-
-                    track_pos := len(app_state.albums[idx].track_indices) - 1
-                    track.order_nr_in_album = i32(track_pos)
-
-                    current_album = app_state.albums[len(app_state.albums) - 1]
-                }
-
-            } else if filepath.ext(d.fullpath) == ".jpg" || filepath.ext(d.fullpath) == ".jpeg" || filepath.ext(d.fullpath) == ".png" {
-                // found an image. Assume this is the cover for the album
-                if current_album != nil {
-                    current_album.cover_art_path = strings.clone_to_cstring(d.fullpath)
-                }
-            }
+    if rl.CheckCollisionPointRec(rl.GetMousePosition(), play_pause_button_bounds) {
+        if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
+            handle_play_pause(app_state)
         }
+    }
+
+    // draw next song button
+    {
+        next_song_button_bounds := rl.Rectangle{
+            x = f32(rl.GetScreenWidth() / 2) - (PLAYBACK_BUTTON_SIZE / 2) + 50,
+            y = f32(rl.GetScreenHeight() - 150),
+            width = 50,
+            height = 50
+        }
+        rl.DrawTexture(
+            app_state.next_button_texture,
+            i32(next_song_button_bounds.x), i32(next_song_button_bounds.y),
+            rl.BLACK)
+    }
+
+    // draw prev song button
+    {
+        prev_song_button_bounds := rl.Rectangle{
+            x = f32(rl.GetScreenWidth() / 2) - (PLAYBACK_BUTTON_SIZE / 2) - 50,
+            y = f32(rl.GetScreenHeight() - 150),
+            width = 50,
+            height = 50
+        }
+        rl.DrawTexture(
+            app_state.previous_button_texture,
+            i32(prev_song_button_bounds.x), i32(prev_song_button_bounds.y),
+            rl.BLACK)
     }
 }
 
-@private
+@(private = "file")
 draw_and_handle_album_list :: proc(app_state: ^App_State) {
     selected_track, pressed := draw_content(app_state)
     if pressed {
@@ -379,79 +367,166 @@ draw_and_handle_album_list :: proc(app_state: ^App_State) {
     }
 }
 
+@(private = "file")
+draw_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: bool) {
+    track_pressed         := false
+    pressed_track         : ^Track = nil
 
-// @todo: could use app_state.rows now
-@private
-handle_next_song_pick :: proc(app_state: ^App_State) {
-    assert(ma.sound_at_end(app_state.ma_sound) == true)
+    rl.BeginScissorMode(
+        i32(app_state.main_panel.x),
+        i32(app_state.main_panel.y),
+        i32(app_state.main_panel.width),
+        i32(app_state.main_panel.height))
 
-    ma.sound_uninit(app_state.ma_sound)
-    app_state.ma_sound = nil
-    app_state.audio_state = .Stopped
+    start := app_state.current_scroll_idx
+    end := app_state.current_scroll_idx + app_state.max_rows_count_to_render
+    pos_y := app_state.main_panel.x
 
-    current_album := app_state.albums[app_state.currently_playing.album_idx]
-    next_track : ^Track = nil
+    for row in app_state.rows[start:end] {
+        if row.is_album_title_row {
+            pos_y = pos_y + ROW_HEIGHT
+            list_item := rl.Rectangle{
+                x = app_state.main_panel.x,
+                y = pos_y,
+                width = app_state.main_panel.width,
+                height = ROW_HEIGHT
+            }
+            text_measurement := rl.MeasureTextEx(app_state.font[FONT_30], row.album_title^, FONT_30, 0)
 
-    assert(app_state.currently_playing != nil)
+            rl.DrawTextEx(
+                app_state.font[FONT_30],
+                row.album_title^,
+                { app_state.main_panel.x, pos_y},
+                FONT_30,
+                0,
+                rl.BLACK)
 
-    // @testing
-    // @todo: handle if last album
-    // Is last song of the album. Switch to the next one
-    if len(current_album.track_indices) - 1 == int(app_state.currently_playing.order_nr_in_album) {
-        is_last_album := len(app_state.albums) - 1  == int(app_state.currently_playing.album_idx)
-        if is_last_album {
-            app_state.currently_playing = nil
-            app_state.ma_sound = nil
-            app_state.audio_state = .Stopped
-            return
+            rl.DrawLine(
+                i32(text_measurement.x + app_state.main_panel.x + 20), 
+                i32(pos_y + FONT_30 / 2),
+                i32(app_state.main_panel.width),
+                i32(pos_y + FONT_30 / 2),
+                rl.PURPLE)
+
+            pos_y = pos_y + ROW_HEIGHT
+
+        } else {
+            list_item := rl.Rectangle{
+                x = 250,
+                y = pos_y,
+                width = app_state.main_panel.width,
+                height = ROW_HEIGHT
+            }
+
+            // handle row clicked
+            {
+                if (
+                    rl.CheckCollisionPointRec(rl.GetMousePosition(), list_item) &&
+                    rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel)
+                ) {
+                    rl.DrawRectangleRec(list_item, rl.ORANGE)
+
+                    if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
+                        track_pressed = true
+                        pressed_track = row.track
+                    }
+                }
+            }
+
+            text_measurement := rl.MeasureTextEx(app_state.font[FONT_20], "placeholder", FONT_20, 0)
+            txt_y := ((list_item.height - text_measurement.y) / 2) + list_item.y
+
+            txt_color := rl.BLACK
+            is_playing := app_state.currently_playing != nil && row.track.file_path == app_state.currently_playing.file_path
+            if is_playing {
+                txt_color = rl.PURPLE
+            }
+
+            // display track text
+            {
+                rl.DrawTextEx(
+                    app_state.font[FONT_20],
+                    row.track.album,
+                    { list_item.x + 10, txt_y},
+                    f32(FONT_20),
+                    0,
+                    txt_color)
+
+                rl.DrawTextEx(
+                    app_state.font[FONT_20],
+                    row.track.artist,
+                    { list_item.x + 500, txt_y},
+                    f32(FONT_20),
+                    0,
+                    txt_color)
+
+                title := row.track.title
+                if len(title) == 0 {
+                    title = row.track.file_name
+                }
+                rl.DrawTextEx(
+                    app_state.font[FONT_20],
+                    title,
+                    { list_item.x + 1000, txt_y},
+                    f32(FONT_20),
+                    0,
+                    txt_color)
+            }
+            pos_y = pos_y + ROW_HEIGHT
         }
 
-        next_track_idx := app_state.albums[app_state.currently_playing.album_idx + 1].track_indices[0]
-        next_track = app_state.tracks[next_track_idx]
-    } else {
-        next_track_idx := current_album.track_indices[app_state.currently_playing.order_nr_in_album + 1]
-        next_track = app_state.tracks[next_track_idx]
     }
 
-    app_state.currently_playing = nil
+    rl.EndScissorMode()
 
-    if next_track != nil {
-        app_state.ma_sound = new(ma.sound)
-        res := ma.sound_init_from_file(&app_state.ma_engine, next_track.file_path, {.STREAM}, nil, nil, app_state.ma_sound)
-        if res != .SUCCESS {
-            app_state.ma_sound = nil
-            fmt.println("Could not start the next track")
-        } else {
-            sound_start_result := ma.sound_start(app_state.ma_sound)
-            if sound_start_result == .SUCCESS {
-                app_state.audio_state = .Playing
-                app_state.currently_playing = next_track
+    wheel := rl.GetMouseWheelMove()
+    if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel) {
+        if wheel < 0 { // scroll down
+            value := app_state.current_scroll_idx + SCROLL_INCREMENT
+            max_allowed_value := i32(len(app_state.rows)) - 1 - app_state.max_rows_count_to_render - 1
+
+            if value >= max_allowed_value {
+                app_state.current_scroll_idx = max_allowed_value
+            } else {
+                app_state.current_scroll_idx = value
+            }
+        } else if wheel > 0 { // scroll up
+            value := app_state.current_scroll_idx - SCROLL_INCREMENT
+            if value <= 0 {
+                app_state.current_scroll_idx = 0
+            } else {
+                app_state.current_scroll_idx = value
             }
         }
     }
+
+    return pressed_track, track_pressed
 }
 
-@private
-handle_play_pause :: proc(app_state: ^App_State) {
-    if app_state.audio_state == .Playing {
-        stop_response := ma.sound_stop(app_state.ma_sound)
-        if stop_response == .SUCCESS {
-            app_state.audio_state = .Paused
-        } else {
-            fmt.eprintln("Could not stop the sound: ", stop_response)
-        }
-    } else if app_state.audio_state == .Paused && app_state.ma_sound != nil {
-        start_response := ma.sound_start(app_state.ma_sound)
-        if start_response == .SUCCESS {
-            app_state.audio_state = .Playing
-        } else {
-            fmt.eprintln("Could not start the sound: ", start_response)
-        }
+@(private = "file")
+draw_progress_bar :: proc(value: f32, max_value: f32, pos: [2]f32, w, h: f32) {
+    bounds := rl.Rectangle{
+        x = pos.x,
+        y = pos.y,
+        width = w,
+        height = h
     }
-}
 
-@private
-get_track_cover_art :: proc(app_state: ^App_State, track: ^Track) -> ^cstring {
-    return &app_state.albums[track.album_idx].cover_art_path
+    roundness: f32 = 0.2
+    {
+        progress := value * bounds.width / max_value
+        progress_rect := rl.Rectangle{
+            x = pos.x,
+            y = pos.y + 0.4,
+            width = progress,
+            height = h
+        }
+        rl.DrawRectangleRec(progress_rect, rl.PURPLE)
+    }
+
+    rl.DrawRectangleRoundedLinesEx(
+        bounds,
+        0.1,
+        0, 2, rl.BLACK)
 }
 
