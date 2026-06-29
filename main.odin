@@ -36,6 +36,7 @@ App_State :: struct {
     main_panel: rl.Rectangle,
     main_panel_content: Content,
 
+    playback_controls_panel: rl.Rectangle,
     side_panel: rl.Rectangle,
 
     current_scroll_idx: i32,
@@ -169,8 +170,12 @@ main :: proc() {
         y = 20
     }
 
+    app_state.playback_controls_panel = rl.Rectangle{
+        x = 0,
+        height = 150
+    }
+
     app_state.default_album_cover_texture = rl.LoadTexture("./res/album_placeholder.png")
-    app_state.selected_artist = "Sleep Token"
 
     // Load play button image
     {
@@ -229,15 +234,17 @@ main :: proc() {
         rl.ClearBackground(rl.RAYWHITE)
 
         app_state.main_panel.width = f32(rl.GetScreenWidth() - 40)
-        app_state.main_panel.height = f32(rl.GetScreenHeight() - 200)
+        app_state.main_panel.height = f32(rl.GetScreenHeight()) - app_state.playback_controls_panel.height
         app_state.side_panel.height = app_state.main_panel.height
+
+        app_state.playback_controls_panel.width = f32(rl.GetScreenWidth())
+        app_state.playback_controls_panel.y = app_state.main_panel.height
 
         if rl.IsWindowResized() {
             // @todo
-            // 40 - row height
+            // 40 - min row height
             // 100 - padding from the bottom hack
-            calculated_rows_count := ((i32(app_state.main_panel.height) - 100) / 40) - 1
-            app_state.max_rows_visible = calculated_rows_count
+            app_state.max_rows_visible = ((i32(app_state.main_panel.height - 20)) / ROW_HEIGHT) - 2
         }
 
         update_main(app_state)
@@ -279,31 +286,42 @@ draw_main :: proc(app_state: ^App_State) {
             i32(app_state.side_panel.width),
             i32(app_state.main_panel.height))
 
+
         pos_y : f32 = 20
-        txt_measurement := rl.MeasureTextEx(app_state.font[20], "All", FONT_20, 0)
 
-        all_music_bounds := rl.Rectangle{
-            x = 20,
-            y = pos_y,
-            width = f32(txt_measurement.x),
-            height = 35
-        }
-        // center text
-        txt_y := ((all_music_bounds.height - txt_measurement.y) / 2) + all_music_bounds.y
+        // Add an default "All" option
+        {
+            txt_measurement := rl.MeasureTextEx(app_state.font[20], "All", FONT_20, 0)
 
-        rl.DrawTextEx(
-            app_state.font[FONT_20],
-            "All",
-            {all_music_bounds.x, txt_y},
-            FONT_20, 0, rl.BLACK)
+            all_music_bounds := rl.Rectangle{
+                x = 0,
+                y = pos_y,
+                width = app_state.side_panel.width,
+                height = 35
+            }
 
-        pos_y = pos_y + all_music_bounds.height
+            // highlight
+            if app_state.selected_artist == nil {
+                rl.DrawRectangleRec(all_music_bounds, rl.LIGHTGRAY)
+            }
 
-        if rl.CheckCollisionPointRec(rl.GetMousePosition(), all_music_bounds) {
-            if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
-                fmt.println("selected_artist: ", "ALL")
-                app_state.selected_artist = nil
-                build_rows(app_state)
+            // center text
+            txt_y := ((all_music_bounds.height - txt_measurement.y) / 2) + all_music_bounds.y
+
+            rl.DrawTextEx(
+                app_state.font[FONT_20],
+                "All",
+                {all_music_bounds.x + 20, txt_y},
+                FONT_20, 0, rl.BLACK)
+
+            pos_y = pos_y + all_music_bounds.height
+
+
+            if rl.CheckCollisionPointRec(rl.GetMousePosition(), all_music_bounds) { 
+                if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
+                    app_state.selected_artist = nil
+                    build_rows(app_state)
+                }
             }
         }
 
@@ -312,12 +330,14 @@ draw_main :: proc(app_state: ^App_State) {
             artist_txt_measurements := rl.MeasureTextEx(app_state.font[20], artist, FONT_20, 0)
 
             artist_item_bounds := rl.Rectangle{
-                x = 20,
+                x = 0,
                 y = pos_y,
-                width = f32(artist_txt_measurements.x),
+                width = app_state.side_panel.width,
                 height = 35
             }
-            //rl.DrawRectangleRec(artist_item_bounds, rl.GRAY)
+            if artist == app_state.selected_artist {
+                rl.DrawRectangleRec(artist_item_bounds, rl.LIGHTGRAY)
+            }
 
             // center text
             txt_y := ((artist_item_bounds.height - artist_txt_measurements.y) / 2) + artist_item_bounds.y
@@ -325,7 +345,7 @@ draw_main :: proc(app_state: ^App_State) {
             rl.DrawTextEx(
                 app_state.font[FONT_20],
                 artist,
-                {artist_item_bounds.x, txt_y},
+                {artist_item_bounds.x + 20, txt_y},
                 FONT_20, 0, rl.BLACK)
 
             pos_y = pos_y + artist_item_bounds.height
@@ -333,7 +353,6 @@ draw_main :: proc(app_state: ^App_State) {
             if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel) {
                 if rl.CheckCollisionPointRec(rl.GetMousePosition(), artist_item_bounds) {
                     if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
-                        fmt.println("selected_artist: ", artist)
                         app_state.selected_artist = artist
                         build_rows(app_state)
                     }
@@ -380,7 +399,7 @@ draw_main :: proc(app_state: ^App_State) {
             draw_progress_bar(
                 cursor,
                 length,
-                {BOTTOM_BAR_PADDING, f32(rl.GetScreenHeight() - 100)},
+                {BOTTOM_BAR_PADDING, f32(app_state.playback_controls_panel.y + 100)},
                 f32(rl.GetScreenWidth() - 100),
                 10)
         }
@@ -390,8 +409,8 @@ draw_main :: proc(app_state: ^App_State) {
 @(private = "file")
 draw_playback_controls :: proc(app_state: ^App_State) {
     play_pause_button_bounds := rl.Rectangle{
-        x = f32(rl.GetScreenWidth() / 2) - (PLAYBACK_BUTTON_SIZE / 2),
-        y = f32(rl.GetScreenHeight() - 150),
+        x = (app_state.playback_controls_panel.width / 2) - (PLAYBACK_BUTTON_SIZE / 2),
+        y = (app_state.playback_controls_panel.y + 50),
         width = 50,
         height = 50
     }
@@ -417,8 +436,8 @@ draw_playback_controls :: proc(app_state: ^App_State) {
     // draw next song button
     {
         next_song_button_bounds := rl.Rectangle{
-            x = f32(rl.GetScreenWidth() / 2) - (PLAYBACK_BUTTON_SIZE / 2) + 50,
-            y = f32(rl.GetScreenHeight() - 150),
+            x = f32(app_state.playback_controls_panel.width / 2) - (PLAYBACK_BUTTON_SIZE / 2) + 50,
+            y = f32(app_state.playback_controls_panel.y + 50),
             width = 50,
             height = 50
         }
@@ -431,8 +450,8 @@ draw_playback_controls :: proc(app_state: ^App_State) {
     // draw prev song button
     {
         prev_song_button_bounds := rl.Rectangle{
-            x = f32(rl.GetScreenWidth() / 2) - (PLAYBACK_BUTTON_SIZE / 2) - 50,
-            y = f32(rl.GetScreenHeight() - 150),
+            x = f32(app_state.playback_controls_panel.width / 2) - (PLAYBACK_BUTTON_SIZE / 2) - 50,
+            y = f32(app_state.playback_controls_panel.y + 50),
             width = 50,
             height = 50
         }

@@ -232,7 +232,6 @@ build_rows :: proc(app_state: ^App_State) {
                 continue
             }
         }
-        fmt.println("fond albums: ", album)
 
         album_title_row := new(Row)
         album_title_row.is_album_title_row = true
@@ -259,5 +258,4 @@ build_rows :: proc(app_state: ^App_State) {
         pos_y = pos_y + ROW_HEIGHT // padding after the album
     }
     app_state.rows = rows
-    fmt.println("rows: ", app_state.rows[:])
 }
