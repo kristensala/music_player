@@ -8,15 +8,46 @@ import tl "taglib"
 import ma "vendor:miniaudio"
 import rl "vendor:raylib"
 
-SCROLL_INCREMENT :: 5 // five rows
+SCROLL_INCREMENT  :: 5 // five rows
 ALBUM_COVER_SCALE :: 2
 
-ROW_HEIGHT :: 40
+ROW_HEIGHT        :: 40
 
 Row :: struct {
     is_album_title_row : bool,
     album_title        : ^cstring,
     track              : ^Track,
+}
+
+// @todo
+// ~/.config/music_player/config
+// create ~/.config/music_player/playlists/mppl1
+// mppl2 (music player playlist 2)
+// each row is path to the track and the first row is the name of the playlist
+@private
+load_config :: proc() {
+    home_dir, err  := os.user_home_dir(context.allocator)
+    config_path, join_err := filepath.join({home_dir, ".config", "music_player"}, context.allocator)
+
+    //os.exists
+    config_files, read_path_err := os.read_directory_by_path(config_path, 1, context.allocator)
+    if read_path_err == .Not_Exist {
+        if make_dir_err := os.make_directory_all(config_path); err != nil {
+            fmt.eprintln("Could not create config dir")
+            return
+        }
+
+    }
+    defer delete(config_files)
+
+    config_file_path, e := filepath.join({config_path, "config"}, context.allocator)
+    config_file, open_config_file_err := os.open(config_file_path, flags = {.Read, .Create}, perm = {.Read_User, .Write_User})
+
+    if open_config_file_err != nil {
+        fmt.eprintln("Could not read config file")
+        return
+    }
+    defer os.close(config_file)
 }
 
 @private
@@ -41,6 +72,9 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
 
     album_map := make(map[cstring]int)
     defer delete(album_map)
+
+    //artist_map := make(map[cstring][dynamic]^Album)
+    //defer delete(artist_map)
 
     current_album: ^Album = nil
 
@@ -90,7 +124,6 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
 
                     current_album = app_state.albums[len(app_state.albums) - 1]
                 }
-
             } else if filepath.ext(d.fullpath) == ".jpg" || filepath.ext(d.fullpath) == ".jpeg" || filepath.ext(d.fullpath) == ".png" {
                 // found an image. Assume this is the cover for the album
                 if current_album != nil {
@@ -176,12 +209,20 @@ get_track_cover_art :: proc(app_state: ^App_State, track: ^Track) -> ^cstring {
     return &app_state.albums[track.album_idx].cover_art_path
 }
 
+// @todo:
+// if selected_artist != nil then rebuild rows from app_state.artists
 @private
 build_rows :: proc(app_state: ^App_State) {
     rows : [dynamic]^Row
 
     pos_y : i32 = i32(app_state.main_panel.y)
     for album in app_state.albums {
+        if app_state.selected_artist != nil {
+            if album.artist != app_state.selected_artist {
+                continue
+            }
+        }
+
         album_title_row := new(Row)
         album_title_row.is_album_title_row = true
         album_title_row.album_title = &album.title
@@ -204,7 +245,7 @@ build_rows :: proc(app_state: ^App_State) {
             append(&rows, track_row)
         }
 
-        pos_y = pos_y + 40 // padding after the album
+        pos_y = pos_y + ROW_HEIGHT // padding after the album
     }
 
     app_state.rows = rows

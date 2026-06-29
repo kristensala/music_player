@@ -1,5 +1,6 @@
 package main
 
+import "core:math"
 import "core:fmt"
 import rl "vendor:raylib"
 import ma "vendor:miniaudio"
@@ -37,7 +38,11 @@ App_State :: struct {
     main_panel_content: Content,
 
     current_scroll_idx: i32,
-    max_rows_count_to_render: i32
+    max_rows_count_to_render: i32,
+
+    // filtering
+    artist_list: [dynamic]cstring,
+    selected_artist: cstring
 }
 
 // @todo
@@ -125,7 +130,7 @@ destroy_state :: proc(app_state: ^App_State) {
 main :: proc() {
     rl.SetConfigFlags({.WINDOW_RESIZABLE})
 
-    rl.InitWindow(1000, 800, "music_player")
+    rl.InitWindow(1800, 1250, "music_player")
     defer rl.CloseWindow()
 
     rl.SetTargetFPS(60)
@@ -143,6 +148,8 @@ main :: proc() {
     fonts[FONT_20] = font_20
     fonts[FONT_30] = font_30
 
+    //load_config()
+
     app_state := new(App_State)
     app_state.music_dir = "/home/salakris/Music/"
     app_state.font = fonts
@@ -154,6 +161,7 @@ main :: proc() {
     }
     app_state.main_panel_scroll_offset = 20
     app_state.default_album_cover_texture = rl.LoadTexture("./res/album_placeholder.png")
+    app_state.selected_artist = "Sleep Token"
 
     // Load play button image
     {
@@ -201,13 +209,6 @@ main :: proc() {
     was_focused := true
 
     for !rl.WindowShouldClose() {
-        if rl.IsWindowResized() {
-            // @todo
-            // 40 - row height
-            // 350 - padding from the bottom
-            app_state.max_rows_count_to_render = ((rl.GetScreenHeight() - 350) / 40) - 1
-        }
-
         // hack to lower CPU usage when window is not focused
         is_focused := rl.IsWindowFocused()
         if is_focused != was_focused {
@@ -220,6 +221,14 @@ main :: proc() {
 
         app_state.main_panel.width = f32(rl.GetScreenWidth() - 40)
         app_state.main_panel.height = f32(rl.GetScreenHeight() - 200)
+
+        if rl.IsWindowResized() {
+            // @todo
+            // 40 - row height
+            // 100 - padding from the bottom hack
+            calculated_rows_count := ((i32(app_state.main_panel.height) - 100) / 40) - 1
+            app_state.max_rows_count_to_render = math.min(calculated_rows_count, i32(len(app_state.rows) - 1)) 
+        }
 
         update_main(app_state)
         draw_main(app_state)
@@ -379,7 +388,13 @@ draw_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: bool) {
         i32(app_state.main_panel.height))
 
     start := app_state.current_scroll_idx
-    end := app_state.current_scroll_idx + app_state.max_rows_count_to_render
+    end := app_state.current_scroll_idx + math.min(app_state.max_rows_count_to_render, i32(len(app_state.rows) - 1)) 
+
+    // failsafe
+    if end > i32(len(app_state.rows) - 1) {
+        end = i32(len(app_state.rows) - 1)
+    }
+
     pos_y := app_state.main_panel.x
 
     for row in app_state.rows[start:end] {
@@ -483,7 +498,8 @@ draw_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: bool) {
     if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel) {
         if wheel < 0 { // scroll down
             value := app_state.current_scroll_idx + SCROLL_INCREMENT
-            max_allowed_value := i32(len(app_state.rows)) - 1 - app_state.max_rows_count_to_render - 1
+            max_allowed_value := i32(len(app_state.rows)) - 1 - app_state.max_rows_count_to_render
+            assert(max_allowed_value >= 0)
 
             if value >= max_allowed_value {
                 app_state.current_scroll_idx = max_allowed_value
