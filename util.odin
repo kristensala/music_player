@@ -1,5 +1,6 @@
 package main
 
+import "core:sort"
 import "core:slice"
 import "core:strings"
 import "core:path/filepath"
@@ -139,6 +140,8 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
             }
         }
     }
+
+    sort.quick_sort(app_state.artist_list[:])
 }
 
 // @todo: could use app_state.rows now
