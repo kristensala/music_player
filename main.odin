@@ -14,11 +14,11 @@ App_State :: struct {
     font: map[i32]rl.Font,
     music_dir: string,
 
-    tracks: [dynamic]^Track,
-    albums: [dynamic]^Album,
+    tracks: [dynamic]Track,
+    albums: [dynamic]Album,
     playlists: [dynamic]Playlist,
 
-    rows: [dynamic]^Row,
+    rows: [dynamic]Row,
 
     default_album_cover_texture: rl.Texture2D,
 
@@ -316,7 +316,6 @@ draw_main :: proc(app_state: ^App_State) {
 
             pos_y = pos_y + all_music_bounds.height
 
-
             if rl.CheckCollisionPointRec(rl.GetMousePosition(), all_music_bounds) { 
                 if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
                     app_state.selected_artist = nil
@@ -515,11 +514,11 @@ draw_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: bool) {
                 width = app_state.main_panel.width,
                 height = ROW_HEIGHT
             }
-            text_measurement := rl.MeasureTextEx(app_state.font[FONT_30], row.album_title^, FONT_30, 0)
+            text_measurement := rl.MeasureTextEx(app_state.font[FONT_30], row.album_title, FONT_30, 0)
 
             rl.DrawTextEx(
                 app_state.font[FONT_30],
-                row.album_title^,
+                row.album_title,
                 { app_state.main_panel.x, pos_y},
                 FONT_30,
                 0,

@@ -17,7 +17,7 @@ ROW_HEIGHT        :: 40
 
 Row :: struct {
     is_album_title_row : bool,
-    album_title        : ^cstring,
+    album_title        : cstring,
     track              : ^Track,
 }
 
@@ -75,10 +75,7 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
     album_map := make(map[cstring]int)
     defer delete(album_map)
 
-    //artist_map := make(map[cstring][dynamic]^Album)
-    //defer delete(artist_map)
-
-    current_album: ^Album = nil
+    current_album: ^Album
 
     for d in data {
         if d.type == .Directory {
@@ -93,12 +90,19 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
                 tag, tl_error := tl.get_tag(d.fullpath)
                 //fmt.printfln("md.title len=%d value=%q", len(tag.title), tag.title)
 
-                track := new(Track)
+                track := Track{
+                    title = strings.clone_to_cstring(tag.title),
+                    artist = strings.clone_to_cstring(tag.artist),
+                    album = strings.clone_to_cstring(tag.album),
+                    file_name = strings.clone_to_cstring(d.name),
+                    file_path = strings.clone_to_cstring(d.fullpath)
+                }
+                /*track := new(Track)
                 track.title = strings.clone_to_cstring(tag.title)
                 track.artist = strings.clone_to_cstring(tag.artist)
                 track.album = strings.clone_to_cstring(tag.album)
                 track.file_name = strings.clone_to_cstring(d.name)
-                track.file_path = strings.clone_to_cstring(d.fullpath)
+                track.file_path = strings.clone_to_cstring(d.fullpath)*/
 
                 append(&app_state.tracks, track)
                 tl.tag_destroy(&tag)
@@ -109,9 +113,13 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
                     if !album_exists {
                         idx = len(app_state.albums)
 
-                        album := new(Album)
+                        album := Album{
+                            title = track.album,
+                            artist = track.artist
+                        }
+                        /*album := new(Album)
                         album.title = track.album
-                        album.artist = track.artist
+                        album.artist = track.artist*/
                         //album.cover_img_texture = app_state.default_album_cover_texture
 
                         append(&app_state.albums, album)
@@ -124,14 +132,13 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
                     track_pos := len(app_state.albums[idx].track_indices) - 1
                     track.order_nr_in_album = i32(track_pos)
 
-                    current_album = app_state.albums[len(app_state.albums) - 1]
+                    current_album = &app_state.albums[len(app_state.albums) - 1]
                 }
 
-                {
-                    if !slice.contains(app_state.artist_list[:], current_album.artist) {
-                        append(&app_state.artist_list, current_album.artist)
-                    }
+                if !slice.contains(app_state.artist_list[:], current_album.artist) {
+                    append(&app_state.artist_list, current_album.artist)
                 }
+
             } else if filepath.ext(d.fullpath) == ".jpg" || filepath.ext(d.fullpath) == ".jpeg" || filepath.ext(d.fullpath) == ".png" {
                 // found an image. Assume this is the cover for the album
                 if current_album != nil {
@@ -171,10 +178,10 @@ handle_next_song_pick :: proc(app_state: ^App_State) {
         }
 
         next_track_idx := app_state.albums[app_state.currently_playing.album_idx + 1].track_indices[0]
-        next_track = app_state.tracks[next_track_idx]
+        next_track = &app_state.tracks[next_track_idx]
     } else {
         next_track_idx := current_album.track_indices[app_state.currently_playing.order_nr_in_album + 1]
-        next_track = app_state.tracks[next_track_idx]
+        next_track = &app_state.tracks[next_track_idx]
     }
 
     app_state.currently_playing = nil
@@ -225,10 +232,8 @@ get_track_cover_art :: proc(app_state: ^App_State, track: ^Track) -> ^cstring {
 build_rows :: proc(app_state: ^App_State) {
     // reset scroll index
     app_state.current_scroll_idx = 0
-
-    rows : [dynamic]^Row
-
     pos_y : i32 = i32(app_state.main_panel.y)
+
     for album in app_state.albums {
         if app_state.selected_artist != nil {
             if album.artist != app_state.selected_artist {
@@ -236,29 +241,28 @@ build_rows :: proc(app_state: ^App_State) {
             }
         }
 
-        album_title_row := new(Row)
-        album_title_row.is_album_title_row = true
-        album_title_row.album_title = &album.title
+        album_title_row := Row{
+            is_album_title_row = true,
+            album_title = album.title
+        }
+        append(&app_state.rows, album_title_row)
 
         pos_y = pos_y + ROW_HEIGHT
-
-        append(&rows, album_title_row)
 
         // @todo: next should be cover art row
 
         for track_idx in album.track_indices {
-            track := app_state.tracks[track_idx]
+            track := &app_state.tracks[track_idx]
             assert(track != nil)
 
-            track_row := new(Row)
-            track_row.track = track
+            track_row := Row{
+                track = track
+            }
+            append(&app_state.rows, track_row)
 
             pos_y = pos_y + ROW_HEIGHT
-
-            append(&rows, track_row)
         }
 
         pos_y = pos_y + ROW_HEIGHT // padding after the album
     }
-    app_state.rows = rows
 }
