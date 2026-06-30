@@ -111,11 +111,6 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
                             title = track.album,
                             artist = track.artist
                         }
-                        /*album := new(Album)
-                        album.title = track.album
-                        album.artist = track.artist*/
-                        //album.cover_img_texture = app_state.default_album_cover_texture
-
                         append(&app_state.albums, album)
                         album_map[track.album] = idx
                     }
@@ -136,13 +131,13 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
             } else if filepath.ext(d.fullpath) == ".jpg" || filepath.ext(d.fullpath) == ".jpeg" || filepath.ext(d.fullpath) == ".png" {
                 // found an image. Assume this is the cover for the album
                 if current_album != nil {
-                    //current_album.cover_art_path = strings.clone_to_cstring(d.fullpath)
+                    current_album.cover_art_path = strings.clone_to_cstring(d.fullpath)
                 }
             }
         }
     }
 
-    sort.quick_sort(app_state.artist_list[:])
+    sort.quick_sort(app_state.artist_list[1:])
 }
 
 // @todo: could use app_state.rows now
