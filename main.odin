@@ -6,10 +6,10 @@ import rl "vendor:raylib"
 import ma "vendor:miniaudio"
 import "core:mem"
 
-BOTTOM_BAR_PADDING   :: 50
-FONT_20              :: 20
-FONT_30              :: 30
-PLAYBACK_BUTTON_SIZE :: 30
+BOTTOM_BAR_PADDING    :: 50
+FONT_20               :: 20
+FONT_30               :: 30
+PLAYBACK_BUTTON_SIZE  :: 30
 SIDE_PANEL_ROW_HEIGHT :: 35
 
 App_State :: struct {

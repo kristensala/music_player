@@ -326,9 +326,9 @@ tag_destroy :: proc(tag: ^Tag) {
     delete(tag.album)
     delete(tag.artist)
 
-    tag.title = ""
+    /*tag.title = ""
     tag.album = ""
-    tag.artist = ""
+    tag.artist = ""*/
 }
 
 @private
