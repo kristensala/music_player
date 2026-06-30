@@ -55,6 +55,7 @@ set_tag_fields :: proc(filepath: string, values: map[Tag_Field]string) {
 set_tag_field :: proc(filepath: string, tag_field: Tag_Field) {
 }
 
+@private
 parse_mp3 :: proc(filepath: string) -> (_tag: Tag, error: Taglib_Error) {
     file, err := os.open(filepath)
     if err != nil {
@@ -104,6 +105,7 @@ parse_mp3 :: proc(filepath: string) -> (_tag: Tag, error: Taglib_Error) {
     return md, nil
 }
 
+@private
 parse_flac :: proc(filepath: string) -> (_tag: Tag, error: Taglib_Error) {
     file, err := os.open(filepath)
     if err != nil {
@@ -167,7 +169,6 @@ parse_flac :: proc(filepath: string) -> (_tag: Tag, error: Taglib_Error) {
 
 // Vendor data is always first in Vorbis comment block
 // Then comes comment count: ARTIST, ALBUM, TITLE etc
-// @todo: return tag
 @private
 flac_parse_vorbis_comment :: proc(vorbis_data: []u8) -> Tag {
     pos := 0
@@ -188,7 +189,6 @@ flac_parse_vorbis_comment :: proc(vorbis_data: []u8) -> Tag {
 
         comment := string(vorbis_data[pos:pos + comment_length])
         pos += comment_length
-        //fmt.println("Comment: ", comment)
 
         if strings.has_prefix(comment, "TITLE=") {
             tag.title = strings.clone(comment[len("TITLE="):])
@@ -238,7 +238,6 @@ mp3_parse_tag :: proc(tag_data: []byte, tag_size: u32, major_version: u8) -> Tag
         }
 
         frame_data := tag_data[frame_data_start:frame_data_end]
-        fmt.println(frame)
 
         switch frame {
         case "TIT2": 
@@ -267,6 +266,7 @@ mp3_parse_tag :: proc(tag_data: []byte, tag_size: u32, major_version: u8) -> Tag
            Terminated with $00 00.
      $03   UTF-8 [UTF-8] encoded Unicode [UNICODE]. Terminated with $00.
  */
+@private
 decode_text :: proc(data: []byte) -> string {
     if len(data) == 0 {
         return ""

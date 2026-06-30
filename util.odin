@@ -81,7 +81,7 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
         if d.type == .Directory {
             walk_music_dir(app_state, d.fullpath)
         } else if d.type == .Regular {
-            if filepath.ext(d.fullpath) == ".mp3" || filepath.ext(d.fullpath) == ".flac" {
+            if filepath.ext(d.fullpath) == ".mp3" || filepath.ext(d.fullpath) == ".flac" || filepath.ext(d.fullpath) == ".wav" {
                 // @todo: if image found `cover.jpeg/png` save to a map with base path as key
                 // map[string]string and value as path to the cover art
                 // after the tracks are found, use track file_path and match with the cover art path
