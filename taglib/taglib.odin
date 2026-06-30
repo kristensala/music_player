@@ -1,5 +1,6 @@
 package taglib
 
+import "core:unicode/utf16"
 import "core:strings"
 import "core:fmt"
 import "core:os"
@@ -77,11 +78,8 @@ parse_mp3 :: proc(filepath: string) -> (_tag: Tag, error: Taglib_Error) {
         return {}, nil
     }
 
-    // @todo: if major version is 2 then need to parse differently
     major_version := header[3]
-    //fmt.println("major_version: ", major_version)
     revision_number := header[4]
-    //fmt.println("revision_number: ", revision_number)
 
     // flags: if byte is 0 then no flags
     // else conver to 8bit binary
@@ -102,7 +100,7 @@ parse_mp3 :: proc(filepath: string) -> (_tag: Tag, error: Taglib_Error) {
         return {}, nil
     }
 
-    md := mp3_parse_tag(tag_data[:tag_size], tag_size)
+    md := mp3_parse_tag(tag_data[:tag_size], tag_size, major_version)
     return md, nil
 }
 
@@ -211,8 +209,7 @@ parse_wav :: proc(file_path: string) {
 
 @private
 @require_results
-mp3_parse_tag :: proc(tag_data: []byte, tag_size: u32) -> Tag {
-    //fmt.println("parse tag start: ", tag_size)
+mp3_parse_tag :: proc(tag_data: []byte, tag_size: u32, major_version: u8) -> Tag {
     frame_length := 4
     result := Tag{}
 
@@ -226,7 +223,12 @@ mp3_parse_tag :: proc(tag_data: []byte, tag_size: u32) -> Tag {
         frame_size_bytes := tag_data[start:end]
         assert(len(frame_size_bytes) == 4, "Frame length has to be 4")
 
-        frame_size := read_u32_be(frame_size_bytes)
+        frame_size : u32 = 0
+        if major_version == 4 {
+            frame_size = synchsafe_to_u32(frame_size_bytes)
+        } else {
+            frame_size = read_u32_be(frame_size_bytes)
+        }
         frame := string(tag_data[i:i+frame_length])
 
         frame_data_start := i + MP3_PADDING
@@ -236,27 +238,87 @@ mp3_parse_tag :: proc(tag_data: []byte, tag_size: u32) -> Tag {
         }
 
         frame_data := tag_data[frame_data_start:frame_data_end]
-
-        // @note(ksala): strip text encoding byte
-        if len(frame_data) > 1 {
-            frame_data = frame_data[1:]
-        }
-
-        //fmt.printfln("%s: %s", frame, string(frame_data))
+        fmt.println(frame)
 
         switch frame {
         case "TIT2": 
-            result.title = strings.clone(string(frame_data))
+            result.title = decode_text(frame_data)
         case "TALB":
-            result.album = strings.clone(string(frame_data))
+            result.album = decode_text(frame_data)
         case "TPE1": 
-            result.artist = strings.clone(string(frame_data))
+            result.artist = decode_text(frame_data)
         }
 
         i = i + MP3_PADDING + int(frame_size)
     }
 
     return result
+}
+
+/*
+   Frames that allow different types of text encoding contains a text
+   encoding description byte. Possible encodings:
+
+     $00   ISO-8859-1 [ISO-8859-1]. Terminated with $00.
+     $01   UTF-16 [UTF-16] encoded Unicode [UNICODE] with BOM. All
+           strings in the same frame SHALL have the same byteorder.
+           Terminated with $00 00.
+     $02   UTF-16BE [UTF-16] encoded Unicode [UNICODE] without BOM.
+           Terminated with $00 00.
+     $03   UTF-8 [UTF-8] encoded Unicode [UNICODE]. Terminated with $00.
+ */
+decode_text :: proc(data: []byte) -> string {
+    if len(data) == 0 {
+        return ""
+    }
+    endcoding := data[0]
+    text := data[1:]
+
+    switch endcoding {
+    case 0:
+        return strings.clone(string(text))
+    case 1:
+        if len(text) >= 2 && text[0] == 0xff && text[1] == 0xfe {
+            return utf16le_to_utf8(text[2:])
+        }
+        if len(text) >= 2 && text[0] == 0xfe && text[1] == 0xff {
+            return utf16be_to_utf8(text[2:])
+        }
+    }
+    return strings.clone(string(text))
+}
+
+@private
+utf16be_to_utf8 :: proc(data: []u8) -> string {
+    src := make([]u16, len(data)/2)
+    defer delete(src)
+
+    for i := 0; i < len(src); i += 1 {
+        b := i * 2
+        src[i] = u16(data[b]) << 8 | u16(data[b + 1])
+    }
+
+    dst := make([]u8, len(src)*4)
+    defer delete(dst)
+
+    n := utf16.decode_to_utf8(dst, src)
+    return strings.clone(string(dst[:n]))
+}
+
+@private
+utf16le_to_utf8 :: proc(data: []byte) -> string {
+    src := make([]u16, len(data)/2)
+    defer delete(src)
+
+    for i in 0..<len(src) {
+        src[i] = u16(data[2*i]) | u16(data[2*i+1])<<8
+    }
+
+    dst := make([]u8, len(src)*4)
+    defer delete(dst)
+
+    n := utf16.decode_to_utf8(dst, src)
+    return strings.clone(string(dst[:n]))
 }
 
 tag_destroy :: proc(tag: ^Tag) {

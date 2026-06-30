@@ -4,6 +4,7 @@ import "core:math"
 import "core:fmt"
 import rl "vendor:raylib"
 import ma "vendor:miniaudio"
+import "core:mem"
 
 BOTTOM_BAR_PADDING   :: 50
 FONT_20              :: 20
@@ -34,7 +35,6 @@ App_State :: struct {
     currently_playing: ^Track,
 
     main_panel: rl.Rectangle,
-    main_panel_content: Content,
 
     playback_controls_panel: rl.Rectangle,
     side_panel: rl.Rectangle,
@@ -50,12 +50,6 @@ App_State :: struct {
 // @todo
 // with cache eviction
 Cover_Art_Texture_Atlas :: struct {
-}
-
-Content :: enum {
-    Track_List,
-    Albums,
-    Playlists
 }
 
 AudioState :: enum {
@@ -131,6 +125,21 @@ destroy_state :: proc(app_state: ^App_State) {
 }
 
 main :: proc() {
+    when ODIN_DEBUG {
+		track: mem.Tracking_Allocator
+		mem.tracking_allocator_init(&track, context.allocator)
+		context.allocator = mem.tracking_allocator(&track)
+
+		defer {
+			if len(track.allocation_map) > 0 {
+				for _, entry in track.allocation_map {
+					fmt.eprintf("%v leaked %v bytes\n", entry.location, entry.size)
+				}
+			}
+			mem.tracking_allocator_destroy(&track)
+		}
+	}
+
     rl.SetConfigFlags({.WINDOW_RESIZABLE})
 
     rl.InitWindow(1800, 1250, "music_player")
@@ -175,7 +184,7 @@ main :: proc() {
         height = 150
     }
 
-    app_state.default_album_cover_texture = rl.LoadTexture("./res/album_placeholder.png")
+    //app_state.default_album_cover_texture = rl.LoadTexture("./res/album_placeholder.png")
 
     // Load play button image
     {
@@ -325,7 +334,7 @@ draw_main :: proc(app_state: ^App_State) {
         }
 
 
-        for artist, i in app_state.artist_list {
+        for artist in app_state.artist_list {
             artist_txt_measurements := rl.MeasureTextEx(app_state.font[20], artist, FONT_20, 0)
 
             artist_item_bounds := rl.Rectangle{
@@ -569,7 +578,7 @@ draw_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: bool) {
             {
                 rl.DrawTextEx(
                     app_state.font[FONT_20],
-                    row.track.album,
+                    row.track.artist,
                     { list_item.x + 10, txt_y},
                     f32(FONT_20),
                     0,
@@ -577,11 +586,12 @@ draw_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: bool) {
 
                 rl.DrawTextEx(
                     app_state.font[FONT_20],
-                    row.track.artist,
+                    row.track.album,
                     { list_item.x + 500, txt_y},
                     f32(FONT_20),
                     0,
                     txt_color)
+
 
                 title := row.track.title
                 if len(title) == 0 {
@@ -597,7 +607,6 @@ draw_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: bool) {
             }
             pos_y = pos_y + ROW_HEIGHT
         }
-
     }
 
     rl.EndScissorMode()

@@ -97,12 +97,6 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
                     file_name = strings.clone_to_cstring(d.name),
                     file_path = strings.clone_to_cstring(d.fullpath)
                 }
-                /*track := new(Track)
-                track.title = strings.clone_to_cstring(tag.title)
-                track.artist = strings.clone_to_cstring(tag.artist)
-                track.album = strings.clone_to_cstring(tag.album)
-                track.file_name = strings.clone_to_cstring(d.name)
-                track.file_path = strings.clone_to_cstring(d.fullpath)*/
 
                 append(&app_state.tracks, track)
                 tl.tag_destroy(&tag)
@@ -142,7 +136,7 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
             } else if filepath.ext(d.fullpath) == ".jpg" || filepath.ext(d.fullpath) == ".jpeg" || filepath.ext(d.fullpath) == ".png" {
                 // found an image. Assume this is the cover for the album
                 if current_album != nil {
-                    current_album.cover_art_path = strings.clone_to_cstring(d.fullpath)
+                    //current_album.cover_art_path = strings.clone_to_cstring(d.fullpath)
                 }
             }
         }
@@ -231,6 +225,7 @@ get_track_cover_art :: proc(app_state: ^App_State, track: ^Track) -> ^cstring {
 @private
 build_rows :: proc(app_state: ^App_State) {
     // reset scroll index
+    rows : [dynamic]Row
     app_state.current_scroll_idx = 0
     pos_y : i32 = i32(app_state.main_panel.y)
 
@@ -245,7 +240,7 @@ build_rows :: proc(app_state: ^App_State) {
             is_album_title_row = true,
             album_title = album.title
         }
-        append(&app_state.rows, album_title_row)
+        append(&rows, album_title_row)
 
         pos_y = pos_y + ROW_HEIGHT
 
@@ -258,11 +253,13 @@ build_rows :: proc(app_state: ^App_State) {
             track_row := Row{
                 track = track
             }
-            append(&app_state.rows, track_row)
+            append(&rows, track_row)
 
             pos_y = pos_y + ROW_HEIGHT
         }
 
         pos_y = pos_y + ROW_HEIGHT // padding after the album
     }
+
+    app_state.rows = rows
 }
