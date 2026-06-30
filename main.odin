@@ -10,6 +10,7 @@ BOTTOM_BAR_PADDING   :: 50
 FONT_20              :: 20
 FONT_30              :: 30
 PLAYBACK_BUTTON_SIZE :: 30
+SIDE_PANEL_ROW_HEIGHT :: 35
 
 App_State :: struct {
     font: map[i32]rl.Font,
@@ -39,8 +40,11 @@ App_State :: struct {
     playback_controls_panel: rl.Rectangle,
     side_panel: rl.Rectangle,
 
-    current_scroll_idx: i32,
+    main_panel_scroll_idx: i32,
     max_rows_visible: i32,
+
+    side_panel_scoll_idx: i32,
+    side_panel_max_rows: i32,
 
     // filtering
     artist_list: [dynamic]cstring,
@@ -254,6 +258,7 @@ main :: proc() {
             // 40 - min row height
             // 100 - padding from the bottom hack
             app_state.max_rows_visible = ((i32(app_state.main_panel.height - 20)) / ROW_HEIGHT) - 2
+            app_state.side_panel_max_rows = (i32(app_state.side_panel.height) / SIDE_PANEL_ROW_HEIGHT) - 1
         }
 
         update_main(app_state)
@@ -333,8 +338,14 @@ draw_main :: proc(app_state: ^App_State) {
             }
         }
 
+        start := app_state.side_panel_scoll_idx
+        end := start + math.min(app_state.side_panel_max_rows, i32(len(app_state.artist_list) + 1)) 
 
-        for artist in app_state.artist_list {
+        if end >= i32(len(app_state.artist_list)) {
+            end = i32(len(app_state.artist_list))
+        }
+
+        for artist in app_state.artist_list[start:end] {
             artist_txt_measurements := rl.MeasureTextEx(app_state.font[20], artist, FONT_20, 0)
 
             artist_item_bounds := rl.Rectangle{
@@ -367,6 +378,32 @@ draw_main :: proc(app_state: ^App_State) {
                 }
             }
         }
+
+        wheel := rl.GetMouseWheelMove()
+        if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel) {
+            if wheel < 0 { // scroll down
+                default_inc : i32 = SCROLL_INCREMENT
+                current_scroll_idx := app_state.side_panel_scoll_idx
+
+                if current_scroll_idx + default_inc + app_state.side_panel_max_rows > i32(len(app_state.artist_list) + 1) {
+                    default_inc = i32(len(app_state.artist_list)) - app_state.side_panel_max_rows
+                }
+
+                can_scoll := current_scroll_idx + default_inc + app_state.side_panel_max_rows <= i32(len(app_state.artist_list) + 1)
+                if can_scoll {
+                    app_state.side_panel_scoll_idx = app_state.side_panel_scoll_idx + default_inc
+                }
+            } else if wheel > 0 {
+                new_scroll_idx := app_state.side_panel_scoll_idx - SCROLL_INCREMENT
+                if new_scroll_idx < 0 {
+                    app_state.side_panel_scoll_idx = 0
+                } else {
+                    app_state.side_panel_scoll_idx = app_state.side_panel_scoll_idx - SCROLL_INCREMENT
+                }
+            }
+
+        }
+
 
         rl.EndScissorMode()
     }
@@ -505,8 +542,8 @@ draw_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: bool) {
         i32(app_state.main_panel.width),
         i32(app_state.main_panel.height))
 
-    start := app_state.current_scroll_idx
-    end := app_state.current_scroll_idx + math.min(app_state.max_rows_visible, i32(len(app_state.rows))) 
+    start := app_state.main_panel_scroll_idx
+    end := app_state.main_panel_scroll_idx + math.min(app_state.max_rows_visible, i32(len(app_state.rows))) 
 
     if end >= i32(len(app_state.rows)) {
         end = i32(len(app_state.rows))
@@ -614,24 +651,24 @@ draw_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: bool) {
     wheel := rl.GetMouseWheelMove()
     if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel) {
         if wheel < 0 { // scroll down
-            new_start_value := app_state.current_scroll_idx + SCROLL_INCREMENT
+            new_start_value := app_state.main_panel_scroll_idx + SCROLL_INCREMENT
             max_start_value : i32 = 0
             if i32(len(app_state.rows)) > app_state.max_rows_visible {
                 max_start_value = math.abs(app_state.max_rows_visible - i32(len(app_state.rows)))
             }
 
             if new_start_value > max_start_value {
-                app_state.current_scroll_idx = max_start_value
+                app_state.main_panel_scroll_idx = max_start_value
             } else {
-                app_state.current_scroll_idx = new_start_value
+                app_state.main_panel_scroll_idx = new_start_value
             }
 
         } else if wheel > 0 { // scroll up
-            value := app_state.current_scroll_idx - SCROLL_INCREMENT
+            value := app_state.main_panel_scroll_idx - SCROLL_INCREMENT
             if value <= 0 {
-                app_state.current_scroll_idx = 0
+                app_state.main_panel_scroll_idx = 0
             } else {
-                app_state.current_scroll_idx = value
+                app_state.main_panel_scroll_idx = value
             }
         }
     }

@@ -226,7 +226,7 @@ get_track_cover_art :: proc(app_state: ^App_State, track: ^Track) -> ^cstring {
 build_rows :: proc(app_state: ^App_State) {
     // reset scroll index
     rows : [dynamic]Row
-    app_state.current_scroll_idx = 0
+    app_state.main_panel_scroll_idx = 0
     pos_y : i32 = i32(app_state.main_panel.y)
 
     for album in app_state.albums {
