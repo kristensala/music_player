@@ -6,6 +6,7 @@ import rl "vendor:raylib"
 import ma "vendor:miniaudio"
 import "core:mem"
 
+SCROLL_INCREMENT      :: 5 // five rows
 BOTTOM_BAR_PADDING    :: 50
 FONT_20               :: 20
 FONT_30               :: 30
@@ -19,6 +20,8 @@ App_State :: struct {
     tracks: [dynamic]Track,
     albums: [dynamic]Album,
     playlists: [dynamic]Playlist,
+
+    queue: [dynamic]i32, //track indices
 
     rows: [dynamic]Row,
 
@@ -47,7 +50,7 @@ App_State :: struct {
 
     // filtering
     artist_list: [dynamic]cstring,
-    selected_artist: cstring
+    selected_artist: cstring // nil means show all the tracks
 }
 
 // @todo
@@ -386,6 +389,12 @@ draw_playback_controls :: proc(app_state: ^App_State) {
             app_state.next_button_texture,
             i32(next_song_button_bounds.x), i32(next_song_button_bounds.y),
             rl.BLACK)
+
+        if rl.CheckCollisionPointRec(rl.GetMousePosition(), next_song_button_bounds) {
+            if rl.IsMouseButtonPressed(.LEFT) {
+                handle_next_song_pick(app_state)
+            }
+        }
     }
 
     // draw prev song button

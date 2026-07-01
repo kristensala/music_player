@@ -10,9 +10,7 @@ import tl "taglib"
 import ma "vendor:miniaudio"
 import rl "vendor:raylib"
 
-SCROLL_INCREMENT  :: 5 // five rows
 ALBUM_COVER_SCALE :: 2
-
 ROW_HEIGHT        :: 40
 
 Row :: struct {
@@ -98,9 +96,6 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
                     file_path = strings.clone_to_cstring(d.fullpath)
                 }
 
-                append(&app_state.tracks, track)
-                tl.tag_destroy(&tag)
-
                 // create album
                 {
                     idx, album_exists := album_map[track.album]
@@ -115,7 +110,8 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
                         album_map[track.album] = idx
                     }
                     track.album_idx = i32(idx)
-                    track_idx := len(app_state.tracks) - 1
+
+                    track_idx := len(app_state.tracks)
                     append(&app_state.albums[idx].track_indices, i32(track_idx))
 
                     track_pos := len(app_state.albums[idx].track_indices) - 1
@@ -123,6 +119,9 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
 
                     current_album = &app_state.albums[len(app_state.albums) - 1]
                 }
+
+                append(&app_state.tracks, track)
+                tl.tag_destroy(&tag)
 
                 if !slice.contains(app_state.artist_list[:], current_album.artist) {
                     append(&app_state.artist_list, current_album.artist)
@@ -140,22 +139,15 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
     sort.quick_sort(app_state.artist_list[1:])
 }
 
-// @todo: could use app_state.rows now
 @private
 handle_next_song_pick :: proc(app_state: ^App_State) {
-    assert(ma.sound_at_end(app_state.ma_sound) == true)
-
-    ma.sound_uninit(app_state.ma_sound)
-    app_state.ma_sound = nil
-    app_state.audio_state = .Stopped
+    //assert(ma.sound_at_end(app_state.ma_sound) == true)
 
     current_album := app_state.albums[app_state.currently_playing.album_idx]
     next_track : ^Track = nil
 
     assert(app_state.currently_playing != nil)
 
-    // @testing
-    // @todo: handle if last album
     // Is last song of the album. Switch to the next one
     if len(current_album.track_indices) - 1 == int(app_state.currently_playing.order_nr_in_album) {
         is_last_album := len(app_state.albums) - 1  == int(app_state.currently_playing.album_idx)
@@ -173,6 +165,9 @@ handle_next_song_pick :: proc(app_state: ^App_State) {
         next_track = &app_state.tracks[next_track_idx]
     }
 
+    ma.sound_uninit(app_state.ma_sound)
+    app_state.ma_sound = nil
+    app_state.audio_state = .Stopped
     app_state.currently_playing = nil
 
     if next_track != nil {
@@ -257,4 +252,9 @@ build_rows :: proc(app_state: ^App_State) {
     }
 
     app_state.rows = rows
+}
+
+@private
+build_queue :: proc(app_state: ^App_State) {
+    // could use app_state.rows to get the track to play
 }
