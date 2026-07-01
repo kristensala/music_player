@@ -9,3 +9,5 @@
 - [ ] Display album art (build a texture atlas with cache eviction)
 - [x] Render only what is visible to the user
 - [ ] Prompt enter library location when not found in config
+- [ ] Support playlist creation (~/.config/music_player/playlists/mppl0 etc)
+- [ ] Create/Read config file ~/.config/music_player/config
