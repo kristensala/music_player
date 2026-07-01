@@ -1,6 +1,7 @@
 # music_player
 
 ![Demo](/res/demo.png)
+![Memory](/res/memory.png)
 
 - [ ] Fix taglib mp3 major version 2 parsing
 - [x] Per artist filtering
