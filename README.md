@@ -9,4 +9,3 @@
 - [ ] Display album art (build a texture atlas with cache eviction)
 - [x] Render only what is visible to the user
 - [ ] Prompt enter library location when not found in config
-- [ ] Use texture atlas approach for Album covers
