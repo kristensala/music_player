@@ -9,7 +9,6 @@ FONT_20               :: 20
 FONT_30               :: 30
 PLAYBACK_BUTTON_SIZE  :: 30
 SIDE_PANEL_ROW_HEIGHT :: 35
-ALBUM_COVER_SCALE :: 2
 ROW_HEIGHT :: 40
 
 Row :: struct {
