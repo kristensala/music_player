@@ -14,9 +14,9 @@ ALBUM_COVER_SCALE :: 2
 ROW_HEIGHT        :: 40
 
 Row :: struct {
-    is_album_title_row : bool,
-    album_title        : cstring,
-    track              : ^Track,
+    is_album : bool,
+    album_idx: i32,
+    track: ^Track,
 }
 
 // @todo
@@ -104,7 +104,8 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
 
                         album := Album{
                             title = track.album,
-                            artist = track.artist
+                            artist = track.artist,
+                            cover_art_cache_entry_idx = -1
                         }
                         append(&app_state.albums, album)
                         album_map[track.album] = idx
@@ -135,6 +136,7 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
             }
         }
     }
+
 
     sort.quick_sort(app_state.artist_list[1:])
 }
@@ -216,10 +218,9 @@ get_track_cover_art :: proc(app_state: ^App_State, track: ^Track) -> ^cstring {
 build_rows :: proc(app_state: ^App_State) {
     // reset scroll index
     rows : [dynamic]Row
-    app_state.main_panel_scroll_idx = 0
     pos_y : i32 = i32(app_state.main_panel.y)
 
-    for album in app_state.albums {
+    for &album, album_idx in app_state.albums {
         if app_state.selected_artist != nil {
             if album.artist != app_state.selected_artist {
                 continue
@@ -227,8 +228,8 @@ build_rows :: proc(app_state: ^App_State) {
         }
 
         album_title_row := Row{
-            is_album_title_row = true,
-            album_title = album.title
+            is_album = true,
+            album_idx = i32(album_idx),
         }
         append(&rows, album_title_row)
 
@@ -252,9 +253,28 @@ build_rows :: proc(app_state: ^App_State) {
     }
 
     app_state.rows = rows
+    app_state.content_max_height = pos_y
 }
 
 @private
-build_queue :: proc(app_state: ^App_State) {
-    // could use app_state.rows to get the track to play
+least_used_cover_art_idx :: proc(app_state: ^App_State) -> (idx: i32, cache_entry: ^Album_Art_Cache_Entry) {
+    smallest_usage : u64
+    entry_idx: i32
+    e : ^Album_Art_Cache_Entry
+    for &entry, idx in app_state.album_art_cache.entries {
+        if idx == 0 {
+            smallest_usage = entry.counter_value
+            entry_idx = i32(idx)
+            e = &entry
+            continue
+        }
+
+        if entry.counter_value < smallest_usage {
+            smallest_usage = entry.counter_value
+            entry_idx = i32(idx)
+            e = &entry
+        }
+    }
+
+    return entry_idx, e
 }
