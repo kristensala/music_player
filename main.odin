@@ -5,147 +5,6 @@ import rl "vendor:raylib"
 import ma "vendor:miniaudio"
 import "core:mem"
 
-SCROLL_INCREMENT      :: 5 // five rows
-BOTTOM_BAR_PADDING    :: 50
-FONT_20               :: 20
-FONT_30               :: 30
-PLAYBACK_BUTTON_SIZE  :: 30
-SIDE_PANEL_ROW_HEIGHT :: 35
-
-
-App_State :: struct {
-    font: map[i32]rl.Font,
-    music_dir: string,
-
-    tracks: [dynamic]Track,
-    albums: [dynamic]Album,
-    playlists: [dynamic]Playlist,
-
-    album_cover_load_queue: [dynamic]i32,
-    queue: [dynamic]i32, //track indices
-
-    rows: [dynamic]Row,
-    content_max_height: i32, // in pixels
-
-    default_album_cover_texture: rl.Texture2D,
-
-    play_button_texture: rl.Texture2D,
-    pause_button_texture: rl.Texture2D,
-    next_button_texture: rl.Texture2D,
-    previous_button_texture: rl.Texture2D,
-
-    ma_engine: ma.engine,
-    ma_sound: ^ma.sound,
-
-    audio_state: AudioState,
-    currently_playing: ^Track,
-
-    main_panel: rl.Rectangle,
-
-    playback_controls_panel: rl.Rectangle,
-    side_panel: rl.Rectangle,
-
-    main_panel_scroll_offset: i32,
-    side_panel_scroll_offset: f32,
-
-    // filtering
-    artist_list: [dynamic]cstring,
-    selected_artist: cstring, // nil means show all the tracks
-
-    album_art_cache: Album_Art_Cache
-}
-
-Album_Art_Cache :: struct {
-    entries: [15]Album_Art_Cache_Entry,
-    count: i32,
-    counter: u64
-}
-
-Album_Art_Cache_Entry :: struct {
-    texture: rl.Texture2D,
-    album_idx: i32,
-    counter_value: u64 // the one with the smallest nr. remove
-}
-
-AudioState :: enum {
-    Stopped,
-    Playing,
-    Paused
-}
-
-// @todo
-// custom files
-// Use DeaDBeef as an example
-Playlist :: struct {
-    title: string,
-    tracks: [dynamic]Track
-}
-
-Track :: struct {
-    title: cstring,
-    artist: cstring,
-    album: cstring,
-    album_idx: i32, // @todo: use ^Album, then I can sort the Album list
-    file_path: cstring,
-    file_name: cstring,
-
-    order_nr_in_album: i32
-}
-
-Album :: struct {
-    title: cstring,
-    artist: cstring,
-
-    cover_art_path: cstring,
-    cover_art_cache_entry_idx: i32,
-
-    track_indices: [dynamic]i32 // reference to the app_state.tracks @todo: should use [dynamic]^Track then I can sort the list of tracks
-}
-
-@private
-destroy_state :: proc(app_state: ^App_State) {
-    ma.sound_uninit(app_state.ma_sound)
-
-    delete(app_state.rows)
-    delete(app_state.artist_list)
-
-    for a in app_state.albums {
-        delete(a.track_indices)
-        delete(a.cover_art_path)
-
-        //rl.UnloadTexture(a.cover_img_texture)
-    }
-    delete(app_state.albums)
-
-    for t in app_state.tracks {
-        delete(t.file_name)
-        delete(t.file_path)
-        delete(t.title)
-        delete(t.artist)
-        delete(t.album)
-    }
-    delete(app_state.tracks)
-
-
-    for p in app_state.playlists {
-        delete(p.tracks)
-    }
-    delete(app_state.playlists)
-
-    for entry in app_state.album_art_cache.entries {
-        rl.UnloadTexture(entry.texture)
-    }
-
-    rl.UnloadTexture(app_state.default_album_cover_texture)
-    rl.UnloadTexture(app_state.play_button_texture)
-    rl.UnloadTexture(app_state.pause_button_texture)
-    rl.UnloadTexture(app_state.next_button_texture)
-    rl.UnloadTexture(app_state.previous_button_texture)
-
-
-    free(app_state)
-}
-
 main :: proc() {
     when ODIN_DEBUG {
 		track: mem.Tracking_Allocator
@@ -166,7 +25,6 @@ main :: proc() {
 
     rl.InitWindow(1800, 1250, "music_player")
     defer rl.CloseWindow()
-
 
     rl.SetTargetFPS(60)
     rl.SetExitKey(.KEY_NULL)
@@ -207,8 +65,6 @@ main :: proc() {
         height = 150
     }
 
-    //app_state.default_album_cover_texture = rl.LoadTexture("./res/album_placeholder.png")
-
     // Load play button image
     {
         play_btn_img := rl.LoadImage("./res/play.png")
@@ -243,35 +99,6 @@ main :: proc() {
 
     append(&app_state.artist_list, "All")
     walk_music_dir(app_state, app_state.music_dir)
-
-    // add album art to cache
-    {
-        /*counter : i32 = 0
-        for &album, album_idx in app_state.albums {
-            if len(album.cover_art_path) == 0 do continue
-
-            cover_img := rl.LoadImage(album.cover_art_path)
-            rl.ImageResize(&cover_img, 200, 200)
-            cover_texture := rl.LoadTextureFromImage(cover_img)
-            rl.UnloadImage(cover_img)
-            
-            if counter == 15 {
-                fmt.printfln("Cache full")
-                break
-            }
-
-            cache_entry := Album_Art_Cache_Entry{
-                texture = cover_texture,
-                album_idx = i32(album_idx),
-                counter_value = 0
-            }
-            app_state.album_art_cache.entries[counter] = cache_entry
-            album.cover_art_cache_entry_idx = counter
-
-            counter += 1
-        }*/
-    }
-
     build_rows(app_state) // for ui
 
     engine_init_result := ma.engine_init(nil, &app_state.ma_engine)
@@ -291,29 +118,14 @@ main :: proc() {
             was_focused = is_focused
         }
 
-        process_cover_queue(app_state)
+        update_main(app_state)
+        update_layout(app_state)
 
         rl.BeginDrawing()
         rl.ClearBackground(rl.RAYWHITE)
 
-        app_state.main_panel.width = f32(rl.GetScreenWidth() - 40)
-        app_state.main_panel.height = f32(rl.GetScreenHeight()) - app_state.playback_controls_panel.height
-        app_state.side_panel.height = app_state.main_panel.height
-
-        app_state.playback_controls_panel.width = f32(rl.GetScreenWidth())
-        app_state.playback_controls_panel.y = app_state.main_panel.height
-
-        if rl.IsWindowResized() {
-        }
-
-        update_main(app_state)
         draw_main(app_state)
 
-
-        /*for entry in app_state.album_art_cache.entries {
-            least := least_used_cover_art_idx(app_state)
-            fmt.printfln("album_idx: %i; counter: %i; least_used: %i", entry.album_idx, entry.counter_value, least)
-        }*/
         rl.EndDrawing()
     }
 
@@ -323,63 +135,10 @@ main :: proc() {
     }
 }
 
-process_cover_queue :: proc(app_state: ^App_State) {
-    fmt.println(app_state.album_cover_load_queue[:])
-
-    for album_idx, idx in app_state.album_cover_load_queue {
-        album := &app_state.albums[album_idx]
-        if len(album.cover_art_path) > 0 {
-            // cache is full
-            if app_state.album_art_cache.count >= 15 {
-                least_used_idx, e := least_used_cover_art_idx(app_state)
-                a := &app_state.albums[e.album_idx]
-                a.cover_art_cache_entry_idx = -1
-                fmt.println("--------------------unloading: ", a.title, e.album_idx)
-
-                // unload current one
-                current_entry := &app_state.album_art_cache.entries[least_used_idx]
-                rl.UnloadTexture(current_entry.texture)
-
-                app_state.album_art_cache.entries[least_used_idx] = {}
-                app_state.album_art_cache.count -= 1
-
-                img := rl.LoadImage(album.cover_art_path)
-                rl.ImageResize(&img, 200, 200)
-                texture := rl.LoadTextureFromImage(img)
-                rl.UnloadImage(img)
-
-                new_cache_entry := Album_Art_Cache_Entry{
-                    album_idx = album_idx,
-                    texture = texture,
-                    counter_value = app_state.album_art_cache.counter
-                }
-                app_state.album_art_cache.entries[least_used_idx] = new_cache_entry
-                album.cover_art_cache_entry_idx = least_used_idx
-                app_state.album_art_cache.count += 1
-            } else {
-                img := rl.LoadImage(album.cover_art_path)
-                rl.ImageResize(&img, 200, 200)
-                texture := rl.LoadTextureFromImage(img)
-                rl.UnloadImage(img)
-
-                idx := app_state.album_art_cache.count
-                new_cache_entry := Album_Art_Cache_Entry{
-                    album_idx = album_idx,
-                    texture = texture,
-                    counter_value = app_state.album_art_cache.counter
-                }
-                app_state.album_art_cache.entries[idx] = new_cache_entry
-                app_state.album_art_cache.count += 1
-                album.cover_art_cache_entry_idx = i32(idx)
-            }
-        }
-    }
-
-    clear(&app_state.album_cover_load_queue)
-}
 
 @(private = "file")
 update_main :: proc(app_state: ^App_State) {
+    process_album_art_queue(app_state)
     handle_keyboard_events(app_state)
 
     if ma.sound_at_end(app_state.ma_sound) {
@@ -389,27 +148,7 @@ update_main :: proc(app_state: ^App_State) {
 
 @(private = "file")
 draw_main :: proc(app_state: ^App_State) {
-
-    // side panel
-    {
-        rl.DrawLineEx(
-            {app_state.side_panel.x + app_state.side_panel.width, 0},
-            {app_state.side_panel.x + app_state.side_panel.width, app_state.main_panel.y + app_state.main_panel.height},
-            1.5,
-            rl.LIGHTGRAY
-        )
-
-        rl.BeginScissorMode(
-            i32(app_state.side_panel.x),
-            i32(app_state.side_panel.y),
-            i32(app_state.side_panel.width),
-            i32(app_state.main_panel.height))
-
-        draw_artist_list(app_state)
-
-        rl.EndScissorMode()
-    }
-
+    side_panel_draw(app_state)
     draw_and_handle_album_list(app_state)
 
     // Bottom bar
@@ -443,7 +182,7 @@ draw_main :: proc(app_state: ^App_State) {
             length: f32 = 1
             ma.sound_get_length_in_seconds(app_state.ma_sound, &length)
 
-            draw_progress_bar(
+            progress_bar_draw(
                 cursor,
                 length,
                 {BOTTOM_BAR_PADDING, f32(app_state.playback_controls_panel.y + 100)},
@@ -568,13 +307,13 @@ draw_artist_list :: proc(app_state: ^App_State) {
     wheel := rl.GetMouseWheelMove()
     if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel) {
         if wheel < 0 { // scroll down
-            app_state.side_panel_scroll_offset = app_state.side_panel_scroll_offset + (SIDE_PANEL_ROW_HEIGHT * 5) // five rows
+            app_state.side_panel_scroll_offset = app_state.side_panel_scroll_offset + (SIDE_PANEL_ROW_HEIGHT * SCROLL_INCREMENT)
             if app_state.side_panel_scroll_offset >= (f32(len(app_state.artist_list) + 2) * SIDE_PANEL_ROW_HEIGHT) - app_state.side_panel.height {
                 app_state.side_panel_scroll_offset = (f32(len(app_state.artist_list) + 2) * SIDE_PANEL_ROW_HEIGHT) - app_state.side_panel.height
             }
 
         } else if wheel > 0 {
-            app_state.side_panel_scroll_offset = app_state.side_panel_scroll_offset - (40 * 5) // five rows
+            app_state.side_panel_scroll_offset = app_state.side_panel_scroll_offset - (SIDE_PANEL_ROW_HEIGHT * SCROLL_INCREMENT) // five rows
             if app_state.side_panel_scroll_offset < 0 {
                 app_state.side_panel_scroll_offset = 0
             }
@@ -582,9 +321,29 @@ draw_artist_list :: proc(app_state: ^App_State) {
     }
 }
 
+@private
+side_panel_draw :: proc(app_state: ^App_State) {
+    rl.DrawLineEx(
+        {app_state.side_panel.x + app_state.side_panel.width, 0},
+        {app_state.side_panel.x + app_state.side_panel.width, app_state.main_panel.y + app_state.main_panel.height},
+        1.5,
+        rl.LIGHTGRAY
+    )
+
+    rl.BeginScissorMode(
+        i32(app_state.side_panel.x),
+        i32(app_state.side_panel.y),
+        i32(app_state.side_panel.width),
+        i32(app_state.main_panel.height))
+
+    draw_artist_list(app_state)
+
+    rl.EndScissorMode()
+}
+
 @(private = "file")
 draw_and_handle_album_list :: proc(app_state: ^App_State) {
-    selected_track, pressed := draw_content(app_state)
+    selected_track, pressed := draw_main_panel_content(app_state)
     if pressed {
         if app_state.ma_sound != nil {
             ma.sound_uninit(app_state.ma_sound)
@@ -607,9 +366,9 @@ draw_and_handle_album_list :: proc(app_state: ^App_State) {
 }
 
 @(private = "file")
-draw_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: bool) {
-    track_pressed         := false
-    pressed_track         : ^Track = nil
+draw_main_panel_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: bool) {
+    track_pressed := false
+    pressed_track : ^Track = nil
 
     rl.BeginScissorMode(
         i32(app_state.main_panel.x),
@@ -629,7 +388,7 @@ draw_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: bool) {
             break
         }
 
-        if row.is_album {
+        if row.is_album_row {
             album := &app_state.albums[row.album_idx]
 
             pos_y = pos_y + ROW_HEIGHT
@@ -659,13 +418,12 @@ draw_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: bool) {
             pos_y = pos_y + ROW_HEIGHT
 
             if album.cover_art_cache_entry_idx >= 0 {
-                app_state.album_art_cache.counter += 1
+                app_state.album_art_cache.current_frame += 1
                 cache_entry := &app_state.album_art_cache.entries[album.cover_art_cache_entry_idx]
-                cache_entry.counter_value = app_state.album_art_cache.counter
+                cache_entry.frame = app_state.album_art_cache.current_frame
                 rl.DrawTexture(cache_entry.texture, i32(app_state.main_panel.x), i32(pos_y), rl.WHITE)
             } else {
-                request_cover_load(&app_state.album_cover_load_queue, row.album_idx)
-                // no cover fond. look for it
+                request_cover_load(&app_state.album_art_load_queue, row.album_idx)
             }
 
         } else {
@@ -757,23 +515,8 @@ draw_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: bool) {
     return pressed_track, track_pressed
 }
 
-@private
-request_cover_load :: proc(queue: ^[dynamic]i32, album_idx: i32) {
-    if len(queue) == 15 do return
-
-    is_in_queue := false
-    for item in queue {
-        if item == album_idx {
-            is_in_queue = true
-            return
-        }
-    }
-    if is_in_queue do return
-    append(queue, album_idx)
-}
-
 @(private = "file")
-draw_progress_bar :: proc(value: f32, max_value: f32, pos: [2]f32, w, h: f32) {
+progress_bar_draw :: proc(value: f32, max_value: f32, pos: [2]f32, w, h: f32) {
     bounds := rl.Rectangle{
         x = pos.x,
         y = pos.y,
@@ -799,3 +542,52 @@ draw_progress_bar :: proc(value: f32, max_value: f32, pos: [2]f32, w, h: f32) {
         0, 2, rl.BLACK)
 }
 
+@private
+destroy_state :: proc(app_state: ^App_State) {
+    ma.sound_uninit(app_state.ma_sound)
+
+    delete(app_state.rows)
+    delete(app_state.artist_list)
+
+    for a in app_state.albums {
+        delete(a.track_indices)
+        delete(a.cover_art_path)
+    }
+    delete(app_state.albums)
+
+    for t in app_state.tracks {
+        delete(t.file_name)
+        delete(t.file_path)
+        delete(t.title)
+        delete(t.artist)
+        delete(t.album)
+    }
+    delete(app_state.tracks)
+
+
+    for p in app_state.playlists {
+        delete(p.tracks)
+    }
+    delete(app_state.playlists)
+
+    for entry in app_state.album_art_cache.entries {
+        rl.UnloadTexture(entry.texture)
+    }
+
+    rl.UnloadTexture(app_state.default_album_cover_texture)
+    rl.UnloadTexture(app_state.play_button_texture)
+    rl.UnloadTexture(app_state.pause_button_texture)
+    rl.UnloadTexture(app_state.next_button_texture)
+    rl.UnloadTexture(app_state.previous_button_texture)
+
+    free(app_state)
+}
+
+update_layout :: proc(app_state: ^App_State) {
+    app_state.main_panel.width = f32(rl.GetScreenWidth() - 40)
+    app_state.main_panel.height = f32(rl.GetScreenHeight()) - app_state.playback_controls_panel.height
+    app_state.side_panel.height = app_state.main_panel.height
+
+    app_state.playback_controls_panel.width = f32(rl.GetScreenWidth())
+    app_state.playback_controls_panel.y = app_state.main_panel.height
+}

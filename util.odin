@@ -10,15 +10,6 @@ import tl "taglib"
 import ma "vendor:miniaudio"
 import rl "vendor:raylib"
 
-ALBUM_COVER_SCALE :: 2
-ROW_HEIGHT        :: 40
-
-Row :: struct {
-    is_album : bool,
-    album_idx: i32,
-    track: ^Track,
-}
-
 // @todo
 // ~/.config/music_player/config
 // create ~/.config/music_player/playlists/mppl1
@@ -143,8 +134,6 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
 
 @private
 handle_next_song_pick :: proc(app_state: ^App_State) {
-    //assert(ma.sound_at_end(app_state.ma_sound) == true)
-
     current_album := app_state.albums[app_state.currently_playing.album_idx]
     next_track : ^Track = nil
 
@@ -208,34 +197,22 @@ handle_play_pause :: proc(app_state: ^App_State) {
 }
 
 @private
-get_track_cover_art :: proc(app_state: ^App_State, track: ^Track) -> ^cstring {
-    return &app_state.albums[track.album_idx].cover_art_path
-}
-
-// @todo:
-// if selected_artist != nil then rebuild rows from app_state.artists
-@private
 build_rows :: proc(app_state: ^App_State) {
-    // reset scroll index
     rows : [dynamic]Row
     pos_y : i32 = i32(app_state.main_panel.y)
 
     for &album, album_idx in app_state.albums {
         if app_state.selected_artist != nil {
-            if album.artist != app_state.selected_artist {
-                continue
-            }
+            if album.artist != app_state.selected_artist do continue
         }
 
         album_title_row := Row{
-            is_album = true,
+            is_album_row = true,
             album_idx = i32(album_idx),
         }
         append(&rows, album_title_row)
 
         pos_y = pos_y + ROW_HEIGHT
-
-        // @todo: next should be cover art row
 
         for track_idx in album.track_indices {
             track := &app_state.tracks[track_idx]
@@ -257,24 +234,92 @@ build_rows :: proc(app_state: ^App_State) {
 }
 
 @private
-least_used_cover_art_idx :: proc(app_state: ^App_State) -> (idx: i32, cache_entry: ^Album_Art_Cache_Entry) {
+least_used_cover_art_idx :: proc(app_state: ^App_State) -> (cache_entry_idx: i32, cache_entry: ^Album_Art_Cache_Entry) {
     smallest_usage : u64
     entry_idx: i32
     e : ^Album_Art_Cache_Entry
+
     for &entry, idx in app_state.album_art_cache.entries {
         if idx == 0 {
-            smallest_usage = entry.counter_value
+            smallest_usage = entry.frame
             entry_idx = i32(idx)
             e = &entry
             continue
         }
 
-        if entry.counter_value < smallest_usage {
-            smallest_usage = entry.counter_value
+        if entry.frame < smallest_usage {
+            smallest_usage = entry.frame
             entry_idx = i32(idx)
             e = &entry
         }
     }
 
     return entry_idx, e
+}
+
+@private
+request_cover_load :: proc(queue: ^[dynamic]i32, album_idx: i32) {
+    if len(queue) == 15 do return
+
+    is_in_queue := false
+    for item in queue {
+        if item == album_idx {
+            is_in_queue = true
+            return
+        }
+    }
+    if is_in_queue do return
+    append(queue, album_idx)
+}
+
+@private
+process_album_art_queue :: proc(app_state: ^App_State) {
+    for album_idx, idx in app_state.album_art_load_queue {
+        album := &app_state.albums[album_idx]
+        if len(album.cover_art_path) > 0 {
+            // cache is full
+            if app_state.album_art_cache.count >= 15 {
+                cache_entry_idx, cache_entry := least_used_cover_art_idx(app_state)
+                least_used_album := &app_state.albums[cache_entry.album_idx]
+                least_used_album.cover_art_cache_entry_idx = -1
+                current_entry := &app_state.album_art_cache.entries[cache_entry_idx]
+                rl.UnloadTexture(current_entry.texture)
+
+                app_state.album_art_cache.entries[cache_entry_idx] = {}
+                app_state.album_art_cache.count -= 1
+
+                img := rl.LoadImage(album.cover_art_path)
+                rl.ImageResize(&img, 200, 200)
+                texture := rl.LoadTextureFromImage(img)
+                rl.UnloadImage(img)
+
+                new_cache_entry := Album_Art_Cache_Entry{
+                    album_idx = album_idx,
+                    texture = texture,
+                    frame = app_state.album_art_cache.current_frame
+                }
+
+                app_state.album_art_cache.entries[cache_entry_idx] = new_cache_entry
+                album.cover_art_cache_entry_idx = cache_entry_idx
+                app_state.album_art_cache.count += 1
+            } else {
+                img := rl.LoadImage(album.cover_art_path)
+                rl.ImageResize(&img, 200, 200)
+                texture := rl.LoadTextureFromImage(img)
+                rl.UnloadImage(img)
+
+                idx := app_state.album_art_cache.count
+                new_cache_entry := Album_Art_Cache_Entry{
+                    album_idx = album_idx,
+                    texture = texture,
+                    frame = app_state.album_art_cache.current_frame
+                }
+                app_state.album_art_cache.entries[idx] = new_cache_entry
+                app_state.album_art_cache.count += 1
+                album.cover_art_cache_entry_idx = i32(idx)
+            }
+        }
+    }
+
+    clear(&app_state.album_art_load_queue)
 }
