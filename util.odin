@@ -128,7 +128,7 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
         }
     }
 
-
+    // @todo: ignore case
     sort.quick_sort(app_state.artist_list[1:])
 }
 
@@ -239,18 +239,18 @@ least_used_cover_art_idx :: proc(app_state: ^App_State) -> (cache_entry_idx: i32
     entry_idx: i32
     e : ^Album_Art_Cache_Entry
 
-    for &entry, idx in app_state.album_art_cache.entries {
+    for entry, idx in app_state.album_art_cache.entries {
         if idx == 0 {
             smallest_usage = entry.frame
             entry_idx = i32(idx)
-            e = &entry
+            e = entry
             continue
         }
 
         if entry.frame < smallest_usage {
             smallest_usage = entry.frame
             entry_idx = i32(idx)
-            e = &entry
+            e = entry
         }
     }
 
@@ -276,13 +276,16 @@ request_cover_load :: proc(queue: ^[dynamic]i32, album_idx: i32) {
 process_album_art_queue :: proc(app_state: ^App_State) {
     for album_idx, idx in app_state.album_art_load_queue {
         album := &app_state.albums[album_idx]
+
+        fmt.println("loading album art for: ", album.title)
+
         if len(album.cover_art_path) > 0 {
             // cache is full
             if app_state.album_art_cache.count >= 15 {
                 cache_entry_idx, cache_entry := least_used_cover_art_idx(app_state)
                 least_used_album := &app_state.albums[cache_entry.album_idx]
                 least_used_album.cover_art_cache_entry_idx = -1
-                current_entry := &app_state.album_art_cache.entries[cache_entry_idx]
+                current_entry := app_state.album_art_cache.entries[cache_entry_idx]
                 rl.UnloadTexture(current_entry.texture)
 
                 app_state.album_art_cache.entries[cache_entry_idx] = {}
@@ -293,11 +296,10 @@ process_album_art_queue :: proc(app_state: ^App_State) {
                 texture := rl.LoadTextureFromImage(img)
                 rl.UnloadImage(img)
 
-                new_cache_entry := Album_Art_Cache_Entry{
-                    album_idx = album_idx,
-                    texture = texture,
-                    frame = app_state.album_art_cache.current_frame
-                }
+                new_cache_entry := new(Album_Art_Cache_Entry)
+                new_cache_entry.album_idx = album_idx
+                new_cache_entry.texture = texture
+                new_cache_entry.frame = app_state.current_frame_rendered
 
                 app_state.album_art_cache.entries[cache_entry_idx] = new_cache_entry
                 album.cover_art_cache_entry_idx = cache_entry_idx
@@ -308,18 +310,76 @@ process_album_art_queue :: proc(app_state: ^App_State) {
                 texture := rl.LoadTextureFromImage(img)
                 rl.UnloadImage(img)
 
-                idx := app_state.album_art_cache.count
-                new_cache_entry := Album_Art_Cache_Entry{
-                    album_idx = album_idx,
-                    texture = texture,
-                    frame = app_state.album_art_cache.current_frame
+                idx := -1
+                for e, i in app_state.album_art_cache.entries {
+                    // look for the first empty entry
+                    if e == nil {
+                        idx = i
+                    }
                 }
-                app_state.album_art_cache.entries[idx] = new_cache_entry
-                app_state.album_art_cache.count += 1
-                album.cover_art_cache_entry_idx = i32(idx)
+                if idx >= 0 {
+                    new_cache_entry := new(Album_Art_Cache_Entry)
+                    new_cache_entry.album_idx = album_idx
+                    new_cache_entry.texture = texture
+                    new_cache_entry.frame = app_state.current_frame_rendered
+
+                    app_state.album_art_cache.entries[idx] = new_cache_entry
+                    app_state.album_art_cache.count += 1
+                    album.cover_art_cache_entry_idx = i32(idx)
+                }
             }
         }
     }
 
     clear(&app_state.album_art_load_queue)
+}
+
+// @todo: buggy
+@private
+invalidate_cache :: proc(app_state: ^App_State) {
+    max_frame_diff : u64 = 1000
+
+    entries_to_remove: [dynamic]i32
+    defer delete(entries_to_remove)
+
+    for entry, idx in app_state.album_art_cache.entries {
+        if entry == nil do continue
+
+        // entry has not been accessed for the last 1000 frames
+        // remove from cache
+        if app_state.current_frame_rendered - entry.frame > max_frame_diff {
+            append(&entries_to_remove, i32(idx))
+        }
+    }
+
+    for entry_idx_to_remove in entries_to_remove {
+        cache_entry := app_state.album_art_cache.entries[entry_idx_to_remove]
+        if cache_entry == nil do continue
+
+        album := &app_state.albums[cache_entry.album_idx]
+        if album == nil do continue
+
+        remove_entry_from_cache(&app_state.album_art_cache, entry_idx_to_remove)
+        album.cover_art_cache_entry_idx = -1
+    }
+
+    fmt.println("---start---")
+    for foo in app_state.album_art_cache.entries {
+        if foo != nil {
+            fmt.printfln("album Idx: %i; entry_frame: %i; current frame: %i", foo.album_idx, foo.frame, app_state.current_frame_rendered)
+        }
+    }
+    fmt.println("\n---end---")
+}
+
+@(private = "file")
+remove_entry_from_cache :: proc(cache: ^Album_Art_Cache, entry_idx: i32) {
+    entry := cache.entries[entry_idx]
+    if entry == nil do return
+
+    rl.UnloadTexture(entry.texture)
+    cache.entries[entry_idx] = nil
+    cache.count -= 1
+
+    assert(cache.count >= 0)
 }

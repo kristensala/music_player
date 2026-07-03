@@ -138,6 +138,9 @@ main :: proc() {
 
 @(private = "file")
 update_main :: proc(app_state: ^App_State) {
+    app_state.current_frame_rendered += 1
+
+    invalidate_cache(app_state)
     process_album_art_queue(app_state)
     handle_keyboard_events(app_state)
 
@@ -425,12 +428,14 @@ draw_main_panel_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: b
             pos_y = pos_y + ROW_HEIGHT
 
             if album.cover_art_cache_entry_idx >= 0 {
-                app_state.album_art_cache.current_frame += 1
-                cache_entry := &app_state.album_art_cache.entries[album.cover_art_cache_entry_idx]
-                cache_entry.frame = app_state.album_art_cache.current_frame
+                cache_entry := app_state.album_art_cache.entries[album.cover_art_cache_entry_idx]
+                cache_entry.frame = app_state.current_frame_rendered
                 rl.DrawTexture(cache_entry.texture, i32(app_state.main_panel.x), i32(pos_y), rl.WHITE)
             } else {
-                request_cover_load(&app_state.album_art_load_queue, row.album_idx)
+                if len(album.cover_art_path) > 0 {
+                    fmt.println("add album to queue: ", album.title)
+                    request_cover_load(&app_state.album_art_load_queue, row.album_idx)
+                }
             }
 
         } else {
@@ -556,6 +561,11 @@ destroy_state :: proc(app_state: ^App_State) {
     delete(app_state.rows)
     delete(app_state.artist_list)
 
+    for entry in app_state.album_art_cache.entries {
+        if entry == nil do continue
+        rl.UnloadTexture(entry.texture)
+    }
+
     for a in app_state.albums {
         delete(a.track_indices)
         delete(a.cover_art_path)
@@ -576,10 +586,6 @@ destroy_state :: proc(app_state: ^App_State) {
         delete(p.tracks)
     }
     delete(app_state.playlists)
-
-    for entry in app_state.album_art_cache.entries {
-        rl.UnloadTexture(entry.texture)
-    }
 
     rl.UnloadTexture(app_state.default_album_cover_texture)
     rl.UnloadTexture(app_state.play_button_texture)

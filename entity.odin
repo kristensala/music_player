@@ -58,13 +58,13 @@ App_State :: struct {
 
     album_art_cache: Album_Art_Cache,
     album_art_load_queue: [dynamic]i32, // ref album idx
+
+    current_frame_rendered: u64 // current rendered frame
 }
 
 Album_Art_Cache :: struct {
-    entries: [15]Album_Art_Cache_Entry,
+    entries: [15]^Album_Art_Cache_Entry,
     count: i32,
-
-    current_frame: u64 // current rendered frame
 }
 
 Album_Art_Cache_Entry :: struct {
