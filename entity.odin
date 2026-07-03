@@ -28,7 +28,7 @@ App_State :: struct {
     // @todo: playback_queue
     //queue: [dynamic]i32, //track indices
 
-    rows: [dynamic]Row,
+    rows: [dynamic]^Row,
     content_max_height: i32, // in pixels
 
     default_album_cover_texture: rl.Texture2D,

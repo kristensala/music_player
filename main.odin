@@ -49,6 +49,11 @@ main :: proc() {
     app_state.ma_sound = nil
     app_state.audio_state = .Stopped
 
+    album_placeholder_img := rl.LoadImage("./res/album_placeholder.png")
+    rl.ImageResize(&album_placeholder_img, 200, 200)
+    app_state.default_album_cover_texture = rl.LoadTextureFromImage(album_placeholder_img)
+    rl.UnloadImage(album_placeholder_img)
+
     app_state.side_panel = rl.Rectangle{
         x = 0,
         y = 0,
@@ -386,21 +391,22 @@ draw_main_panel_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: b
         start = i32(len(app_state.rows) - 1)
     }
 
-    album_start_y : f32
     for row, row_idx in app_state.rows[start:] {
-        if pos_y >= app_state.main_panel.height {
+        // 300: pre-fetch some rows
+        // then some of the covers are pre-fetched and there is no delay
+        if pos_y >= app_state.main_panel.height + 300 {
             break
         }
 
-        if row.is_album_row {
-            album := &app_state.albums[row.album_idx]
-
+        if row == nil {
             pos_y += ROW_HEIGHT
-            //@note: album min height should be 200px because the album art is 200x200
-            if row_idx > 0 && pos_y - album_start_y < COVER_SIZE {
-                pos_y = pos_y + (pos_y - album_start_y)
-            }
-            album_start_y = pos_y
+            continue
+        }
+
+        if row.is_album_row {
+            pos_y += ROW_HEIGHT
+
+            album := &app_state.albums[row.album_idx]
 
             list_item := rl.Rectangle{
                 x = app_state.main_panel.x,
@@ -435,6 +441,8 @@ draw_main_panel_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: b
                 if len(album.cover_art_path) > 0 {
                     fmt.println("add album to queue: ", album.title)
                     request_cover_load(&app_state.album_art_load_queue, row.album_idx)
+                } else { // now cover. Load default placeholder
+                    rl.DrawTexture(app_state.default_album_cover_texture, i32(app_state.main_panel.x), i32(pos_y), rl.WHITE)
                 }
             }
 

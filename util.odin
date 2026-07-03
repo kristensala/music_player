@@ -198,7 +198,7 @@ handle_play_pause :: proc(app_state: ^App_State) {
 
 @private
 build_rows :: proc(app_state: ^App_State) {
-    rows : [dynamic]Row
+    rows : [dynamic]^Row
     pos_y : i32 = i32(app_state.main_panel.y)
 
     for &album, album_idx in app_state.albums {
@@ -206,24 +206,33 @@ build_rows :: proc(app_state: ^App_State) {
             if album.artist != app_state.selected_artist do continue
         }
 
-        album_title_row := Row{
-            is_album_row = true,
-            album_idx = i32(album_idx),
-        }
+        album_title_row := new(Row)
+        album_title_row.is_album_row = true
+        album_title_row.album_idx = i32(album_idx)
+
         append(&rows, album_title_row)
 
         pos_y = pos_y + ROW_HEIGHT
 
+        album_content_height : i32 = 0
         for track_idx in album.track_indices {
             track := &app_state.tracks[track_idx]
             assert(track != nil)
 
-            track_row := Row{
-                track = track
-            }
+            track_row := new(Row)
+            track_row.track = track
+
             append(&rows, track_row)
 
             pos_y = pos_y + ROW_HEIGHT
+            album_content_height += ROW_HEIGHT
+        }
+
+        if album_content_height < 200 {
+            diff := (200 - album_content_height) / ROW_HEIGHT
+            for i in 0..<diff{
+                append(&rows, nil)
+            }
         }
 
         pos_y = pos_y + ROW_HEIGHT // padding after the album
