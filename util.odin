@@ -43,6 +43,16 @@ load_config :: proc() {
 
 @private
 handle_keyboard_events :: proc(app_state: ^App_State) {
+    if rl.IsKeyDown(rl.KeyboardKey.LEFT_CONTROL) && rl.IsKeyPressed(rl.KeyboardKey.P) {
+        app_state.command_palette.is_open = true
+    }
+
+    if app_state.command_palette.is_open {
+        if rl.IsKeyPressed(rl.KeyboardKey.ESCAPE) {
+            app_state.command_palette.is_open = false
+        }
+    }
+
     if rl.IsKeyPressed(rl.KeyboardKey.SPACE) {
         if app_state.ma_sound == nil {
             return
@@ -50,6 +60,7 @@ handle_keyboard_events :: proc(app_state: ^App_State) {
 
         handle_play_pause(app_state)
     }
+
 }
 
 @private

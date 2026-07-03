@@ -198,6 +198,8 @@ draw_main :: proc(app_state: ^App_State) {
                 10)
         }
     }
+
+    command_palette_draw(app_state)
 }
 
 @(private = "file")
@@ -296,7 +298,7 @@ draw_artist_list :: proc(app_state: ^App_State) {
 
         pos_y = pos_y + artist_item_bounds.height
 
-        if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel) {
+        if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel) && !app_state.command_palette.is_open {
             if rl.CheckCollisionPointRec(rl.GetMousePosition(), artist_item_bounds) {
                 if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
                     if artist == "All" {
@@ -313,7 +315,7 @@ draw_artist_list :: proc(app_state: ^App_State) {
     }
 
     wheel := rl.GetMouseWheelMove()
-    if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel) {
+    if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel) && !app_state.command_palette.is_open {
         if wheel < 0 { // scroll down
             app_state.side_panel_scroll_offset = app_state.side_panel_scroll_offset + (SIDE_PANEL_ROW_HEIGHT * SCROLL_INCREMENT)
             if app_state.side_panel_scroll_offset >= (f32(len(app_state.artist_list) + 2) * SIDE_PANEL_ROW_HEIGHT) - app_state.side_panel.height {
@@ -458,7 +460,8 @@ draw_main_panel_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: b
             {
                 if (
                     rl.CheckCollisionPointRec(rl.GetMousePosition(), list_item) &&
-                    rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel)
+                    rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel) &&
+                    !app_state.command_palette.is_open
                 ) {
                     rl.DrawRectangleRec(list_item, rl.ORANGE)
 
@@ -516,7 +519,7 @@ draw_main_panel_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: b
     rl.EndScissorMode()
 
     wheel := rl.GetMouseWheelMove()
-    if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel) {
+    if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel) && !app_state.command_palette.is_open {
         if wheel < 0 { // scroll down
             //fmt.printfln("max height: %i; offset: %i; panel height: %f", app_state.content_max_height, app_state.main_panel_scroll_offset, app_state.main_panel.height)
             if app_state.main_panel_scroll_offset + i32(app_state.main_panel.height) < app_state.content_max_height + 150 { // 150 just a random buffer to fix minor calcualtion mistakes
@@ -560,6 +563,31 @@ progress_bar_draw :: proc(value: f32, max_value: f32, pos: [2]f32, w, h: f32) {
         bounds,
         0.1,
         0, 2, rl.BLACK)
+}
+
+command_palette_draw :: proc(app_state: ^App_State) {
+    if !app_state.command_palette.is_open do return
+
+    modal_height : i32 = 300
+    modal_width : i32 = 800
+
+    background := rl.Rectangle{
+        x = 0,
+        y = 0,
+        height = f32(rl.GetScreenHeight()),
+        width = f32(rl.GetScreenWidth())
+    }
+    rl.DrawRectangleRec(background, rl.Fade(rl.GRAY, 0.5))
+
+    bounds := rl.Rectangle{
+        x = f32(rl.GetScreenWidth()) / 2 - f32(modal_width / 2),
+        y = 200,
+        height = f32(modal_height),
+        width = f32(modal_width)
+    }
+
+    rl.DrawRectangleRounded(bounds, 0.1, 0, rl.WHITE)
+
 }
 
 @private

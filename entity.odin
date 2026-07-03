@@ -59,7 +59,9 @@ App_State :: struct {
     album_art_cache: Album_Art_Cache,
     album_art_load_queue: [dynamic]i32, // ref album idx
 
-    current_frame_rendered: u64 // current rendered frame
+    current_frame_rendered: u64, // current rendered frame
+
+    command_palette: Command_Palette
 }
 
 Album_Art_Cache :: struct {
@@ -107,4 +109,14 @@ Album :: struct {
     cover_art_cache_entry_idx: i32,
 
     track_indices: [dynamic]i32 // reference to the app_state.tracks @todo: should use [dynamic]^Track then I can sort the list of tracks
+}
+
+Command_Palette :: struct {
+    input: string,
+    is_open: bool,
+    commands: [1]Command
+}
+
+Command :: enum {
+    Create_Playlist
 }
