@@ -6,7 +6,7 @@
 - [ ] Fix taglib mp3 major version 2 parsing
 - [x] Per artist filtering
 - [ ] Scrolling is broken
-- [ ] Display album art (build a texture atlas with cache eviction)
+- [x] Display album art
 - [x] Render only what is visible to the user
 - [ ] Prompt enter library location when not found in config
 - [ ] Support playlist creation (~/.config/music_player/playlists/mppl0 etc)
