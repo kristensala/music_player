@@ -199,7 +199,7 @@ handle_play_pause :: proc(app_state: ^App_State) {
 @private
 build_rows :: proc(app_state: ^App_State) {
     rows : [dynamic]^Row
-    pos_y : i32 = i32(app_state.main_panel.y)
+    content_height : i32 = 0
 
     for &album, album_idx in app_state.albums {
         if app_state.selected_artist != nil {
@@ -212,7 +212,7 @@ build_rows :: proc(app_state: ^App_State) {
 
         append(&rows, album_title_row)
 
-        pos_y = pos_y + ROW_HEIGHT
+        content_height += ROW_HEIGHT
 
         album_content_height : i32 = 0
         for track_idx in album.track_indices {
@@ -224,23 +224,23 @@ build_rows :: proc(app_state: ^App_State) {
 
             append(&rows, track_row)
 
-            pos_y = pos_y + ROW_HEIGHT
+            //content_height = pos_y + ROW_HEIGHT
             album_content_height += ROW_HEIGHT
         }
 
-        if album_content_height < 200 {
-            diff := (200 - album_content_height) / ROW_HEIGHT
-            for i in 0..<diff{
+        if album_content_height < COVER_SIZE {
+            diff := (COVER_SIZE - album_content_height) / ROW_HEIGHT
+            for i in 0..<diff {
                 append(&rows, nil)
-                pos_y += ROW_HEIGHT
+                album_content_height += ROW_HEIGHT
             }
         }
 
-        pos_y += ROW_HEIGHT // padding after the album
+        content_height += album_content_height // padding after the album
     }
 
     app_state.rows = rows
-    app_state.content_max_height = pos_y
+    app_state.content_max_height = content_height
 }
 
 @private
