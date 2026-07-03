@@ -3,6 +3,7 @@
 ![Demo](/res/demo.png)
 ![Memory](/res/memory.png)
 
+- [ ] Debug cache invalidation (Something lives longer than it has to)
 - [ ] Fix taglib mp3 major version 2 parsing
 - [x] Per artist filtering
 - [ ] Scrolling is broken
