@@ -232,10 +232,11 @@ build_rows :: proc(app_state: ^App_State) {
             diff := (200 - album_content_height) / ROW_HEIGHT
             for i in 0..<diff{
                 append(&rows, nil)
+                pos_y += ROW_HEIGHT
             }
         }
 
-        pos_y = pos_y + ROW_HEIGHT // padding after the album
+        pos_y += ROW_HEIGHT // padding after the album
     }
 
     app_state.rows = rows
@@ -372,13 +373,13 @@ invalidate_cache :: proc(app_state: ^App_State) {
         album.cover_art_cache_entry_idx = -1
     }
 
-    fmt.println("---start---")
+    /*fmt.println("---start---")
     for foo in app_state.album_art_cache.entries {
         if foo != nil {
             fmt.printfln("album Idx: %i; entry_frame: %i; current frame: %i", foo.album_idx, foo.frame, app_state.current_frame_rendered)
         }
     }
-    fmt.println("\n---end---")
+    fmt.println("\n---end---")*/
 }
 
 @(private = "file")

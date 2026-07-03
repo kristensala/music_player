@@ -518,9 +518,15 @@ draw_main_panel_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: b
     wheel := rl.GetMouseWheelMove()
     if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel) {
         if wheel < 0 { // scroll down
-            offset := app_state.main_panel_scroll_offset + (ROW_HEIGHT * 5)
-            if f32(offset) + app_state.main_panel.height < f32(app_state.content_max_height + 50) {
-                app_state.main_panel_scroll_offset += (ROW_HEIGHT * 5)
+            fmt.printfln("max height: %i; offset: %i; panel height: %f", app_state.content_max_height, app_state.main_panel_scroll_offset, app_state.main_panel.height)
+            if app_state.main_panel_scroll_offset + i32(app_state.main_panel.height) < app_state.content_max_height {
+                diff := app_state.content_max_height - (app_state.main_panel_scroll_offset + i32(app_state.main_panel.height))
+                row_count := diff / ROW_HEIGHT
+                if row_count > 5 {
+                    app_state.main_panel_scroll_offset += ROW_HEIGHT * 5
+                } else {
+                    app_state.main_panel_scroll_offset += ROW_HEIGHT * row_count
+                }
             }
         } else if wheel > 0 { // scroll up
             offset := app_state.main_panel_scroll_offset - (ROW_HEIGHT * 5)
