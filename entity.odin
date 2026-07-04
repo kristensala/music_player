@@ -11,6 +11,7 @@ FONT_30               :: 30
 PLAYBACK_BUTTON_SIZE  :: 30
 SIDE_PANEL_ROW_HEIGHT :: 35
 ROW_HEIGHT :: 40
+TRACK_LIST_OFFSET_X :: 250
 
 Row :: struct {
     is_album_row : bool, // if true then track is nil
@@ -43,7 +44,7 @@ App_State :: struct {
     ma_sound: ^ma.sound,
 
     audio_state: AudioState,
-    currently_playing: ^Track,
+    currently_playing_track: ^Track,
 
     main_panel: rl.Rectangle,
 

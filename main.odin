@@ -161,7 +161,7 @@ update_main :: proc(app_state: ^App_State) {
 @(private = "file")
 draw_main :: proc(app_state: ^App_State) {
     side_panel_draw(app_state)
-    draw_and_handle_album_list(app_state)
+    draw_main_panel_content(app_state)
 
     // Bottom bar
     {
@@ -178,10 +178,10 @@ draw_main :: proc(app_state: ^App_State) {
             currently_playing_track_title : cstring = ""
             currently_playing_track_album : cstring = ""
             currently_playing_artist : cstring = ""
-            if app_state.currently_playing != nil {
-                currently_playing_track_title = app_state.currently_playing.title
-                currently_playing_track_album = app_state.currently_playing.album
-                currently_playing_artist = app_state.currently_playing.artist
+            if app_state.currently_playing_track != nil {
+                currently_playing_track_title = app_state.currently_playing_track.title
+                currently_playing_track_album = app_state.currently_playing_track.album
+                currently_playing_artist = app_state.currently_playing_track.artist
             }
 
             rl.DrawTextEx(
@@ -309,13 +309,14 @@ draw_artist_list :: proc(app_state: ^App_State) {
         // center text
         txt_y := ((artist_item_bounds.height - artist_txt_measurements.y) / 2) + artist_item_bounds.y
 
+        txt_left_padding : f32 = 20
         rl.DrawTextEx(
             app_state.font[FONT_20],
             artist,
-            {artist_item_bounds.x + 20, txt_y},
+            {artist_item_bounds.x + txt_left_padding, txt_y},
             FONT_20, 0, rl.BLACK)
 
-        pos_y = pos_y + artist_item_bounds.height
+        pos_y += artist_item_bounds.height
 
         if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel) {
             if rl.CheckCollisionPointRec(rl.GetMousePosition(), artist_item_bounds) {
@@ -330,7 +331,6 @@ draw_artist_list :: proc(app_state: ^App_State) {
                 }
             }
         }
-
     }
 
     wheel := rl.GetMouseWheelMove()
@@ -371,34 +371,7 @@ side_panel_draw :: proc(app_state: ^App_State) {
 }
 
 @(private = "file")
-draw_and_handle_album_list :: proc(app_state: ^App_State) {
-    selected_track, pressed := draw_main_panel_content(app_state)
-    if pressed {
-        if app_state.ma_sound != nil {
-            ma.sound_uninit(app_state.ma_sound)
-            app_state.ma_sound = nil
-        }
-
-        app_state.ma_sound = new(ma.sound)
-        res := ma.sound_init_from_file(&app_state.ma_engine, selected_track.file_path, {.STREAM}, nil, nil, app_state.ma_sound)
-        if res != .SUCCESS {
-            app_state.ma_sound = nil
-            fmt.println("Could not init sound: ", res)
-        } else {
-            sound_start_result := ma.sound_start(app_state.ma_sound)
-            if sound_start_result == .SUCCESS {
-                app_state.audio_state = .Playing
-                app_state.currently_playing = selected_track
-            }
-        }
-    }
-}
-
-@(private = "file")
-draw_main_panel_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: bool) {
-    track_pressed := false
-    pressed_track : ^Track = nil
-
+draw_main_panel_content :: proc(app_state: ^App_State) {
     rl.BeginScissorMode(
         i32(app_state.main_panel.x),
         i32(app_state.main_panel.y),
@@ -415,10 +388,7 @@ draw_main_panel_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: b
     for row, row_idx in app_state.rows[start:] {
         // 300: pre-fetch some rows
         // then some of the covers are pre-fetched and there is no delay
-        if pos_y >= app_state.main_panel.height + 300 {
-            break
-        }
-
+        if pos_y >= app_state.main_panel.height + 300 do break
         if row == nil {
             pos_y += ROW_HEIGHT
             continue
@@ -426,116 +396,16 @@ draw_main_panel_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: b
 
         if row.is_album_row {
             pos_y += ROW_HEIGHT
-
-            album := &app_state.albums[row.album_idx]
-
-            list_item := rl.Rectangle{
-                x = app_state.main_panel.x,
-                y = pos_y,
-                width = app_state.main_panel.width,
-                height = ROW_HEIGHT
-            }
-            text_measurement := rl.MeasureTextEx(app_state.font[FONT_30], album.title, FONT_30, 0)
-
-            rl.DrawTextEx(
-                app_state.font[FONT_30],
-                album.title,
-                { app_state.main_panel.x, pos_y},
-                FONT_30,
-                0,
-                rl.BLACK)
-
-            rl.DrawLine(
-                i32(text_measurement.x + app_state.main_panel.x + 20), 
-                i32(pos_y + FONT_30 / 2),
-                i32(app_state.main_panel.width),
-                i32(pos_y + FONT_30 / 2),
-                rl.PURPLE)
-
-            pos_y = pos_y + ROW_HEIGHT
-
-            if album.cover_art_cache_entry_idx >= 0 {
-                cache_entry := app_state.album_art_cache.entries[album.cover_art_cache_entry_idx]
-                cache_entry.frame = app_state.current_frame_rendered
-                rl.DrawTexture(cache_entry.texture, i32(app_state.main_panel.x), i32(pos_y), rl.WHITE)
-            } else {
-                if len(album.cover_art_path) > 0 {
-                    fmt.println("add album to queue: ", album.title)
-                    request_cover_load(&app_state.album_art_load_queue, row.album_idx)
-                } else { // now cover. Load default placeholder
-                    rl.DrawTexture(app_state.default_album_cover_texture, i32(app_state.main_panel.x), i32(pos_y), rl.WHITE)
-                }
-            }
-
+            album_title_row_draw(app_state, row, &pos_y)
         } else {
-            list_item := rl.Rectangle{
-                x = app_state.main_panel.x + 250, // @todo
-                y = pos_y,
-                width = app_state.main_panel.width,
-                height = ROW_HEIGHT
-            }
-
-            // handle row clicked
-            {
-                if (
-                    rl.CheckCollisionPointRec(rl.GetMousePosition(), list_item) &&
-                    rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel)
-                ) {
-                    rl.DrawRectangleRec(list_item, rl.ORANGE)
-
-                    if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
-                        track_pressed = true
-                        pressed_track = row.track
-                    }
-                }
-            }
-
-            text_measurement := rl.MeasureTextEx(app_state.font[FONT_20], "placeholder", FONT_20, 0)
-            txt_y := ((list_item.height - text_measurement.y) / 2) + list_item.y
-
-            txt_color := rl.BLACK
-            is_playing := app_state.currently_playing != nil && row.track.file_path == app_state.currently_playing.file_path
-            if is_playing {
-                txt_color = rl.PURPLE
-            }
-
-            // display track text
-            {
-                rl.DrawTextEx(
-                    app_state.font[FONT_20],
-                    row.track.artist,
-                    { list_item.x + 10, txt_y},
-                    f32(FONT_20),
-                    0,
-                    txt_color)
-
-                rl.DrawTextEx(
-                    app_state.font[FONT_20],
-                    row.track.album,
-                    { list_item.x + 500, txt_y},
-                    f32(FONT_20),
-                    0,
-                    txt_color)
-
-
-                title := row.track.title
-                if len(title) == 0 {
-                    title = row.track.file_name
-                }
-                rl.DrawTextEx(
-                    app_state.font[FONT_20],
-                    title,
-                    { list_item.x + 1000, txt_y},
-                    f32(FONT_20),
-                    0,
-                    txt_color)
-            }
-            pos_y = pos_y + ROW_HEIGHT
+            track_list_item_draw(app_state, pos_y, row)
+            pos_y += ROW_HEIGHT
         }
     }
 
     rl.EndScissorMode()
 
+    // Handle main panel scrolling
     wheel := rl.GetMouseWheelMove()
     if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel) {
         if wheel < 0 { // scroll down
@@ -552,8 +422,135 @@ draw_main_panel_content :: proc(app_state: ^App_State) -> (t: ^Track, pressed: b
             }
         }
     }
+}
 
-    return pressed_track, track_pressed
+@private
+handle_track_selection :: proc(app_state: ^App_State, selected_track: ^Track) {
+    if app_state.ma_sound != nil {
+        ma.sound_uninit(app_state.ma_sound)
+        app_state.ma_sound = nil
+    }
+
+    app_state.ma_sound = new(ma.sound)
+    res := ma.sound_init_from_file(&app_state.ma_engine, selected_track.file_path, {.STREAM}, nil, nil, app_state.ma_sound)
+    if res != .SUCCESS {
+        app_state.ma_sound = nil
+        fmt.println("Could not init sound: ", res)
+    } else {
+        sound_start_result := ma.sound_start(app_state.ma_sound)
+        if sound_start_result == .SUCCESS {
+            app_state.audio_state = .Playing
+            app_state.currently_playing_track = selected_track
+        }
+    }
+}
+
+@private
+album_title_row_draw :: proc(app_state: ^App_State, row: ^Row, pos_y: ^f32) {
+    album := &app_state.albums[row.album_idx]
+
+    list_item := rl.Rectangle{
+        x = app_state.main_panel.x,
+        y = pos_y^,
+        width = app_state.main_panel.width,
+        height = ROW_HEIGHT
+    }
+    text_measurement := rl.MeasureTextEx(app_state.font[FONT_30], album.title, FONT_30, 0)
+
+    rl.DrawTextEx(
+        app_state.font[FONT_30],
+        album.title,
+        { app_state.main_panel.x, pos_y^},
+        FONT_30,
+        0,
+        rl.BLACK)
+
+    rl.DrawLine(
+        i32(text_measurement.x + app_state.main_panel.x + 20), 
+        i32(pos_y^ + FONT_30 / 2),
+        i32(app_state.main_panel.width),
+        i32(pos_y^ + FONT_30 / 2),
+        rl.PURPLE)
+
+    pos_y^ += ROW_HEIGHT
+
+    if album.cover_art_cache_entry_idx >= 0 {
+        cache_entry := app_state.album_art_cache.entries[album.cover_art_cache_entry_idx]
+        cache_entry.frame = app_state.current_frame_rendered
+        rl.DrawTexture(cache_entry.texture, i32(app_state.main_panel.x), i32(pos_y^), rl.WHITE)
+    } else {
+        if len(album.cover_art_path) > 0 {
+            fmt.println("add album to queue: ", album.title)
+            request_cover_load(&app_state.album_art_load_queue, row.album_idx)
+        } else { // now cover. Load default placeholder
+            rl.DrawTexture(app_state.default_album_cover_texture, i32(app_state.main_panel.x), i32(pos_y^), rl.WHITE)
+        }
+    }
+
+}
+
+@private
+track_list_item_draw :: proc(app_state: ^App_State, pos_y: f32, row: ^Row) {
+    list_item := rl.Rectangle{
+        x = app_state.main_panel.x + TRACK_LIST_OFFSET_X,
+        y = pos_y,
+        width = app_state.main_panel.width,
+        height = ROW_HEIGHT
+    }
+
+    // detect track clicked
+    if (
+        rl.CheckCollisionPointRec(rl.GetMousePosition(), list_item) &&
+        rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel)
+    ) {
+        // highlight
+        rl.DrawRectangleRec(list_item, rl.ORANGE)
+
+        if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
+            handle_track_selection(app_state, row.track)
+        }
+    }
+
+    text_measurement := rl.MeasureTextEx(app_state.font[FONT_20], "placeholder", FONT_20, 0)
+    txt_y := ((list_item.height - text_measurement.y) / 2) + list_item.y
+
+    txt_color := rl.BLACK
+    is_playing := app_state.currently_playing_track != nil && row.track.file_path == app_state.currently_playing_track.file_path
+    if is_playing {
+        txt_color = rl.PURPLE
+    }
+
+    // artist - album - title
+    {
+        rl.DrawTextEx(
+            app_state.font[FONT_20],
+            row.track.artist,
+            { list_item.x + 10, txt_y},
+            f32(FONT_20),
+            0,
+            txt_color)
+
+        rl.DrawTextEx(
+            app_state.font[FONT_20],
+            row.track.album,
+            { list_item.x + 500, txt_y},
+            f32(FONT_20),
+            0,
+            txt_color)
+
+
+        title := row.track.title
+        if len(title) == 0 {
+            title = row.track.file_name
+        }
+        rl.DrawTextEx(
+            app_state.font[FONT_20],
+            title,
+            { list_item.x + 1000, txt_y},
+            f32(FONT_20),
+            0,
+            txt_color)
+    }
 }
 
 @(private = "file")
@@ -626,6 +623,7 @@ destroy_state :: proc(app_state: ^App_State) {
 }
 
 update_layout :: proc(app_state: ^App_State) {
+    // -40 := 20px padding from left and right
     app_state.main_panel.width = f32(rl.GetScreenWidth() - 40)
     app_state.main_panel.height = f32(rl.GetScreenHeight()) - app_state.playback_controls_panel.height
     app_state.side_panel.height = app_state.main_panel.height

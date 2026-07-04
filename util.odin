@@ -134,32 +134,32 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
 
 @private
 handle_next_song_pick :: proc(app_state: ^App_State) {
-    current_album := app_state.albums[app_state.currently_playing.album_idx]
+    current_album := app_state.albums[app_state.currently_playing_track.album_idx]
     next_track : ^Track = nil
 
-    assert(app_state.currently_playing != nil)
+    assert(app_state.currently_playing_track != nil)
 
     // Is last song of the album. Switch to the next one
-    if len(current_album.track_indices) - 1 == int(app_state.currently_playing.order_nr_in_album) {
-        is_last_album := len(app_state.albums) - 1  == int(app_state.currently_playing.album_idx)
+    if len(current_album.track_indices) - 1 == int(app_state.currently_playing_track.order_nr_in_album) {
+        is_last_album := len(app_state.albums) - 1  == int(app_state.currently_playing_track.album_idx)
         if is_last_album {
-            app_state.currently_playing = nil
+            app_state.currently_playing_track = nil
             app_state.ma_sound = nil
             app_state.audio_state = .Stopped
             return
         }
 
-        next_track_idx := app_state.albums[app_state.currently_playing.album_idx + 1].track_indices[0]
+        next_track_idx := app_state.albums[app_state.currently_playing_track.album_idx + 1].track_indices[0]
         next_track = &app_state.tracks[next_track_idx]
     } else {
-        next_track_idx := current_album.track_indices[app_state.currently_playing.order_nr_in_album + 1]
+        next_track_idx := current_album.track_indices[app_state.currently_playing_track.order_nr_in_album + 1]
         next_track = &app_state.tracks[next_track_idx]
     }
 
     ma.sound_uninit(app_state.ma_sound)
     app_state.ma_sound = nil
     app_state.audio_state = .Stopped
-    app_state.currently_playing = nil
+    app_state.currently_playing_track = nil
 
     if next_track != nil {
         app_state.ma_sound = new(ma.sound)
@@ -171,7 +171,7 @@ handle_next_song_pick :: proc(app_state: ^App_State) {
             sound_start_result := ma.sound_start(app_state.ma_sound)
             if sound_start_result == .SUCCESS {
                 app_state.audio_state = .Playing
-                app_state.currently_playing = next_track
+                app_state.currently_playing_track = next_track
             }
         }
     }
