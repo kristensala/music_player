@@ -352,13 +352,13 @@ invalidate_cache :: proc(app_state: ^App_State) {
     entries_to_remove: [dynamic]i32
     defer delete(entries_to_remove)
 
-    for entry, idx in app_state.album_art_cache.entries {
+    for entry, entry_idx in app_state.album_art_cache.entries {
         if entry == nil do continue
 
         // entry has not been accessed for the last 1000 frames
         // remove from cache
         if app_state.current_frame_rendered - entry.frame > max_frame_diff {
-            append(&entries_to_remove, i32(idx))
+            append(&entries_to_remove, i32(entry_idx))
         }
     }
 

@@ -5,6 +5,7 @@ import ma "vendor:miniaudio"
 
 SCROLL_INCREMENT      :: 5 // five rows
 BOTTOM_BAR_PADDING    :: 50
+FONT_16               :: 18
 FONT_20               :: 20
 FONT_30               :: 30
 PLAYBACK_BUTTON_SIZE  :: 30

@@ -29,6 +29,9 @@ main :: proc() {
     rl.SetTargetFPS(60)
     rl.SetExitKey(.KEY_NULL)
 
+    font_16 := rl.LoadFontEx("res/IBMPlexMono-Regular.ttf", FONT_16, nil, 0)
+    defer rl.UnloadFont(font_16)
+
     font_20 := rl.LoadFontEx("res/IBMPlexMono-Regular.ttf", FONT_20, nil, 0)
     defer rl.UnloadFont(font_20)
 
@@ -38,6 +41,7 @@ main :: proc() {
     fonts := make(map[i32]rl.Font)
     defer delete(fonts)
 
+    fonts[FONT_16] = font_16
     fonts[FONT_20] = font_20
     fonts[FONT_30] = font_30
 
@@ -67,7 +71,7 @@ main :: proc() {
 
     app_state.playback_controls_panel = rl.Rectangle{
         x = 0,
-        height = 150
+        height = 170
     }
 
     // Load play button image
@@ -171,15 +175,32 @@ draw_main :: proc(app_state: ^App_State) {
 
         // Display currently playing track
         {
-            currently_playing : cstring = ""
+            currently_playing_track_title : cstring = ""
+            currently_playing_track_album : cstring = ""
+            currently_playing_artist : cstring = ""
             if app_state.currently_playing != nil {
-                currently_playing = app_state.currently_playing.file_name
+                currently_playing_track_title = app_state.currently_playing.title
+                currently_playing_track_album = app_state.currently_playing.album
+                currently_playing_artist = app_state.currently_playing.artist
             }
+
             rl.DrawTextEx(
-                app_state.font[FONT_20],
-                currently_playing,
-                {BOTTOM_BAR_PADDING, f32(rl.GetScreenHeight() - BOTTOM_BAR_PADDING - 25)},
-                FONT_20, 0, rl.BLACK)
+                app_state.font[FONT_16],
+                currently_playing_track_title,
+                {BOTTOM_BAR_PADDING, f32(rl.GetScreenHeight() - BOTTOM_BAR_PADDING - 70)},
+                FONT_16, 0, rl.BLACK)
+
+            rl.DrawTextEx(
+                app_state.font[FONT_16],
+                currently_playing_artist,
+                {BOTTOM_BAR_PADDING, f32(rl.GetScreenHeight() - BOTTOM_BAR_PADDING - 50)},
+                FONT_16, 0, rl.PURPLE)
+
+            rl.DrawTextEx(
+                app_state.font[FONT_16],
+                currently_playing_track_album,
+                {BOTTOM_BAR_PADDING, f32(rl.GetScreenHeight() - BOTTOM_BAR_PADDING - 30)},
+                FONT_16, 0, rl.GRAY)
         }
 
         // Progress bar
@@ -193,7 +214,7 @@ draw_main :: proc(app_state: ^App_State) {
             progress_bar_draw(
                 cursor,
                 length,
-                {BOTTOM_BAR_PADDING, f32(app_state.playback_controls_panel.y + 100)},
+                {BOTTOM_BAR_PADDING, f32(rl.GetScreenHeight() - 50)},
                 f32(rl.GetScreenWidth() - 100),
                 10)
         }
@@ -204,7 +225,7 @@ draw_main :: proc(app_state: ^App_State) {
 draw_playback_controls :: proc(app_state: ^App_State) {
     play_pause_button_bounds := rl.Rectangle{
         x = (app_state.playback_controls_panel.width / 2) - (PLAYBACK_BUTTON_SIZE / 2),
-        y = (app_state.playback_controls_panel.y + 50),
+        y = f32(rl.GetScreenHeight() - 110),
         width = 50,
         height = 50
     }
@@ -231,7 +252,7 @@ draw_playback_controls :: proc(app_state: ^App_State) {
     {
         next_song_button_bounds := rl.Rectangle{
             x = f32(app_state.playback_controls_panel.width / 2) - (PLAYBACK_BUTTON_SIZE / 2) + 50,
-            y = f32(app_state.playback_controls_panel.y + 50),
+            y = f32(rl.GetScreenHeight() - 110),
             width = 50,
             height = 50
         }
@@ -251,7 +272,7 @@ draw_playback_controls :: proc(app_state: ^App_State) {
     {
         prev_song_button_bounds := rl.Rectangle{
             x = f32(app_state.playback_controls_panel.width / 2) - (PLAYBACK_BUTTON_SIZE / 2) - 50,
-            y = f32(app_state.playback_controls_panel.y + 50),
+            y = f32(rl.GetScreenHeight() - 110),
             width = 50,
             height = 50
         }
