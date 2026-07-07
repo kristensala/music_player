@@ -11,8 +11,8 @@ init_state :: proc() -> ^App_State {
     app_state := new(App_State)
     app_state.is_library_path_set = false
     app_state.ma_sound = nil
-    app_state.audio_state = .STOPPED
-    app_state.selected_side_panel_option = .ARTIST_LIST
+    app_state.audio_state = .Stopped
+    app_state.selected_side_panel_option = .Artist_List
 
     load_assets(app_state)
     load_config(app_state)
@@ -208,12 +208,12 @@ draw_playback_controls :: proc(app_state: ^App_State) {
         height = 50
     }
 
-    if app_state.audio_state == .PLAYING {
+    if app_state.audio_state == .Playing {
         rl.DrawTexture(
             app_state.pause_button_texture,
             i32(play_pause_button_bounds.x), i32(play_pause_button_bounds.y),
             rl.BLACK)
-    } else if app_state.audio_state == .PAUSED || app_state.audio_state == .STOPPED {
+    } else if app_state.audio_state == .Paused || app_state.audio_state == .Stopped {
         rl.DrawTexture(
             app_state.play_button_texture,
             i32(play_pause_button_bounds.x), i32(play_pause_button_bounds.y),
@@ -343,7 +343,7 @@ side_panel_draw :: proc(app_state: ^App_State) {
         }
 
         // highlight the option
-        if app_state.selected_side_panel_option == .ARTIST_LIST {
+        if app_state.selected_side_panel_option == .Artist_List {
             rl.DrawRectangleRec(artists_option_bounds, rl.ORANGE)
         }
 
@@ -366,7 +366,7 @@ side_panel_draw :: proc(app_state: ^App_State) {
         }
 
         // highlight the option
-        if app_state.selected_side_panel_option == .PLAYLISTS {
+        if app_state.selected_side_panel_option == .Playlists {
             rl.DrawRectangleRec(playlists_option_bounds, rl.ORANGE)
         }
 
@@ -384,9 +384,9 @@ side_panel_draw :: proc(app_state: ^App_State) {
         if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_options_rect) {
             if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
                 if rl.CheckCollisionPointRec(rl.GetMousePosition(), artists_option_bounds) {
-                    app_state.selected_side_panel_option = .ARTIST_LIST
+                    app_state.selected_side_panel_option = .Artist_List
                 } else if rl.CheckCollisionPointRec(rl.GetMousePosition(), playlists_option_bounds) {
-                    app_state.selected_side_panel_option = .PLAYLISTS
+                    app_state.selected_side_panel_option = .Playlists
                 }
             }
         }
@@ -406,9 +406,9 @@ side_panel_draw :: proc(app_state: ^App_State) {
         i32(app_state.side_panel_option_content_rect.width),
         i32(app_state.side_panel_option_content_rect.height))
 
-    if app_state.selected_side_panel_option == .ARTIST_LIST {
+    if app_state.selected_side_panel_option == .Artist_List {
         draw_artist_list(app_state)
-    } else if app_state.selected_side_panel_option == .PLAYLISTS {
+    } else if app_state.selected_side_panel_option == .Playlists {
         // @todo: draw_playlist_list()
     }
 
@@ -491,7 +491,7 @@ handle_track_selection :: proc(app_state: ^App_State, selected_track: ^Track) {
     } else {
         sound_start_result := ma.sound_start(app_state.ma_sound)
         if sound_start_result == .SUCCESS {
-            app_state.audio_state = .PLAYING
+            app_state.audio_state = .Playing
             app_state.currently_playing_track = selected_track
         }
     }

@@ -183,7 +183,7 @@ handle_next_song_pick :: proc(app_state: ^App_State) {
         if is_last_album {
             app_state.currently_playing_track = nil
             app_state.ma_sound = nil
-            app_state.audio_state = .STOPPED
+            app_state.audio_state = .Stopped
             return
         }
 
@@ -196,7 +196,7 @@ handle_next_song_pick :: proc(app_state: ^App_State) {
 
     ma.sound_uninit(app_state.ma_sound)
     app_state.ma_sound = nil
-    app_state.audio_state = .STOPPED
+    app_state.audio_state = .Stopped
     app_state.currently_playing_track = nil
 
     if next_track != nil {
@@ -208,7 +208,7 @@ handle_next_song_pick :: proc(app_state: ^App_State) {
         } else {
             sound_start_result := ma.sound_start(app_state.ma_sound)
             if sound_start_result == .SUCCESS {
-                app_state.audio_state = .PLAYING
+                app_state.audio_state = .Playing
                 app_state.currently_playing_track = next_track
             }
         }
@@ -217,17 +217,17 @@ handle_next_song_pick :: proc(app_state: ^App_State) {
 
 @private
 handle_play_pause :: proc(app_state: ^App_State) {
-    if app_state.audio_state == .PLAYING {
+    if app_state.audio_state == .Playing {
         stop_response := ma.sound_stop(app_state.ma_sound)
         if stop_response == .SUCCESS {
-            app_state.audio_state = .PAUSED
+            app_state.audio_state = .Paused
         } else {
             fmt.eprintln("Could not stop the sound: ", stop_response)
         }
-    } else if app_state.audio_state == .PAUSED && app_state.ma_sound != nil {
+    } else if app_state.audio_state == .Paused && app_state.ma_sound != nil {
         start_response := ma.sound_start(app_state.ma_sound)
         if start_response == .SUCCESS {
-            app_state.audio_state = .PLAYING
+            app_state.audio_state = .Playing
         } else {
             fmt.eprintln("Could not start the sound: ", start_response)
         }

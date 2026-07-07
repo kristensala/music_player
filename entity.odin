@@ -92,9 +92,9 @@ Album_Art_Cache_Entry :: struct {
 }
 
 AudioState :: enum i32 {
-    STOPPED = 0,
-    PLAYING = 1,
-    PAUSED = 2
+    Stopped = 0,
+    Playing = 1,
+    Paused = 2
 }
 
 Track :: struct {
@@ -119,6 +119,7 @@ Album :: struct {
 }
 
 Side_Panel_Option :: enum i32 {
-    ARTIST_LIST = 0,
-    PLAYLISTS = 1
+    Artist_List = 0,
+    Playlists = 1,
+    All_Music = 2 // @todo: remove all artists option from artist list and add it to the side_panel options instead. As "All Music"
 }
