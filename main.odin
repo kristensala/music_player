@@ -332,6 +332,8 @@ draw_artist_list :: proc(app_state: ^App_State) {
 side_panel_draw :: proc(app_state: ^App_State) {
     //rl.DrawRectangleRec(app_state.side_panel_options_rect, rl.ORANGE)
     //rl.DrawRectangleRec(app_state.side_panel_option_content_rect, rl.GREEN)
+
+    // side panel options
     {
         artists_option_bounds := rl.Rectangle{
             x = app_state.side_panel_options_rect.x,
@@ -345,7 +347,6 @@ side_panel_draw :: proc(app_state: ^App_State) {
             rl.DrawRectangleRec(artists_option_bounds, rl.ORANGE)
         }
 
-        // @todo: handle options selection
         text_measurement := rl.MeasureTextEx(app_state.fonts[FONT_20], "Artists", FONT_20, 0)
         txt_y := ((artists_option_bounds.height - text_measurement.y) / 2) + artists_option_bounds.y
 
@@ -378,6 +379,17 @@ side_panel_draw :: proc(app_state: ^App_State) {
             FONT_20,
             0,
             rl.BLACK)
+
+        // handle on options click
+        if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_options_rect) {
+            if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
+                if rl.CheckCollisionPointRec(rl.GetMousePosition(), artists_option_bounds) {
+                    app_state.selected_side_panel_option = .ARTIST_LIST
+                } else if rl.CheckCollisionPointRec(rl.GetMousePosition(), playlists_option_bounds) {
+                    app_state.selected_side_panel_option = .PLAYLISTS
+                }
+            }
+        }
     }
 
     // horizontal line
