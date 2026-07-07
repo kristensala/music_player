@@ -10,35 +10,73 @@ import tl "taglib"
 import ma "vendor:miniaudio"
 import rl "vendor:raylib"
 
-// @todo
-// ~/.config/music_player/config
-// create ~/.config/music_player/playlists/mppl1
-// mppl2 (music player playlist 2)
-// each row is path to the track and the first row is the name of the playlist
-@private
-load_config :: proc() {
-    home_dir, err  := os.user_home_dir(context.allocator)
-    config_path, join_err := filepath.join({home_dir, ".config", "music_player"}, context.allocator)
-
-    //os.exists
-    config_files, read_path_err := os.read_directory_by_path(config_path, 1, context.allocator)
-    if read_path_err == .Not_Exist {
-        if make_dir_err := os.make_directory_all(config_path); err != nil {
-            fmt.eprintln("Could not create config dir")
-            return
-        }
-
-    }
-    defer delete(config_files)
-
-    config_file_path, e := filepath.join({config_path, "config"}, context.allocator)
-    config_file, open_config_file_err := os.open(config_file_path, flags = {.Read, .Create}, perm = {.Read_User, .Write_User})
-
-    if open_config_file_err != nil {
-        fmt.eprintln("Could not read config file")
+create_config_file :: proc(path: string) {
+    config_file, err := os.create(path)
+    if err != nil {
+        fmt.println("Could not create config file")
         return
     }
     defer os.close(config_file)
+
+    s := "LIBRARY_PATH="
+    buf := make([]u8, len(s))
+    defer delete(buf)
+    copy(buf, s)
+
+    _, err = os.write(config_file, buf)
+    if err != nil {
+        fmt.eprintln("Could not write to config file")
+        return
+    }
+
+}
+
+// @todo: windows
+@private
+load_config :: proc(app_state: ^App_State) {
+    home_dir, err  := os.user_home_dir(context.allocator)
+    config_path, join_err := filepath.join({home_dir, ".config", "music_player"}, context.allocator)
+    assert(join_err == nil, "Probably programmer error")
+    defer delete(config_path)
+
+    // @todo: handle err
+    config_file_path, e := filepath.join({config_path, "config"}, context.allocator)
+    assert(e == nil, "Probably programmer error")
+    defer delete(config_file_path)
+
+    file_info, file_info_err := os.stat(config_path, context.allocator)
+    if file_info_err == nil && file_info.type == .Directory {
+        if os.exists(config_file_path) {
+            file_data, err := os.read_entire_file_from_path(config_file_path, context.allocator)
+            if err != nil {
+                fmt.eprintln("Could not read config file")
+                return
+            }
+            defer delete(file_data)
+
+            it := string(file_data)
+            for line in strings.split_lines_iterator(&it) {
+                // process line
+                if strings.has_prefix(line, "LIBRARY_PATH=") {
+                    library_path := line[len("LIBRARY_PATH="):]
+                    if len(library_path) > 0 {
+                        app_state.library_path = strings.clone(library_path)
+                        app_state.is_library_path_set = true
+                    }
+                }
+            }
+        } else {
+            create_config_file(config_file_path)
+        }
+    } else {
+        mkdir_err := os.mkdir(config_path)
+        if mkdir_err != nil {
+            fmt.eprintln("Could not create music_player directory")
+            return
+        }
+
+        create_config_file(config_file_path)
+    }
 }
 
 @private
@@ -291,7 +329,7 @@ process_album_art_queue :: proc(app_state: ^App_State) {
 
         if len(album.cover_art_path) > 0 {
             // cache is full
-            if app_state.album_art_cache.count >= 15 {
+            if app_state.album_art_cache.count >= CACHE_MAX_CAPACITY {
                 cache_entry_idx, cache_entry := least_used_cover_art_idx(app_state)
                 least_used_album := &app_state.albums[cache_entry.album_idx]
                 least_used_album.cover_art_cache_entry_idx = -1

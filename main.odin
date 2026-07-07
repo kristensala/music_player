@@ -5,6 +5,33 @@ import rl "vendor:raylib"
 import ma "vendor:miniaudio"
 import "core:mem"
 
+@private
+init_state :: proc() -> ^App_State {
+    app_state := new(App_State)
+    app_state.is_library_path_set = false
+    app_state.ma_sound = nil
+    app_state.audio_state = .Stopped
+
+    load_assets(app_state)
+    load_config(app_state)
+
+    app_state.side_panel = rl.Rectangle{
+        x = 0,
+        y = 0,
+        width = 300
+    }
+    app_state.main_panel = rl.Rectangle{ x = app_state.side_panel.width + 20, y = 20}
+    app_state.playback_controls_panel = rl.Rectangle{ x = 0, height = 170 }
+
+    if app_state.is_library_path_set {
+        append(&app_state.artist_list, "All")
+        walk_music_dir(app_state, app_state.library_path)
+        build_rows(app_state) // for ui
+    }
+
+    return app_state
+}
+
 main :: proc() {
     when ODIN_DEBUG {
 		track: mem.Tracking_Allocator
@@ -29,86 +56,7 @@ main :: proc() {
     rl.SetTargetFPS(60)
     rl.SetExitKey(.KEY_NULL)
 
-    font_16 := rl.LoadFontEx("res/IBMPlexMono-Regular.ttf", FONT_16, nil, 0)
-    defer rl.UnloadFont(font_16)
-
-    font_20 := rl.LoadFontEx("res/IBMPlexMono-Regular.ttf", FONT_20, nil, 0)
-    defer rl.UnloadFont(font_20)
-
-    font_30 := rl.LoadFontEx("res/IBMPlexMono-Regular.ttf", FONT_30, nil, 0)
-    defer rl.UnloadFont(font_30)
-
-    fonts := make(map[i32]rl.Font)
-    defer delete(fonts)
-
-    fonts[FONT_16] = font_16
-    fonts[FONT_20] = font_20
-    fonts[FONT_30] = font_30
-
-    //load_config()
-
-    app_state := new(App_State)
-    app_state.music_dir = "/home/salakris/Music/"
-    app_state.font = fonts
-    app_state.ma_sound = nil
-    app_state.audio_state = .Stopped
-
-    album_placeholder_img := rl.LoadImage("./res/album_placeholder.png")
-    rl.ImageResize(&album_placeholder_img, 200, 200)
-    app_state.default_album_cover_texture = rl.LoadTextureFromImage(album_placeholder_img)
-    rl.UnloadImage(album_placeholder_img)
-
-    app_state.side_panel = rl.Rectangle{
-        x = 0,
-        y = 0,
-        width = 300
-    }
-
-    app_state.main_panel = rl.Rectangle{
-        x = app_state.side_panel.width + 20,
-        y = 20
-    }
-
-    app_state.playback_controls_panel = rl.Rectangle{
-        x = 0,
-        height = 170
-    }
-
-    // Load play button image
-    {
-        play_btn_img := rl.LoadImage("./res/play.png")
-        rl.ImageResize(&play_btn_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
-        app_state.play_button_texture =  rl.LoadTextureFromImage(play_btn_img)
-        rl.UnloadImage(play_btn_img)
-    }
-
-    // Load pause button image
-    {
-        pause_btn_img := rl.LoadImage("./res/pause.png")
-        rl.ImageResize(&pause_btn_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
-        app_state.pause_button_texture =  rl.LoadTextureFromImage(pause_btn_img)
-        rl.UnloadImage(pause_btn_img)
-    }
-
-    // Load next button image
-    {
-        next_btn_img := rl.LoadImage("./res/next.png")
-        rl.ImageResize(&next_btn_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
-        app_state.next_button_texture =  rl.LoadTextureFromImage(next_btn_img)
-        rl.UnloadImage(next_btn_img)
-    }
-
-    // Load previous button image
-    {
-        prev_btn_img := rl.LoadImage("./res/previous.png")
-        rl.ImageResize(&prev_btn_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
-        app_state.previous_button_texture =  rl.LoadTextureFromImage(prev_btn_img)
-        rl.UnloadImage(prev_btn_img)
-    }
-
-    append(&app_state.artist_list, "All")
-    walk_music_dir(app_state, app_state.music_dir)
-    build_rows(app_state) // for ui
+    app_state := init_state()
 
     engine_init_result := ma.engine_init(nil, &app_state.ma_engine)
     if engine_init_result != .SUCCESS {
@@ -127,13 +75,19 @@ main :: proc() {
             was_focused = is_focused
         }
 
-        update_main(app_state)
-        update_layout(app_state)
+        if app_state.is_library_path_set {
+            update_main(app_state)
+            update_layout(app_state)
+        }
 
         rl.BeginDrawing()
         rl.ClearBackground(rl.RAYWHITE)
 
-        draw_main(app_state)
+        if app_state.is_library_path_set {
+            draw_main(app_state)
+        } else {
+            draw_insert_library_path_screen(app_state)
+        }
 
         rl.EndDrawing()
     }
@@ -156,6 +110,12 @@ update_main :: proc(app_state: ^App_State) {
     if ma.sound_at_end(app_state.ma_sound) {
         handle_next_song_pick(app_state)
     }
+}
+
+// @todo: directory picker button
+@private
+draw_insert_library_path_screen :: proc(app_state: ^App_State) {
+    rl.DrawText("Set LIBRARY_PATH in ~/.config/music_player/config", 100, 100, FONT_30, rl.BLACK)
 }
 
 @(private = "file")
@@ -185,22 +145,22 @@ draw_main :: proc(app_state: ^App_State) {
             }
 
             rl.DrawTextEx(
-                app_state.font[FONT_16],
+                app_state.fonts[FONT_18],
                 currently_playing_track_title,
                 {BOTTOM_BAR_PADDING, f32(rl.GetScreenHeight() - BOTTOM_BAR_PADDING - 70)},
-                FONT_16, 0, rl.BLACK)
+                FONT_18, 0, rl.BLACK)
 
             rl.DrawTextEx(
-                app_state.font[FONT_16],
+                app_state.fonts[FONT_18],
                 currently_playing_artist,
                 {BOTTOM_BAR_PADDING, f32(rl.GetScreenHeight() - BOTTOM_BAR_PADDING - 50)},
-                FONT_16, 0, rl.PURPLE)
+                FONT_18, 0, rl.PURPLE)
 
             rl.DrawTextEx(
-                app_state.font[FONT_16],
+                app_state.fonts[FONT_18],
                 currently_playing_track_album,
                 {BOTTOM_BAR_PADDING, f32(rl.GetScreenHeight() - BOTTOM_BAR_PADDING - 30)},
-                FONT_16, 0, rl.GRAY)
+                FONT_18, 0, rl.GRAY)
         }
 
         // Progress bar
@@ -293,7 +253,7 @@ draw_artist_list :: proc(app_state: ^App_State) {
             break
         }
 
-        artist_txt_measurements := rl.MeasureTextEx(app_state.font[20], artist, FONT_20, 0)
+        artist_txt_measurements := rl.MeasureTextEx(app_state.fonts[20], artist, FONT_20, 0)
 
         artist_item_bounds := rl.Rectangle{
             x = 0,
@@ -311,7 +271,7 @@ draw_artist_list :: proc(app_state: ^App_State) {
 
         txt_left_padding : f32 = 20
         rl.DrawTextEx(
-            app_state.font[FONT_20],
+            app_state.fonts[FONT_20],
             artist,
             {artist_item_bounds.x + txt_left_padding, txt_y},
             FONT_20, 0, rl.BLACK)
@@ -455,10 +415,10 @@ album_title_row_draw :: proc(app_state: ^App_State, row: ^Row, pos_y: ^f32) {
         width = app_state.main_panel.width,
         height = ROW_HEIGHT
     }
-    text_measurement := rl.MeasureTextEx(app_state.font[FONT_30], album.title, FONT_30, 0)
+    text_measurement := rl.MeasureTextEx(app_state.fonts[FONT_30], album.title, FONT_30, 0)
 
     rl.DrawTextEx(
-        app_state.font[FONT_30],
+        app_state.fonts[FONT_30],
         album.title,
         { app_state.main_panel.x, pos_y^},
         FONT_30,
@@ -511,7 +471,7 @@ track_list_item_draw :: proc(app_state: ^App_State, pos_y: f32, row: ^Row) {
         }
     }
 
-    text_measurement := rl.MeasureTextEx(app_state.font[FONT_20], "placeholder", FONT_20, 0)
+    text_measurement := rl.MeasureTextEx(app_state.fonts[FONT_20], "placeholder", FONT_20, 0)
     txt_y := ((list_item.height - text_measurement.y) / 2) + list_item.y
 
     txt_color := rl.BLACK
@@ -523,7 +483,7 @@ track_list_item_draw :: proc(app_state: ^App_State, pos_y: f32, row: ^Row) {
     // artist - album - title
     {
         rl.DrawTextEx(
-            app_state.font[FONT_20],
+            app_state.fonts[FONT_20],
             row.track.artist,
             { list_item.x + 10, txt_y},
             f32(FONT_20),
@@ -531,7 +491,7 @@ track_list_item_draw :: proc(app_state: ^App_State, pos_y: f32, row: ^Row) {
             txt_color)
 
         rl.DrawTextEx(
-            app_state.font[FONT_20],
+            app_state.fonts[FONT_20],
             row.track.album,
             { list_item.x + 500, txt_y},
             f32(FONT_20),
@@ -544,7 +504,7 @@ track_list_item_draw :: proc(app_state: ^App_State, pos_y: f32, row: ^Row) {
             title = row.track.file_name
         }
         rl.DrawTextEx(
-            app_state.font[FONT_20],
+            app_state.fonts[FONT_20],
             title,
             { list_item.x + 1000, txt_y},
             f32(FONT_20),
@@ -613,15 +573,80 @@ destroy_state :: proc(app_state: ^App_State) {
     }
     delete(app_state.playlists)
 
+
     rl.UnloadTexture(app_state.default_album_cover_texture)
     rl.UnloadTexture(app_state.play_button_texture)
     rl.UnloadTexture(app_state.pause_button_texture)
     rl.UnloadTexture(app_state.next_button_texture)
     rl.UnloadTexture(app_state.previous_button_texture)
 
+    for key, value in app_state.fonts {
+        rl.UnloadFont(value)
+    }
+    delete(app_state.fonts)
+    delete(app_state.library_path)
+
     free(app_state)
 }
 
+@private
+load_assets :: proc(app_state: ^App_State) {
+    // fonts
+    {
+        font_16 := rl.LoadFontEx("res/IBMPlexMono-Regular.ttf", FONT_18, nil, 0)
+        font_20 := rl.LoadFontEx("res/IBMPlexMono-Regular.ttf", FONT_20, nil, 0)
+        font_30 := rl.LoadFontEx("res/IBMPlexMono-Regular.ttf", FONT_30, nil, 0)
+
+        fonts := make(map[i32]rl.Font)
+        fonts[FONT_18] = font_16
+        fonts[FONT_20] = font_20
+        fonts[FONT_30] = font_30
+
+        app_state.fonts = fonts
+    }
+
+    // album art placeholder
+    {
+        album_placeholder_img := rl.LoadImage("./res/album_placeholder.png")
+        rl.ImageResize(&album_placeholder_img, 200, 200)
+        app_state.default_album_cover_texture = rl.LoadTextureFromImage(album_placeholder_img)
+        rl.UnloadImage(album_placeholder_img)
+    }
+
+    // Load play button image
+    {
+        play_btn_img := rl.LoadImage("./res/play.png")
+        rl.ImageResize(&play_btn_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
+        app_state.play_button_texture =  rl.LoadTextureFromImage(play_btn_img)
+        rl.UnloadImage(play_btn_img)
+    }
+
+    // Load pause button image
+    {
+        pause_btn_img := rl.LoadImage("./res/pause.png")
+        rl.ImageResize(&pause_btn_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
+        app_state.pause_button_texture =  rl.LoadTextureFromImage(pause_btn_img)
+        rl.UnloadImage(pause_btn_img)
+    }
+
+    // Load next button image
+    {
+        next_btn_img := rl.LoadImage("./res/next.png")
+        rl.ImageResize(&next_btn_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
+        app_state.next_button_texture =  rl.LoadTextureFromImage(next_btn_img)
+        rl.UnloadImage(next_btn_img)
+    }
+
+    // Load previous button image
+    {
+        prev_btn_img := rl.LoadImage("./res/previous.png")
+        rl.ImageResize(&prev_btn_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
+        app_state.previous_button_texture =  rl.LoadTextureFromImage(prev_btn_img)
+        rl.UnloadImage(prev_btn_img)
+    }
+}
+
+@private
 update_layout :: proc(app_state: ^App_State) {
     // -40 := 20px padding from left and right
     app_state.main_panel.width = f32(rl.GetScreenWidth() - 40)

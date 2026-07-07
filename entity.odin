@@ -3,15 +3,16 @@ package main
 import rl "vendor:raylib"
 import ma "vendor:miniaudio"
 
-SCROLL_INCREMENT      :: 5 // five rows
-BOTTOM_BAR_PADDING    :: 50
-FONT_16               :: 18
-FONT_20               :: 20
-FONT_30               :: 30
-PLAYBACK_BUTTON_SIZE  :: 30
+SCROLL_INCREMENT :: 5 // five rows
+BOTTOM_BAR_PADDING :: 50
+FONT_18 :: 18
+FONT_20 :: 20
+FONT_30 :: 30
+PLAYBACK_BUTTON_SIZE :: 30
 SIDE_PANEL_ROW_HEIGHT :: 35
 ROW_HEIGHT :: 40
 TRACK_LIST_OFFSET_X :: 250
+CACHE_MAX_CAPACITY :: 15
 
 Row :: struct {
     is_album_row : bool, // if true then track is nil
@@ -20,8 +21,9 @@ Row :: struct {
 }
 
 App_State :: struct {
-    font: map[i32]rl.Font,
-    music_dir: string,
+    fonts: map[i32]rl.Font,
+    library_path: string,
+    is_library_path_set: bool,
 
     tracks: [dynamic]Track,
     albums: [dynamic]Album,
@@ -80,14 +82,6 @@ AudioState :: enum {
     Stopped,
     Playing,
     Paused
-}
-
-// @todo
-// custom files
-// Use DeaDBeef as an example
-Playlist :: struct {
-    title: string,
-    tracks: [dynamic]Track
 }
 
 Track :: struct {
