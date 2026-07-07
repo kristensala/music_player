@@ -4,23 +4,41 @@ import "core:fmt"
 import rl "vendor:raylib"
 import ma "vendor:miniaudio"
 import "core:mem"
+import "core:path/filepath"
 
 @private
 init_state :: proc() -> ^App_State {
     app_state := new(App_State)
     app_state.is_library_path_set = false
     app_state.ma_sound = nil
-    app_state.audio_state = .Stopped
+    app_state.audio_state = .STOPPED
 
     load_assets(app_state)
     load_config(app_state)
 
-    app_state.side_panel = rl.Rectangle{
+
+    playlist_path, err := filepath.join({app_state.library_path, ".mppl"}, context.allocator)
+    assert(err == nil)
+    app_state.playlist_path = playlist_path
+
+    app_state.side_panel_rect = rl.Rectangle{
         x = 0,
         y = 0,
         width = 300
     }
-    app_state.main_panel = rl.Rectangle{ x = app_state.side_panel.width + 20, y = 20}
+    app_state.side_panel_options_rect = rl.Rectangle{
+        x = app_state.side_panel_rect.x,
+        y = app_state.side_panel_rect.y,
+        height = 100,
+        width = app_state.side_panel_rect.width,
+    }
+    app_state.side_panel_option_content_rect = rl.Rectangle{
+        x = app_state.side_panel_rect.x,
+        y = app_state.side_panel_rect.y + app_state.side_panel_options_rect.height,
+        width = app_state.side_panel_rect.width,
+    }
+
+    app_state.main_panel_rect = rl.Rectangle{ x = app_state.side_panel_rect.width + 20, y = 20}
     app_state.playback_controls_panel = rl.Rectangle{ x = 0, height = 170 }
 
     if app_state.is_library_path_set {
@@ -126,8 +144,8 @@ draw_main :: proc(app_state: ^App_State) {
     // Bottom bar
     {
         rl.DrawLineEx(
-            {0, app_state.main_panel.y + app_state.main_panel.height}, 
-            {f32(rl.GetScreenWidth()), app_state.main_panel.y + app_state.main_panel.height},
+            {0, app_state.main_panel_rect.y + app_state.main_panel_rect.height}, 
+            {f32(rl.GetScreenWidth()), app_state.main_panel_rect.y + app_state.main_panel_rect.height},
             1.5,
             rl.LIGHTGRAY
         )
@@ -190,12 +208,12 @@ draw_playback_controls :: proc(app_state: ^App_State) {
         height = 50
     }
 
-    if app_state.audio_state == .Playing {
+    if app_state.audio_state == .PLAYING {
         rl.DrawTexture(
             app_state.pause_button_texture,
             i32(play_pause_button_bounds.x), i32(play_pause_button_bounds.y),
             rl.BLACK)
-    } else if app_state.audio_state == .Paused || app_state.audio_state == .Stopped {
+    } else if app_state.audio_state == .PAUSED || app_state.audio_state == .STOPPED {
         rl.DrawTexture(
             app_state.play_button_texture,
             i32(play_pause_button_bounds.x), i32(play_pause_button_bounds.y),
@@ -245,24 +263,24 @@ draw_playback_controls :: proc(app_state: ^App_State) {
 
 @private
 draw_artist_list :: proc(app_state: ^App_State) {
-    pos_y : f32 = app_state.side_panel.y + SIDE_PANEL_ROW_HEIGHT
+    pos_y : f32 = app_state.side_panel_option_content_rect.y + 10
+    end_y := app_state.side_panel_option_content_rect.height + app_state.side_panel_option_content_rect.y
 
     start := i32(app_state.side_panel_scroll_offset / SIDE_PANEL_ROW_HEIGHT)
     for artist in app_state.artist_list[start:] {
-        if pos_y >= app_state.side_panel.height {
+        if pos_y >= end_y {
             break
         }
 
         artist_txt_measurements := rl.MeasureTextEx(app_state.fonts[20], artist, FONT_20, 0)
-
         artist_item_bounds := rl.Rectangle{
             x = 0,
             y = pos_y,
-            width = app_state.side_panel.width,
+            width = app_state.side_panel_option_content_rect.width,
             height = SIDE_PANEL_ROW_HEIGHT
         }
 
-        if artist == app_state.selected_artist || (artist == "All" && app_state.selected_artist == nil) {
+        if artist == app_state.current_selected_artist || (artist == "All" && app_state.current_selected_artist == nil) {
             rl.DrawRectangleRec(artist_item_bounds, rl.LIGHTGRAY)
         }
 
@@ -278,13 +296,13 @@ draw_artist_list :: proc(app_state: ^App_State) {
 
         pos_y += artist_item_bounds.height
 
-        if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel) {
+        if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_option_content_rect) {
             if rl.CheckCollisionPointRec(rl.GetMousePosition(), artist_item_bounds) {
                 if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
                     if artist == "All" {
-                        app_state.selected_artist = nil
+                        app_state.current_selected_artist = nil
                     } else {
-                        app_state.selected_artist = artist
+                        app_state.current_selected_artist = artist
                     }
                     app_state.main_panel_scroll_offset = 0
                     build_rows(app_state)
@@ -294,11 +312,11 @@ draw_artist_list :: proc(app_state: ^App_State) {
     }
 
     wheel := rl.GetMouseWheelMove()
-    if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel) {
+    if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_option_content_rect) {
         if wheel < 0 { // scroll down
             app_state.side_panel_scroll_offset = app_state.side_panel_scroll_offset + (SIDE_PANEL_ROW_HEIGHT * SCROLL_INCREMENT)
-            if app_state.side_panel_scroll_offset >= (f32(len(app_state.artist_list) + 2) * SIDE_PANEL_ROW_HEIGHT) - app_state.side_panel.height {
-                app_state.side_panel_scroll_offset = (f32(len(app_state.artist_list) + 2) * SIDE_PANEL_ROW_HEIGHT) - app_state.side_panel.height
+            if app_state.side_panel_scroll_offset >= (f32(len(app_state.artist_list) + 1) * SIDE_PANEL_ROW_HEIGHT) - app_state.side_panel_option_content_rect.height {
+                app_state.side_panel_scroll_offset = (f32(len(app_state.artist_list) + 1) * SIDE_PANEL_ROW_HEIGHT) - app_state.side_panel_option_content_rect.height
             }
 
         } else if wheel > 0 {
@@ -312,33 +330,62 @@ draw_artist_list :: proc(app_state: ^App_State) {
 
 @private
 side_panel_draw :: proc(app_state: ^App_State) {
+    //rl.DrawRectangleRec(app_state.side_panel_options_rect, rl.ORANGE)
+    //rl.DrawRectangleRec(app_state.side_panel_option_content_rect, rl.GREEN)
+    {
+        // @todo: draw options
+        rl.DrawTextEx(
+            app_state.fonts[FONT_20],
+            "Artists",
+            {app_state.side_panel_rect.x + 20, app_state.side_panel_rect.y + 20},
+            FONT_20,
+            0,
+            rl.BLACK)
+
+        rl.DrawTextEx(
+            app_state.fonts[FONT_20],
+            "Playlists",
+            {app_state.side_panel_rect.x + 20, app_state.side_panel_rect.y + 50},
+            FONT_20,
+            0,
+            rl.BLACK)
+    }
+
+    // horizontal line
     rl.DrawLineEx(
-        {app_state.side_panel.x + app_state.side_panel.width, 0},
-        {app_state.side_panel.x + app_state.side_panel.width, app_state.main_panel.y + app_state.main_panel.height},
+        {0, app_state.side_panel_options_rect.y + app_state.side_panel_options_rect.height},
+        {app_state.side_panel_options_rect.width, app_state.side_panel_options_rect.y + app_state.side_panel_options_rect.height},
         1.5,
-        rl.LIGHTGRAY
-    )
+        rl.LIGHTGRAY)
+
 
     rl.BeginScissorMode(
-        i32(app_state.side_panel.x),
-        i32(app_state.side_panel.y),
-        i32(app_state.side_panel.width),
-        i32(app_state.main_panel.height))
+        i32(app_state.side_panel_option_content_rect.x),
+        i32(app_state.side_panel_option_content_rect.y),
+        i32(app_state.side_panel_option_content_rect.width),
+        i32(app_state.side_panel_option_content_rect.height))
 
     draw_artist_list(app_state)
 
     rl.EndScissorMode()
+
+    rl.DrawLineEx(
+        {app_state.side_panel_rect.x + app_state.side_panel_rect.width, 0},
+        {app_state.side_panel_rect.x + app_state.side_panel_rect.width, app_state.main_panel_rect.y + app_state.main_panel_rect.height},
+        1.5,
+        rl.LIGHTGRAY
+    )
 }
 
 @(private = "file")
 draw_main_panel_content :: proc(app_state: ^App_State) {
     rl.BeginScissorMode(
-        i32(app_state.main_panel.x),
-        i32(app_state.main_panel.y),
-        i32(app_state.main_panel.width),
-        i32(app_state.main_panel.height))
+        i32(app_state.main_panel_rect.x),
+        i32(app_state.main_panel_rect.y),
+        i32(app_state.main_panel_rect.width),
+        i32(app_state.main_panel_rect.height))
 
-    pos_y := app_state.main_panel.y
+    pos_y := app_state.main_panel_rect.y
 
     start := i32(app_state.main_panel_scroll_offset / ROW_HEIGHT)
     if start > i32(len(app_state.rows) - 1) {
@@ -348,7 +395,7 @@ draw_main_panel_content :: proc(app_state: ^App_State) {
     for row, row_idx in app_state.rows[start:] {
         // 300: pre-fetch some rows
         // then some of the covers are pre-fetched and there is no delay
-        if pos_y >= app_state.main_panel.height + 300 do break
+        if pos_y >= app_state.main_panel_rect.height + 300 do break
         if row == nil {
             pos_y += ROW_HEIGHT
             continue
@@ -367,10 +414,10 @@ draw_main_panel_content :: proc(app_state: ^App_State) {
 
     // Handle main panel scrolling
     wheel := rl.GetMouseWheelMove()
-    if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel) {
+    if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel_rect) {
         if wheel < 0 { // scroll down
             //fmt.printfln("max height: %i; offset: %i; panel height: %f", app_state.content_max_height, app_state.main_panel_scroll_offset, app_state.main_panel.height)
-            if app_state.main_panel_scroll_offset + i32(app_state.main_panel.height) < app_state.content_max_height + 150 { // 150 just a random buffer to fix minor calcualtion mistakes
+            if app_state.main_panel_scroll_offset + i32(app_state.main_panel_rect.height) < app_state.content_max_height + 150 { // 150 just a random buffer to fix minor calcualtion mistakes
                 app_state.main_panel_scroll_offset += ROW_HEIGHT * 5
             }
         } else if wheel > 0 { // scroll up
@@ -399,7 +446,7 @@ handle_track_selection :: proc(app_state: ^App_State, selected_track: ^Track) {
     } else {
         sound_start_result := ma.sound_start(app_state.ma_sound)
         if sound_start_result == .SUCCESS {
-            app_state.audio_state = .Playing
+            app_state.audio_state = .PLAYING
             app_state.currently_playing_track = selected_track
         }
     }
@@ -410,9 +457,9 @@ album_title_row_draw :: proc(app_state: ^App_State, row: ^Row, pos_y: ^f32) {
     album := &app_state.albums[row.album_idx]
 
     list_item := rl.Rectangle{
-        x = app_state.main_panel.x,
+        x = app_state.main_panel_rect.x,
         y = pos_y^,
-        width = app_state.main_panel.width,
+        width = app_state.main_panel_rect.width,
         height = ROW_HEIGHT
     }
     text_measurement := rl.MeasureTextEx(app_state.fonts[FONT_30], album.title, FONT_30, 0)
@@ -420,15 +467,15 @@ album_title_row_draw :: proc(app_state: ^App_State, row: ^Row, pos_y: ^f32) {
     rl.DrawTextEx(
         app_state.fonts[FONT_30],
         album.title,
-        { app_state.main_panel.x, pos_y^},
+        { app_state.main_panel_rect.x, pos_y^},
         FONT_30,
         0,
         rl.BLACK)
 
     rl.DrawLine(
-        i32(text_measurement.x + app_state.main_panel.x + 20), 
+        i32(text_measurement.x + app_state.main_panel_rect.x + 20), 
         i32(pos_y^ + FONT_30 / 2),
-        i32(app_state.main_panel.width),
+        i32(app_state.main_panel_rect.width),
         i32(pos_y^ + FONT_30 / 2),
         rl.PURPLE)
 
@@ -437,13 +484,13 @@ album_title_row_draw :: proc(app_state: ^App_State, row: ^Row, pos_y: ^f32) {
     if album.cover_art_cache_entry_idx >= 0 {
         cache_entry := app_state.album_art_cache.entries[album.cover_art_cache_entry_idx]
         cache_entry.frame = app_state.current_frame_rendered
-        rl.DrawTexture(cache_entry.texture, i32(app_state.main_panel.x), i32(pos_y^), rl.WHITE)
+        rl.DrawTexture(cache_entry.texture, i32(app_state.main_panel_rect.x), i32(pos_y^), rl.WHITE)
     } else {
         if len(album.cover_art_path) > 0 {
             fmt.println("add album to queue: ", album.title)
             request_cover_load(&app_state.album_art_load_queue, row.album_idx)
         } else { // now cover. Load default placeholder
-            rl.DrawTexture(app_state.default_album_cover_texture, i32(app_state.main_panel.x), i32(pos_y^), rl.WHITE)
+            rl.DrawTexture(app_state.default_album_cover_texture, i32(app_state.main_panel_rect.x), i32(pos_y^), rl.WHITE)
         }
     }
 
@@ -452,16 +499,16 @@ album_title_row_draw :: proc(app_state: ^App_State, row: ^Row, pos_y: ^f32) {
 @private
 track_list_item_draw :: proc(app_state: ^App_State, pos_y: f32, row: ^Row) {
     list_item := rl.Rectangle{
-        x = app_state.main_panel.x + TRACK_LIST_OFFSET_X,
+        x = app_state.main_panel_rect.x + TRACK_LIST_OFFSET_X,
         y = pos_y,
-        width = app_state.main_panel.width,
+        width = app_state.main_panel_rect.width,
         height = ROW_HEIGHT
     }
 
     // detect track clicked
     if (
         rl.CheckCollisionPointRec(rl.GetMousePosition(), list_item) &&
-        rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel)
+        rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel_rect)
     ) {
         // highlight
         rl.DrawRectangleRec(list_item, rl.ORANGE)
@@ -585,6 +632,7 @@ destroy_state :: proc(app_state: ^App_State) {
     }
     delete(app_state.fonts)
     delete(app_state.library_path)
+    delete(app_state.playlist_path)
 
     free(app_state)
 }
@@ -649,10 +697,11 @@ load_assets :: proc(app_state: ^App_State) {
 @private
 update_layout :: proc(app_state: ^App_State) {
     // -40 := 20px padding from left and right
-    app_state.main_panel.width = f32(rl.GetScreenWidth() - 40)
-    app_state.main_panel.height = f32(rl.GetScreenHeight()) - app_state.playback_controls_panel.height
-    app_state.side_panel.height = app_state.main_panel.height
+    app_state.main_panel_rect.width = f32(rl.GetScreenWidth() - 40)
+    app_state.main_panel_rect.height = f32(rl.GetScreenHeight()) - app_state.playback_controls_panel.height
+    app_state.side_panel_rect.height = app_state.main_panel_rect.height + app_state.main_panel_rect.y // @explain
+    app_state.side_panel_option_content_rect.height = app_state.side_panel_rect.height - app_state.side_panel_options_rect.height
 
     app_state.playback_controls_panel.width = f32(rl.GetScreenWidth())
-    app_state.playback_controls_panel.y = app_state.main_panel.height
+    app_state.playback_controls_panel.y = app_state.main_panel_rect.height
 }

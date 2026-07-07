@@ -20,23 +20,40 @@ Row :: struct {
     track: ^Track,
 }
 
+Side_Panel :: struct {
+    side_panel_rect: rl.Rectangle,
+    side_panel_scroll_offset: f32,
+
+    side_panel_options_rect: rl.Rectangle,
+    side_panel_option_content_rect: rl.Rectangle,
+
+    side_panel_options: [2]Side_Panel_Option,
+    selected_side_panel_option: Side_Panel_Option
+}
+
+Main_Panel :: struct {
+    main_panel_rect: rl.Rectangle,
+    main_panel_scroll_offset: i32,
+
+    rows: [dynamic]^Row,
+    content_max_height: i32, // in pixels
+}
+
 App_State :: struct {
+    using main_panel: Main_Panel,
+    using side_panel: Side_Panel,
+
     fonts: map[i32]rl.Font,
     library_path: string,
     is_library_path_set: bool,
 
     tracks: [dynamic]Track,
     albums: [dynamic]Album,
+
+    playlist_path: string,
     playlists: [dynamic]Playlist,
 
-    // @todo: playback_queue
-    //queue: [dynamic]i32, //track indices
-
-    rows: [dynamic]^Row,
-    content_max_height: i32, // in pixels
-
     default_album_cover_texture: rl.Texture2D,
-
     play_button_texture: rl.Texture2D,
     pause_button_texture: rl.Texture2D,
     next_button_texture: rl.Texture2D,
@@ -48,17 +65,11 @@ App_State :: struct {
     audio_state: AudioState,
     currently_playing_track: ^Track,
 
-    main_panel: rl.Rectangle,
-
     playback_controls_panel: rl.Rectangle,
-    side_panel: rl.Rectangle,
-
-    main_panel_scroll_offset: i32,
-    side_panel_scroll_offset: f32,
 
     // filtering
     artist_list: [dynamic]cstring,
-    selected_artist: cstring, // nil means show all the tracks
+    current_selected_artist: cstring, // nil means show all the tracks
 
     album_art_cache: Album_Art_Cache,
     album_art_load_queue: [dynamic]i32, // ref album idx
@@ -78,10 +89,10 @@ Album_Art_Cache_Entry :: struct {
     frame: u64 // last frame it was rendered
 }
 
-AudioState :: enum {
-    Stopped,
-    Playing,
-    Paused
+AudioState :: enum i32 {
+    STOPPED = 0,
+    PLAYING = 1,
+    PAUSED = 2
 }
 
 Track :: struct {
@@ -103,4 +114,9 @@ Album :: struct {
     cover_art_cache_entry_idx: i32,
 
     track_indices: [dynamic]i32 // reference to the app_state.tracks @todo: should use [dynamic]^Track then I can sort the list of tracks
+}
+
+Side_Panel_Option :: enum i32 {
+    ARTIST_LIST = 0,
+    PLAYLISTS = 1
 }

@@ -183,7 +183,7 @@ handle_next_song_pick :: proc(app_state: ^App_State) {
         if is_last_album {
             app_state.currently_playing_track = nil
             app_state.ma_sound = nil
-            app_state.audio_state = .Stopped
+            app_state.audio_state = .STOPPED
             return
         }
 
@@ -196,7 +196,7 @@ handle_next_song_pick :: proc(app_state: ^App_State) {
 
     ma.sound_uninit(app_state.ma_sound)
     app_state.ma_sound = nil
-    app_state.audio_state = .Stopped
+    app_state.audio_state = .STOPPED
     app_state.currently_playing_track = nil
 
     if next_track != nil {
@@ -208,7 +208,7 @@ handle_next_song_pick :: proc(app_state: ^App_State) {
         } else {
             sound_start_result := ma.sound_start(app_state.ma_sound)
             if sound_start_result == .SUCCESS {
-                app_state.audio_state = .Playing
+                app_state.audio_state = .PLAYING
                 app_state.currently_playing_track = next_track
             }
         }
@@ -217,17 +217,17 @@ handle_next_song_pick :: proc(app_state: ^App_State) {
 
 @private
 handle_play_pause :: proc(app_state: ^App_State) {
-    if app_state.audio_state == .Playing {
+    if app_state.audio_state == .PLAYING {
         stop_response := ma.sound_stop(app_state.ma_sound)
         if stop_response == .SUCCESS {
-            app_state.audio_state = .Paused
+            app_state.audio_state = .PAUSED
         } else {
             fmt.eprintln("Could not stop the sound: ", stop_response)
         }
-    } else if app_state.audio_state == .Paused && app_state.ma_sound != nil {
+    } else if app_state.audio_state == .PAUSED && app_state.ma_sound != nil {
         start_response := ma.sound_start(app_state.ma_sound)
         if start_response == .SUCCESS {
-            app_state.audio_state = .Playing
+            app_state.audio_state = .PLAYING
         } else {
             fmt.eprintln("Could not start the sound: ", start_response)
         }
@@ -240,8 +240,8 @@ build_rows :: proc(app_state: ^App_State) {
     content_height : i32 = 0
 
     for &album, album_idx in app_state.albums {
-        if app_state.selected_artist != nil {
-            if album.artist != app_state.selected_artist do continue
+        if app_state.current_selected_artist != nil {
+            if album.artist != app_state.current_selected_artist do continue
         }
 
         album_title_row := new(Row)
