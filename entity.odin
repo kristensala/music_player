@@ -14,6 +14,8 @@ ROW_HEIGHT :: 40
 TRACK_LIST_OFFSET_X :: 250
 CACHE_MAX_CAPACITY :: 15
 
+ALL_ARTISTS_OPTION :: "All Artists"
+
 Row :: struct {
     is_album_row : bool, // if true then track is nil
     album_idx: i32,

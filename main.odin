@@ -12,10 +12,10 @@ init_state :: proc() -> ^App_State {
     app_state.is_library_path_set = false
     app_state.ma_sound = nil
     app_state.audio_state = .STOPPED
+    app_state.selected_side_panel_option = .ARTIST_LIST
 
     load_assets(app_state)
     load_config(app_state)
-
 
     playlist_path, err := filepath.join({app_state.library_path, ".mppl"}, context.allocator)
     assert(err == nil)
@@ -42,7 +42,7 @@ init_state :: proc() -> ^App_State {
     app_state.playback_controls_panel = rl.Rectangle{ x = 0, height = 170 }
 
     if app_state.is_library_path_set {
-        append(&app_state.artist_list, "All")
+        append(&app_state.artist_list, ALL_ARTISTS_OPTION)
         walk_music_dir(app_state, app_state.library_path)
         build_rows(app_state) // for ui
     }
@@ -280,7 +280,7 @@ draw_artist_list :: proc(app_state: ^App_State) {
             height = SIDE_PANEL_ROW_HEIGHT
         }
 
-        if artist == app_state.current_selected_artist || (artist == "All" && app_state.current_selected_artist == nil) {
+        if artist == app_state.current_selected_artist || (artist == ALL_ARTISTS_OPTION && app_state.current_selected_artist == nil) {
             rl.DrawRectangleRec(artist_item_bounds, rl.LIGHTGRAY)
         }
 
@@ -299,7 +299,7 @@ draw_artist_list :: proc(app_state: ^App_State) {
         if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_option_content_rect) {
             if rl.CheckCollisionPointRec(rl.GetMousePosition(), artist_item_bounds) {
                 if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
-                    if artist == "All" {
+                    if artist == ALL_ARTISTS_OPTION {
                         app_state.current_selected_artist = nil
                     } else {
                         app_state.current_selected_artist = artist
@@ -333,19 +333,48 @@ side_panel_draw :: proc(app_state: ^App_State) {
     //rl.DrawRectangleRec(app_state.side_panel_options_rect, rl.ORANGE)
     //rl.DrawRectangleRec(app_state.side_panel_option_content_rect, rl.GREEN)
     {
-        // @todo: draw options
+        artists_option_bounds := rl.Rectangle{
+            x = app_state.side_panel_options_rect.x,
+            y = app_state.side_panel_options_rect.y + 20,
+            width = app_state.side_panel_options_rect.width,
+            height = 25
+        }
+
+        // highlight the option
+        if app_state.selected_side_panel_option == .ARTIST_LIST {
+            rl.DrawRectangleRec(artists_option_bounds, rl.ORANGE)
+        }
+
+        // @todo: handle options selection
+        text_measurement := rl.MeasureTextEx(app_state.fonts[FONT_20], "Artists", FONT_20, 0)
+        txt_y := ((artists_option_bounds.height - text_measurement.y) / 2) + artists_option_bounds.y
+
         rl.DrawTextEx(
             app_state.fonts[FONT_20],
             "Artists",
-            {app_state.side_panel_rect.x + 20, app_state.side_panel_rect.y + 20},
+            {app_state.side_panel_rect.x + 20, txt_y},
             FONT_20,
             0,
             rl.BLACK)
 
+        playlists_option_bounds := rl.Rectangle{
+            x = app_state.side_panel_options_rect.x,
+            y = app_state.side_panel_options_rect.y + 50,
+            width = app_state.side_panel_options_rect.width,
+            height = 25
+        }
+
+        // highlight the option
+        if app_state.selected_side_panel_option == .PLAYLISTS {
+            rl.DrawRectangleRec(playlists_option_bounds, rl.ORANGE)
+        }
+
+        text_measurement = rl.MeasureTextEx(app_state.fonts[FONT_20], "Playlists", FONT_20, 0)
+        txt_y = ((playlists_option_bounds.height - text_measurement.y) / 2) + playlists_option_bounds.y
         rl.DrawTextEx(
             app_state.fonts[FONT_20],
             "Playlists",
-            {app_state.side_panel_rect.x + 20, app_state.side_panel_rect.y + 50},
+            {app_state.side_panel_rect.x + 20, txt_y},
             FONT_20,
             0,
             rl.BLACK)
@@ -365,7 +394,11 @@ side_panel_draw :: proc(app_state: ^App_State) {
         i32(app_state.side_panel_option_content_rect.width),
         i32(app_state.side_panel_option_content_rect.height))
 
-    draw_artist_list(app_state)
+    if app_state.selected_side_panel_option == .ARTIST_LIST {
+        draw_artist_list(app_state)
+    } else if app_state.selected_side_panel_option == .PLAYLISTS {
+        // @todo: draw_playlist_list()
+    }
 
     rl.EndScissorMode()
 
