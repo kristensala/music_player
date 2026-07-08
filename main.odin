@@ -690,7 +690,6 @@ process_album_art_queue :: proc(app_state: ^App_State) {
     clear(&app_state.album_art_load_queue)
 }
 
-// @todo: buggy
 @private
 invalidate_cache :: proc(app_state: ^App_State) {
     max_frame_diff : u64 = 1000
@@ -747,6 +746,7 @@ init_playlists_from_playlist_files :: proc(app_state: ^App_State) {
         fmt.eprintln(#procedure, "Failed to read the playlist directory by path: ", err)
         return
     }
+    defer delete(playlist_files)
 
     for f in playlist_files {
         file_data, err := os.read_entire_file_from_path(f.fullpath, context.allocator)
@@ -814,6 +814,7 @@ create_playlist :: proc(app_state: ^App_State, playlist_name: string) {
         current_file_name := files[len(files) - 1].name
         current_playlist_nr := current_file_name[len("mppl"):]
 
+        // @todo: if unable to parse, get the second last file and so on
         current_playlist_nr_int, ok := strconv.parse_int(current_playlist_nr)
         assert(ok == true)
 
