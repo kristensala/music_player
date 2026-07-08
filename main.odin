@@ -216,11 +216,12 @@ main :: proc() {
 
     // @nocheckin: testing
     {
-        create_playlist(app_state, "test")
+        /*create_playlist(app_state, "test")
         tmp_playlist := &app_state.playlists[0]
         tmp_track := &app_state.tracks[0]
 
-        add_track_to_playlist(tmp_playlist, tmp_track, app_state.library_path)
+        add_track_to_playlist(tmp_playlist, tmp_track, app_state.library_path)*/
+        init_playlists_from_playlist_files(app_state)
     }
 
     engine_init_result := ma.engine_init(nil, &app_state.ma_engine)
@@ -739,9 +740,54 @@ remove_entry_from_cache :: proc(cache: ^Album_Art_Cache, entry_idx: i32) {
     assert(cache.count >= 0)
 }
 
-@require_results
-get_and_build_playlists :: proc() -> [dynamic]Playlist {
-    return {}
+@(private = "file")
+init_playlists_from_playlist_files :: proc(app_state: ^App_State) {
+    playlist_files, err := os.read_directory_by_path(app_state.playlist_path, 0, context.allocator)
+    if err != nil {
+        fmt.eprintln(#procedure, "Failed to read the playlist directory by path: ", err)
+        return
+    }
+
+    for f in playlist_files {
+        file_data, err := os.read_entire_file_from_path(f.fullpath, context.allocator)
+        if err != nil {
+            fmt.eprintln(#procedure, "Failed to read the playlist file: ", err)
+            continue
+        }
+        defer delete(file_data)
+
+        if len(file_data) == 0 do continue
+
+        current_playlist := Playlist{
+            playlist_file_path = f.fullpath
+        }
+
+        line_idx := 0
+        it := string(file_data)
+        for line in strings.split_lines_iterator(&it) {
+            if line_idx == 0 {
+                current_playlist.title = line
+            } else {
+                track_full_path, err := filepath.join({app_state.library_path, line}, context.allocator)
+                if err != nil {
+                    fmt.eprintln(#procedure, "Failed to join library path with the path from playlist file: ", err)
+                    line_idx += 1
+                    continue
+                }
+                defer delete(track_full_path)
+
+                for &track in app_state.tracks {
+                    if strings.compare(string(track.file_path), track_full_path) == 0 {
+                        append(&current_playlist.tracks, &track)
+                        break
+                    }
+                }
+            }
+            line_idx += 1
+        }
+
+        append(&app_state.playlists, current_playlist)
+    }
 }
 
 create_playlist :: proc(app_state: ^App_State, playlist_name: string) {
