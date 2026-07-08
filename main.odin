@@ -537,7 +537,6 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
                 }
 
                 append(&app_state.tracks, track)
-                tl.tag_destroy(&tag)
 
                 if !slice.contains(app_state.artist_list[:], current_album.artist) {
                     append(&app_state.artist_list, current_album.artist)
