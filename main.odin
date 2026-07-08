@@ -2,6 +2,7 @@ package main
 
 import "core:fmt"
 import "core:strings"
+import "core:strconv"
 import "core:slice"
 import "core:sort"
 import rl "vendor:raylib"
@@ -30,6 +31,12 @@ Row :: struct {
     is_album_row : bool, // if true then track is nil
     album_idx: i32,
     track: ^Track,
+}
+
+Playlist :: struct {
+    title: string,
+    playlist_file_path: string,
+    tracks: [dynamic]^Track,
 }
 
 Side_Panel :: struct {
@@ -207,6 +214,15 @@ main :: proc() {
 
     app_state := init_state()
 
+    // @nocheckin: testing
+    {
+        create_playlist(app_state, "test")
+        tmp_playlist := &app_state.playlists[0]
+        tmp_track := &app_state.tracks[0]
+
+        add_track_to_playlist(tmp_playlist, tmp_track, app_state.library_path)
+    }
+
     engine_init_result := ma.engine_init(nil, &app_state.ma_engine)
     if engine_init_result != .SUCCESS {
         fmt.println("Could not init Mini audio engine: ", engine_init_result)
@@ -378,11 +394,7 @@ create_config_file :: proc(path: string) {
     defer os.close(config_file)
 
     s := "LIBRARY_PATH="
-    buf := make([]u8, len(s))
-    defer delete(buf)
-    copy(buf, s)
-
-    _, err = os.write(config_file, buf)
+    _, err = os.write(config_file, transmute([]byte)s)
     if err != nil {
         fmt.eprintln("Could not write to config file")
         return
@@ -727,14 +739,103 @@ remove_entry_from_cache :: proc(cache: ^Album_Art_Cache, entry_idx: i32) {
     assert(cache.count >= 0)
 }
 
-@private
-update_layout :: proc(app_state: ^App_State) {
-    // -40 := 20px padding from left and right
-    app_state.main_panel_rect.width = f32(rl.GetScreenWidth() - 40)
-    app_state.main_panel_rect.height = f32(rl.GetScreenHeight()) - app_state.playback_controls_panel.height
-    app_state.side_panel_rect.height = app_state.main_panel_rect.height + app_state.main_panel_rect.y // @explain
-    app_state.side_panel_option_content_rect.height = app_state.side_panel_rect.height - app_state.side_panel_options_rect.height
-
-    app_state.playback_controls_panel.width = f32(rl.GetScreenWidth())
-    app_state.playback_controls_panel.y = app_state.main_panel_rect.height
+@require_results
+get_and_build_playlists :: proc() -> [dynamic]Playlist {
+    return {}
 }
+
+create_playlist :: proc(app_state: ^App_State, playlist_name: string) {
+    err := get_or_create_playlist_dir(app_state.playlist_path)
+    if err != nil {
+        fmt.eprintln("Could not create or read playlist path: ", err)
+        return
+    }
+
+    files, dir_read_err := os.read_directory_by_path(app_state.playlist_path, 0, context.allocator)
+    if dir_read_err != nil {
+        fmt.eprintln(#procedure, "Could not create the playlist: ", dir_read_err)
+        return
+    }
+
+    next_file_name : string = "mppl0"
+    if len(files) > 0 {
+        sort.quick_sort_proc(files, proc(a, b: os.File_Info) -> int {
+            if a.name < b.name do return -1
+            if a.name > b.name do return 1
+            return 0
+        })
+
+        current_file_name := files[len(files) - 1].name
+        current_playlist_nr := current_file_name[len("mppl"):]
+
+        current_playlist_nr_int, ok := strconv.parse_int(current_playlist_nr)
+        assert(ok == true)
+
+        next_file_name = fmt.tprintf("mppl%i", current_playlist_nr_int + 1)
+    }
+
+    file_path, e := filepath.join({app_state.playlist_path, next_file_name}, context.allocator)
+    defer delete(file_path)
+
+    playlist_file, file_create_err := os.create(file_path)
+    if file_create_err != nil {
+        fmt.eprintln(#procedure, "Could not create a playlist file: ", file_create_err)
+        return
+    }
+    defer os.close(playlist_file)
+
+    formatted_playlist_name := fmt.tprintf("%s\n", playlist_name)
+    _, err = os.write(playlist_file, transmute([]byte)formatted_playlist_name)
+    if err != nil {
+        fmt.eprintln(#procedure, "Could not write to the playlist file: ", err)
+        return
+    }
+
+    new_playlist := Playlist{
+        title = playlist_name,
+        playlist_file_path = file_path
+    }
+
+    append(&app_state.playlists, new_playlist)
+}
+
+add_track_to_playlist :: proc(playlist: ^Playlist, track: ^Track, root_dir: string) {
+    playlist_file, err := os.open(playlist.playlist_file_path, {.Append, .Write})
+    if err != nil {
+        fmt.eprintln(#procedure, "Could not open the playlist file: ", err)
+        return
+    }
+    defer os.close(playlist_file)
+
+    relative_track_file_path := fmt.tprintf("%s\n", string(track.file_path)[len(root_dir):])
+    _, err = os.write(playlist_file, transmute([]byte)relative_track_file_path)
+    if err != nil {
+        fmt.eprintln(#procedure, "Failed to write to playlist file", err)
+        return
+    }
+
+    append(&playlist.tracks, track)
+}
+
+delete_playlist :: proc(app_state: ^App_State, playlist: Playlist) {
+    // @todo
+}
+
+
+remove_track_from_playlist :: proc(playlist: ^Playlist, track_to_remove: Track) {
+    // @todo
+}
+
+@require_results
+get_or_create_playlist_dir :: proc(path: string) -> os.Error {
+    file_info, file_info_err := os.stat(path, context.allocator)
+    if file_info_err != nil || file_info.type != .Directory {
+        err := os.mkdir(path)
+        if err != nil {
+            return err
+        }
+    }
+
+    return nil
+}
+

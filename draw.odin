@@ -569,3 +569,15 @@ draw_progress_bar :: proc(value: f32, max_value: f32, pos: [2]f32, w, h: f32) {
         0.1,
         0, 2, rl.BLACK)
 }
+
+@private
+update_layout :: proc(app_state: ^App_State) {
+    // -40 := 20px padding from left and right
+    app_state.main_panel_rect.width = f32(rl.GetScreenWidth() - 40)
+    app_state.main_panel_rect.height = f32(rl.GetScreenHeight()) - app_state.playback_controls_panel.height
+    app_state.side_panel_rect.height = app_state.main_panel_rect.height + app_state.main_panel_rect.y // @explain
+    app_state.side_panel_option_content_rect.height = app_state.side_panel_rect.height - app_state.side_panel_options_rect.height
+
+    app_state.playback_controls_panel.width = f32(rl.GetScreenWidth())
+    app_state.playback_controls_panel.y = app_state.main_panel_rect.height
+}
