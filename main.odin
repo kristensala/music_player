@@ -1,18 +1,149 @@
 package main
 
 import "core:fmt"
+import "core:strings"
+import "core:slice"
+import "core:sort"
 import rl "vendor:raylib"
 import ma "vendor:miniaudio"
 import "core:mem"
 import "core:path/filepath"
+import "core:os"
+import tl "taglib"
+
+SCROLL_INCREMENT :: 5 // five rows
+BOTTOM_BAR_PADDING :: 50
+FONT_18 :: 18
+FONT_20 :: 20
+FONT_30 :: 30
+PLAYBACK_BUTTON_SIZE :: 30
+SIDE_PANEL_ROW_HEIGHT :: 35
+ROW_HEIGHT :: 40
+TRACK_LIST_OFFSET_X :: 250
+CACHE_MAX_CAPACITY :: 15
+
+ALL_ARTISTS_OPTION :: "All Artists"
+
+Track_Idx :: i32
+
+Row :: struct {
+    is_album_row : bool, // if true then track is nil
+    album_idx: i32,
+    track: ^Track,
+}
+
+Side_Panel :: struct {
+    side_panel_rect: rl.Rectangle,
+    side_panel_scroll_offset: f32,
+
+    side_panel_options_rect: rl.Rectangle,
+    side_panel_option_content_rect: rl.Rectangle,
+
+    side_panel_options: [2]Side_Panel_Option,
+    selected_side_panel_option: Side_Panel_Option
+}
+
+Main_Panel :: struct {
+    main_panel_rect: rl.Rectangle,
+    main_panel_scroll_offset: i32,
+
+    rows: [dynamic]^Row,
+    content_max_height: i32, // in pixels
+}
+
+App_State :: struct {
+    using main_panel: Main_Panel,
+    using side_panel: Side_Panel,
+
+    fonts: map[i32]rl.Font,
+    library_path: string,
+    is_library_path_set: bool,
+
+    tracks: [dynamic]Track,
+    albums: [dynamic]Album,
+
+    playlist_path: string,
+    playlists: [dynamic]Playlist,
+
+    queue: [dynamic]Track_Idx,
+
+    default_album_cover_texture: rl.Texture2D,
+    play_button_texture: rl.Texture2D,
+    pause_button_texture: rl.Texture2D,
+    next_button_texture: rl.Texture2D,
+    previous_button_texture: rl.Texture2D,
+
+    ma_engine: ma.engine,
+    ma_sound: ^ma.sound,
+
+    audio_state: AudioState,
+    currently_playing_track: ^Track,
+
+    playback_controls_panel: rl.Rectangle,
+
+    // filtering
+    artist_list: [dynamic]cstring,
+    current_selected_artist: cstring, // nil means show all the tracks
+
+    album_art_cache: Album_Art_Cache,
+    album_art_load_queue: [dynamic]i32, // ref album idx
+
+    current_frame_rendered: u64 // current rendered frame
+}
+
+Album_Art_Cache :: struct {
+    entries: [15]^Album_Art_Cache_Entry,
+    count: i32,
+}
+
+Album_Art_Cache_Entry :: struct {
+    texture: rl.Texture2D,
+    album_idx: i32,
+
+    frame: u64 // last frame it was rendered
+}
+
+AudioState :: enum i32 {
+    Stopped = 0,
+    Playing = 1,
+    Paused = 2
+}
+
+Track :: struct {
+    title: cstring,
+    artist: cstring,
+    album: cstring,
+    album_idx: i32, // @todo: use ^Album, then I can sort the Album list
+    file_path: cstring,
+    file_name: cstring,
+
+    order_nr_in_album: i32
+}
+
+Album :: struct {
+    title: cstring,
+    artist: cstring,
+
+    cover_art_path: cstring,
+    cover_art_cache_entry_idx: i32,
+
+    track_indices: [dynamic]Track_Idx // reference to the app_state.tracks @todo: should use [dynamic]^Track then I can sort the list of tracks
+}
+
+Side_Panel_Option :: enum i32 {
+    Artist_List = 0,
+    Playlists = 1,
+    All_Music = 2 // @todo: remove all artists option from artist list and add it to the side_panel options instead. As "All Music"
+}
 
 @private
+@require_results
 init_state :: proc() -> ^App_State {
     app_state := new(App_State)
     app_state.is_library_path_set = false
     app_state.ma_sound = nil
     app_state.audio_state = .Stopped
-    app_state.selected_side_panel_option = .Artist_List
+    app_state.selected_side_panel_option = .Artist_List // @todo: All_Music once implemented
 
     load_assets(app_state)
     load_config(app_state)
@@ -130,508 +261,6 @@ update_main :: proc(app_state: ^App_State) {
     }
 }
 
-// @todo: directory picker button
-@private
-draw_insert_library_path_screen :: proc(app_state: ^App_State) {
-    rl.DrawText("Set LIBRARY_PATH in ~/.config/music_player/config", 100, 100, FONT_30, rl.BLACK)
-}
-
-@(private = "file")
-draw_main :: proc(app_state: ^App_State) {
-    side_panel_draw(app_state)
-    draw_main_panel_content(app_state)
-
-    // Bottom bar
-    {
-        rl.DrawLineEx(
-            {0, app_state.main_panel_rect.y + app_state.main_panel_rect.height}, 
-            {f32(rl.GetScreenWidth()), app_state.main_panel_rect.y + app_state.main_panel_rect.height},
-            1.5,
-            rl.LIGHTGRAY
-        )
-        draw_playback_controls(app_state)
-
-        // Display currently playing track
-        {
-            currently_playing_track_title : cstring = ""
-            currently_playing_track_album : cstring = ""
-            currently_playing_artist : cstring = ""
-            if app_state.currently_playing_track != nil {
-                currently_playing_track_title = app_state.currently_playing_track.title
-                currently_playing_track_album = app_state.currently_playing_track.album
-                currently_playing_artist = app_state.currently_playing_track.artist
-            }
-
-            rl.DrawTextEx(
-                app_state.fonts[FONT_18],
-                currently_playing_track_title,
-                {BOTTOM_BAR_PADDING, f32(rl.GetScreenHeight() - BOTTOM_BAR_PADDING - 70)},
-                FONT_18, 0, rl.BLACK)
-
-            rl.DrawTextEx(
-                app_state.fonts[FONT_18],
-                currently_playing_artist,
-                {BOTTOM_BAR_PADDING, f32(rl.GetScreenHeight() - BOTTOM_BAR_PADDING - 50)},
-                FONT_18, 0, rl.PURPLE)
-
-            rl.DrawTextEx(
-                app_state.fonts[FONT_18],
-                currently_playing_track_album,
-                {BOTTOM_BAR_PADDING, f32(rl.GetScreenHeight() - BOTTOM_BAR_PADDING - 30)},
-                FONT_18, 0, rl.GRAY)
-        }
-
-        // Progress bar
-        {
-            cursor: f32 = 0
-            ma.sound_get_cursor_in_seconds(app_state.ma_sound, &cursor)
-
-            length: f32 = 1
-            ma.sound_get_length_in_seconds(app_state.ma_sound, &length)
-
-            progress_bar_draw(
-                cursor,
-                length,
-                {BOTTOM_BAR_PADDING, f32(rl.GetScreenHeight() - 50)},
-                f32(rl.GetScreenWidth() - 100),
-                10)
-        }
-    }
-}
-
-@(private = "file")
-draw_playback_controls :: proc(app_state: ^App_State) {
-    play_pause_button_bounds := rl.Rectangle{
-        x = (app_state.playback_controls_panel.width / 2) - (PLAYBACK_BUTTON_SIZE / 2),
-        y = f32(rl.GetScreenHeight() - 110),
-        width = 50,
-        height = 50
-    }
-
-    if app_state.audio_state == .Playing {
-        rl.DrawTexture(
-            app_state.pause_button_texture,
-            i32(play_pause_button_bounds.x), i32(play_pause_button_bounds.y),
-            rl.BLACK)
-    } else if app_state.audio_state == .Paused || app_state.audio_state == .Stopped {
-        rl.DrawTexture(
-            app_state.play_button_texture,
-            i32(play_pause_button_bounds.x), i32(play_pause_button_bounds.y),
-            rl.BLACK)
-    }
-
-    if rl.CheckCollisionPointRec(rl.GetMousePosition(), play_pause_button_bounds) {
-        if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
-            handle_play_pause(app_state)
-        }
-    }
-
-    // draw next song button
-    {
-        next_song_button_bounds := rl.Rectangle{
-            x = f32(app_state.playback_controls_panel.width / 2) - (PLAYBACK_BUTTON_SIZE / 2) + 50,
-            y = f32(rl.GetScreenHeight() - 110),
-            width = 50,
-            height = 50
-        }
-        rl.DrawTexture(
-            app_state.next_button_texture,
-            i32(next_song_button_bounds.x), i32(next_song_button_bounds.y),
-            rl.BLACK)
-
-        if rl.CheckCollisionPointRec(rl.GetMousePosition(), next_song_button_bounds) {
-            if rl.IsMouseButtonPressed(.LEFT) {
-                handle_next_song_pick(app_state)
-            }
-        }
-    }
-
-    // draw prev song button
-    {
-        prev_song_button_bounds := rl.Rectangle{
-            x = f32(app_state.playback_controls_panel.width / 2) - (PLAYBACK_BUTTON_SIZE / 2) - 50,
-            y = f32(rl.GetScreenHeight() - 110),
-            width = 50,
-            height = 50
-        }
-        rl.DrawTexture(
-            app_state.previous_button_texture,
-            i32(prev_song_button_bounds.x), i32(prev_song_button_bounds.y),
-            rl.BLACK)
-    }
-}
-
-@private
-draw_artist_list :: proc(app_state: ^App_State) {
-    pos_y : f32 = app_state.side_panel_option_content_rect.y + 10
-    end_y := app_state.side_panel_option_content_rect.height + app_state.side_panel_option_content_rect.y
-
-    start := i32(app_state.side_panel_scroll_offset / SIDE_PANEL_ROW_HEIGHT)
-    for artist in app_state.artist_list[start:] {
-        if pos_y >= end_y {
-            break
-        }
-
-        artist_txt_measurements := rl.MeasureTextEx(app_state.fonts[20], artist, FONT_20, 0)
-        artist_item_bounds := rl.Rectangle{
-            x = 0,
-            y = pos_y,
-            width = app_state.side_panel_option_content_rect.width,
-            height = SIDE_PANEL_ROW_HEIGHT
-        }
-
-        if artist == app_state.current_selected_artist || (artist == ALL_ARTISTS_OPTION && app_state.current_selected_artist == nil) {
-            rl.DrawRectangleRec(artist_item_bounds, rl.LIGHTGRAY)
-        }
-
-        // center text
-        txt_y := ((artist_item_bounds.height - artist_txt_measurements.y) / 2) + artist_item_bounds.y
-
-        txt_left_padding : f32 = 20
-        rl.DrawTextEx(
-            app_state.fonts[FONT_20],
-            artist,
-            {artist_item_bounds.x + txt_left_padding, txt_y},
-            FONT_20, 0, rl.BLACK)
-
-        pos_y += artist_item_bounds.height
-
-        if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_option_content_rect) {
-            if rl.CheckCollisionPointRec(rl.GetMousePosition(), artist_item_bounds) {
-                if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
-                    if artist == ALL_ARTISTS_OPTION {
-                        app_state.current_selected_artist = nil
-                    } else {
-                        app_state.current_selected_artist = artist
-                    }
-                    app_state.main_panel_scroll_offset = 0
-                    build_rows(app_state)
-                }
-            }
-        }
-    }
-
-    wheel := rl.GetMouseWheelMove()
-    if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_option_content_rect) {
-        if wheel < 0 { // scroll down
-            app_state.side_panel_scroll_offset = app_state.side_panel_scroll_offset + (SIDE_PANEL_ROW_HEIGHT * SCROLL_INCREMENT)
-            if app_state.side_panel_scroll_offset >= (f32(len(app_state.artist_list) + 1) * SIDE_PANEL_ROW_HEIGHT) - app_state.side_panel_option_content_rect.height {
-                app_state.side_panel_scroll_offset = (f32(len(app_state.artist_list) + 1) * SIDE_PANEL_ROW_HEIGHT) - app_state.side_panel_option_content_rect.height
-            }
-
-        } else if wheel > 0 {
-            app_state.side_panel_scroll_offset = app_state.side_panel_scroll_offset - (SIDE_PANEL_ROW_HEIGHT * SCROLL_INCREMENT) // five rows
-            if app_state.side_panel_scroll_offset < 0 {
-                app_state.side_panel_scroll_offset = 0
-            }
-        }
-    }
-}
-
-@private
-side_panel_draw :: proc(app_state: ^App_State) {
-    //rl.DrawRectangleRec(app_state.side_panel_options_rect, rl.ORANGE)
-    //rl.DrawRectangleRec(app_state.side_panel_option_content_rect, rl.GREEN)
-
-    // side panel options
-    {
-        artists_option_bounds := rl.Rectangle{
-            x = app_state.side_panel_options_rect.x,
-            y = app_state.side_panel_options_rect.y + 20,
-            width = app_state.side_panel_options_rect.width,
-            height = 25
-        }
-
-        // highlight the option
-        if app_state.selected_side_panel_option == .Artist_List {
-            rl.DrawRectangleRec(artists_option_bounds, rl.ORANGE)
-        }
-
-        text_measurement := rl.MeasureTextEx(app_state.fonts[FONT_20], "Artists", FONT_20, 0)
-        txt_y := ((artists_option_bounds.height - text_measurement.y) / 2) + artists_option_bounds.y
-
-        rl.DrawTextEx(
-            app_state.fonts[FONT_20],
-            "Artists",
-            {app_state.side_panel_rect.x + 20, txt_y},
-            FONT_20,
-            0,
-            rl.BLACK)
-
-        playlists_option_bounds := rl.Rectangle{
-            x = app_state.side_panel_options_rect.x,
-            y = app_state.side_panel_options_rect.y + 50,
-            width = app_state.side_panel_options_rect.width,
-            height = 25
-        }
-
-        // highlight the option
-        if app_state.selected_side_panel_option == .Playlists {
-            rl.DrawRectangleRec(playlists_option_bounds, rl.ORANGE)
-        }
-
-        text_measurement = rl.MeasureTextEx(app_state.fonts[FONT_20], "Playlists", FONT_20, 0)
-        txt_y = ((playlists_option_bounds.height - text_measurement.y) / 2) + playlists_option_bounds.y
-        rl.DrawTextEx(
-            app_state.fonts[FONT_20],
-            "Playlists",
-            {app_state.side_panel_rect.x + 20, txt_y},
-            FONT_20,
-            0,
-            rl.BLACK)
-
-        // handle on options click
-        if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_options_rect) {
-            if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
-                if rl.CheckCollisionPointRec(rl.GetMousePosition(), artists_option_bounds) {
-                    app_state.selected_side_panel_option = .Artist_List
-                } else if rl.CheckCollisionPointRec(rl.GetMousePosition(), playlists_option_bounds) {
-                    app_state.selected_side_panel_option = .Playlists
-                }
-            }
-        }
-    }
-
-    // horizontal line
-    rl.DrawLineEx(
-        {0, app_state.side_panel_options_rect.y + app_state.side_panel_options_rect.height},
-        {app_state.side_panel_options_rect.width, app_state.side_panel_options_rect.y + app_state.side_panel_options_rect.height},
-        1.5,
-        rl.LIGHTGRAY)
-
-
-    rl.BeginScissorMode(
-        i32(app_state.side_panel_option_content_rect.x),
-        i32(app_state.side_panel_option_content_rect.y),
-        i32(app_state.side_panel_option_content_rect.width),
-        i32(app_state.side_panel_option_content_rect.height))
-
-    if app_state.selected_side_panel_option == .Artist_List {
-        draw_artist_list(app_state)
-    } else if app_state.selected_side_panel_option == .Playlists {
-        // @todo: draw_playlist_list()
-    }
-
-    rl.EndScissorMode()
-
-    rl.DrawLineEx(
-        {app_state.side_panel_rect.x + app_state.side_panel_rect.width, 0},
-        {app_state.side_panel_rect.x + app_state.side_panel_rect.width, app_state.main_panel_rect.y + app_state.main_panel_rect.height},
-        1.5,
-        rl.LIGHTGRAY
-    )
-}
-
-@(private = "file")
-draw_main_panel_content :: proc(app_state: ^App_State) {
-    rl.BeginScissorMode(
-        i32(app_state.main_panel_rect.x),
-        i32(app_state.main_panel_rect.y),
-        i32(app_state.main_panel_rect.width),
-        i32(app_state.main_panel_rect.height))
-
-    pos_y := app_state.main_panel_rect.y
-
-    start := i32(app_state.main_panel_scroll_offset / ROW_HEIGHT)
-    if start > i32(len(app_state.rows) - 1) {
-        start = i32(len(app_state.rows) - 1)
-    }
-
-    for row, row_idx in app_state.rows[start:] {
-        // 300: pre-fetch some rows
-        // then some of the covers are pre-fetched and there is no delay
-        if pos_y >= app_state.main_panel_rect.height + 300 do break
-        if row == nil {
-            pos_y += ROW_HEIGHT
-            continue
-        }
-
-        if row.is_album_row {
-            pos_y += ROW_HEIGHT
-            album_title_row_draw(app_state, row, &pos_y)
-        } else {
-            track_list_item_draw(app_state, pos_y, row)
-            pos_y += ROW_HEIGHT
-        }
-    }
-
-    rl.EndScissorMode()
-
-    // Handle main panel scrolling
-    wheel := rl.GetMouseWheelMove()
-    if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel_rect) {
-        if wheel < 0 { // scroll down
-            //fmt.printfln("max height: %i; offset: %i; panel height: %f", app_state.content_max_height, app_state.main_panel_scroll_offset, app_state.main_panel.height)
-            if app_state.main_panel_scroll_offset + i32(app_state.main_panel_rect.height) < app_state.content_max_height + 150 { // 150 just a random buffer to fix minor calcualtion mistakes
-                app_state.main_panel_scroll_offset += ROW_HEIGHT * 5
-            }
-        } else if wheel > 0 { // scroll up
-            offset := app_state.main_panel_scroll_offset - (ROW_HEIGHT * 5)
-            if offset <= 0 {
-                app_state.main_panel_scroll_offset = 0
-            } else {
-                app_state.main_panel_scroll_offset -= (ROW_HEIGHT * 5)
-            }
-        }
-    }
-}
-
-@private
-handle_track_selection :: proc(app_state: ^App_State, selected_track: ^Track) {
-    if app_state.ma_sound != nil {
-        ma.sound_uninit(app_state.ma_sound)
-        app_state.ma_sound = nil
-    }
-
-    app_state.ma_sound = new(ma.sound)
-    res := ma.sound_init_from_file(&app_state.ma_engine, selected_track.file_path, {.STREAM}, nil, nil, app_state.ma_sound)
-    if res != .SUCCESS {
-        app_state.ma_sound = nil
-        fmt.println("Could not init sound: ", res)
-    } else {
-        sound_start_result := ma.sound_start(app_state.ma_sound)
-        if sound_start_result == .SUCCESS {
-            app_state.audio_state = .Playing
-            app_state.currently_playing_track = selected_track
-        }
-    }
-}
-
-@private
-album_title_row_draw :: proc(app_state: ^App_State, row: ^Row, pos_y: ^f32) {
-    album := &app_state.albums[row.album_idx]
-
-    list_item := rl.Rectangle{
-        x = app_state.main_panel_rect.x,
-        y = pos_y^,
-        width = app_state.main_panel_rect.width,
-        height = ROW_HEIGHT
-    }
-    text_measurement := rl.MeasureTextEx(app_state.fonts[FONT_30], album.title, FONT_30, 0)
-
-    rl.DrawTextEx(
-        app_state.fonts[FONT_30],
-        album.title,
-        { app_state.main_panel_rect.x, pos_y^},
-        FONT_30,
-        0,
-        rl.BLACK)
-
-    rl.DrawLine(
-        i32(text_measurement.x + app_state.main_panel_rect.x + 20), 
-        i32(pos_y^ + FONT_30 / 2),
-        i32(app_state.main_panel_rect.width),
-        i32(pos_y^ + FONT_30 / 2),
-        rl.PURPLE)
-
-    pos_y^ += ROW_HEIGHT
-
-    if album.cover_art_cache_entry_idx >= 0 {
-        cache_entry := app_state.album_art_cache.entries[album.cover_art_cache_entry_idx]
-        cache_entry.frame = app_state.current_frame_rendered
-        rl.DrawTexture(cache_entry.texture, i32(app_state.main_panel_rect.x), i32(pos_y^), rl.WHITE)
-    } else {
-        if len(album.cover_art_path) > 0 {
-            fmt.println("add album to queue: ", album.title)
-            request_cover_load(&app_state.album_art_load_queue, row.album_idx)
-        } else { // now cover. Load default placeholder
-            rl.DrawTexture(app_state.default_album_cover_texture, i32(app_state.main_panel_rect.x), i32(pos_y^), rl.WHITE)
-        }
-    }
-
-}
-
-@private
-track_list_item_draw :: proc(app_state: ^App_State, pos_y: f32, row: ^Row) {
-    list_item := rl.Rectangle{
-        x = app_state.main_panel_rect.x + TRACK_LIST_OFFSET_X,
-        y = pos_y,
-        width = app_state.main_panel_rect.width,
-        height = ROW_HEIGHT
-    }
-
-    // detect track clicked
-    if (
-        rl.CheckCollisionPointRec(rl.GetMousePosition(), list_item) &&
-        rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel_rect)
-    ) {
-        // highlight
-        rl.DrawRectangleRec(list_item, rl.ORANGE)
-
-        if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
-            handle_track_selection(app_state, row.track)
-        }
-    }
-
-    text_measurement := rl.MeasureTextEx(app_state.fonts[FONT_20], "placeholder", FONT_20, 0)
-    txt_y := ((list_item.height - text_measurement.y) / 2) + list_item.y
-
-    txt_color := rl.BLACK
-    is_playing := app_state.currently_playing_track != nil && row.track.file_path == app_state.currently_playing_track.file_path
-    if is_playing {
-        txt_color = rl.PURPLE
-    }
-
-    // artist - album - title
-    {
-        rl.DrawTextEx(
-            app_state.fonts[FONT_20],
-            row.track.artist,
-            { list_item.x + 10, txt_y},
-            f32(FONT_20),
-            0,
-            txt_color)
-
-        rl.DrawTextEx(
-            app_state.fonts[FONT_20],
-            row.track.album,
-            { list_item.x + 500, txt_y},
-            f32(FONT_20),
-            0,
-            txt_color)
-
-
-        title := row.track.title
-        if len(title) == 0 {
-            title = row.track.file_name
-        }
-        rl.DrawTextEx(
-            app_state.fonts[FONT_20],
-            title,
-            { list_item.x + 1000, txt_y},
-            f32(FONT_20),
-            0,
-            txt_color)
-    }
-}
-
-@(private = "file")
-progress_bar_draw :: proc(value: f32, max_value: f32, pos: [2]f32, w, h: f32) {
-    bounds := rl.Rectangle{
-        x = pos.x,
-        y = pos.y,
-        width = w,
-        height = h
-    }
-
-    roundness: f32 = 0.2
-    {
-        progress := value * bounds.width / max_value
-        progress_rect := rl.Rectangle{
-            x = pos.x,
-            y = pos.y + 0.4,
-            width = progress,
-            height = h
-        }
-        rl.DrawRectangleRec(progress_rect, rl.PURPLE)
-    }
-
-    rl.DrawRectangleRoundedLinesEx(
-        bounds,
-        0.1,
-        0, 2, rl.BLACK)
-}
-
 @private
 destroy_state :: proc(app_state: ^App_State) {
     ma.sound_uninit(app_state.ma_sound)
@@ -682,7 +311,7 @@ destroy_state :: proc(app_state: ^App_State) {
     free(app_state)
 }
 
-@private
+@(private = "file")
 load_assets :: proc(app_state: ^App_State) {
     // fonts
     {
@@ -737,6 +366,365 @@ load_assets :: proc(app_state: ^App_State) {
         app_state.previous_button_texture =  rl.LoadTextureFromImage(prev_btn_img)
         rl.UnloadImage(prev_btn_img)
     }
+}
+
+@(private = "file")
+create_config_file :: proc(path: string) {
+    config_file, err := os.create(path)
+    if err != nil {
+        fmt.println("Could not create config file")
+        return
+    }
+    defer os.close(config_file)
+
+    s := "LIBRARY_PATH="
+    buf := make([]u8, len(s))
+    defer delete(buf)
+    copy(buf, s)
+
+    _, err = os.write(config_file, buf)
+    if err != nil {
+        fmt.eprintln("Could not write to config file")
+        return
+    }
+
+}
+
+// @todo: windows
+@(private = "file")
+load_config :: proc(app_state: ^App_State) {
+    home_dir, err  := os.user_home_dir(context.allocator)
+    config_path, join_err := filepath.join({home_dir, ".config", "music_player"}, context.allocator)
+    assert(join_err == nil, "Probably programmer error")
+    defer delete(config_path)
+
+    // @todo: handle err
+    config_file_path, e := filepath.join({config_path, "config"}, context.allocator)
+    assert(e == nil, "Probably programmer error")
+    defer delete(config_file_path)
+
+    file_info, file_info_err := os.stat(config_path, context.allocator)
+    if file_info_err == nil && file_info.type == .Directory {
+        if os.exists(config_file_path) {
+            file_data, err := os.read_entire_file_from_path(config_file_path, context.allocator)
+            if err != nil {
+                fmt.eprintln("Could not read config file")
+                return
+            }
+            defer delete(file_data)
+
+            it := string(file_data)
+            for line in strings.split_lines_iterator(&it) {
+                // process line
+                if strings.has_prefix(line, "LIBRARY_PATH=") {
+                    library_path := line[len("LIBRARY_PATH="):]
+                    if len(library_path) > 0 {
+                        app_state.library_path = strings.clone(library_path)
+                        app_state.is_library_path_set = true
+                    }
+                }
+            }
+        } else {
+            create_config_file(config_file_path)
+        }
+    } else {
+        mkdir_err := os.mkdir(config_path)
+        if mkdir_err != nil {
+            fmt.eprintln("Could not create music_player directory")
+            return
+        }
+
+        create_config_file(config_file_path)
+    }
+}
+
+@private
+handle_keyboard_events :: proc(app_state: ^App_State) {
+    if rl.IsKeyPressed(rl.KeyboardKey.SPACE) {
+        if app_state.ma_sound == nil {
+            return
+        }
+
+        handle_play_pause(app_state)
+    }
+}
+
+@(private = "file")
+walk_music_dir :: proc(app_state: ^App_State, path: string) {
+    data, err := os.read_directory_by_path(path, 0, context.allocator)
+    if err != nil {
+        fmt.printf("Could not read the dir", err)
+        return
+    }
+    defer delete(data)
+
+    album_map := make(map[cstring]int)
+    defer delete(album_map)
+
+    current_album: ^Album
+
+    for d in data {
+        if d.type == .Directory {
+            walk_music_dir(app_state, d.fullpath)
+        } else if d.type == .Regular {
+            if filepath.ext(d.fullpath) == ".mp3" || filepath.ext(d.fullpath) == ".flac" || filepath.ext(d.fullpath) == ".wav" {
+                // @todo: if image found `cover.jpeg/png` save to a map with base path as key
+                // map[string]string and value as path to the cover art
+                // after the tracks are found, use track file_path and match with the cover art path
+
+                //fmt.printfln(d.fullpath)
+                tag, tl_error := tl.get_tag(d.fullpath)
+                //fmt.printfln("md.title len=%d value=%q", len(tag.title), tag.title)
+
+                track := Track{
+                    title = strings.clone_to_cstring(tag.title),
+                    artist = strings.clone_to_cstring(tag.artist),
+                    album = strings.clone_to_cstring(tag.album),
+                    file_name = strings.clone_to_cstring(d.name),
+                    file_path = strings.clone_to_cstring(d.fullpath)
+                }
+
+                // create album
+                {
+                    idx, album_exists := album_map[track.album]
+                    if !album_exists {
+                        idx = len(app_state.albums)
+
+                        album := Album{
+                            title = track.album,
+                            artist = track.artist,
+                            cover_art_cache_entry_idx = -1
+                        }
+                        append(&app_state.albums, album)
+                        album_map[track.album] = idx
+                    }
+                    track.album_idx = i32(idx)
+
+                    track_idx := len(app_state.tracks)
+                    append(&app_state.albums[idx].track_indices, i32(track_idx))
+
+                    track_pos := len(app_state.albums[idx].track_indices) - 1
+                    track.order_nr_in_album = i32(track_pos)
+
+                    current_album = &app_state.albums[len(app_state.albums) - 1]
+                }
+
+                append(&app_state.tracks, track)
+                tl.tag_destroy(&tag)
+
+                if !slice.contains(app_state.artist_list[:], current_album.artist) {
+                    append(&app_state.artist_list, current_album.artist)
+                }
+
+            } else if filepath.ext(d.fullpath) == ".jpg" || filepath.ext(d.fullpath) == ".jpeg" || filepath.ext(d.fullpath) == ".png" {
+                // found an image. Assume this is the cover for the album
+                if current_album != nil {
+                    current_album.cover_art_path = strings.clone_to_cstring(d.fullpath)
+                }
+            }
+        }
+    }
+
+    // @todo: ignore case
+    sort.quick_sort(app_state.artist_list[1:])
+}
+
+@private
+build_rows :: proc(app_state: ^App_State) {
+    rows : [dynamic]^Row
+    content_height : i32 = 0
+
+    for &album, album_idx in app_state.albums {
+        if app_state.current_selected_artist != nil {
+            if album.artist != app_state.current_selected_artist do continue
+        }
+
+        album_title_row := new(Row)
+        album_title_row.is_album_row = true
+        album_title_row.album_idx = i32(album_idx)
+
+        append(&rows, album_title_row)
+
+        content_height += ROW_HEIGHT
+
+        album_content_height : i32 = 0
+        for track_idx in album.track_indices {
+            track := &app_state.tracks[track_idx]
+            assert(track != nil)
+
+            track_row := new(Row)
+            track_row.track = track
+
+            append(&rows, track_row)
+
+            //content_height = pos_y + ROW_HEIGHT
+            album_content_height += ROW_HEIGHT
+        }
+
+        if album_content_height < COVER_SIZE {
+            diff := (COVER_SIZE - album_content_height) / ROW_HEIGHT
+            for i in 0..<diff {
+                append(&rows, nil)
+                album_content_height += ROW_HEIGHT
+            }
+        }
+
+        content_height += album_content_height // padding after the album
+    }
+
+    app_state.rows = rows
+    app_state.content_max_height = content_height
+}
+
+@private
+least_used_cover_art_idx :: proc(app_state: ^App_State) -> (cache_entry_idx: i32, cache_entry: ^Album_Art_Cache_Entry) {
+    smallest_usage : u64
+    entry_idx: i32
+    e : ^Album_Art_Cache_Entry
+
+    for entry, idx in app_state.album_art_cache.entries {
+        if idx == 0 {
+            smallest_usage = entry.frame
+            entry_idx = i32(idx)
+            e = entry
+            continue
+        }
+
+        if entry.frame < smallest_usage {
+            smallest_usage = entry.frame
+            entry_idx = i32(idx)
+            e = entry
+        }
+    }
+
+    return entry_idx, e
+}
+
+@private
+request_cover_load :: proc(queue: ^[dynamic]i32, album_idx: i32) {
+    if len(queue) == 15 do return
+
+    is_in_queue := false
+    for item in queue {
+        if item == album_idx {
+            is_in_queue = true
+            return
+        }
+    }
+    if is_in_queue do return
+    append(queue, album_idx)
+}
+
+@private
+process_album_art_queue :: proc(app_state: ^App_State) {
+    for album_idx, idx in app_state.album_art_load_queue {
+        album := &app_state.albums[album_idx]
+
+        fmt.println("loading album art for: ", album.title)
+
+        if len(album.cover_art_path) > 0 {
+            // cache is full
+            if app_state.album_art_cache.count >= CACHE_MAX_CAPACITY {
+                cache_entry_idx, cache_entry := least_used_cover_art_idx(app_state)
+                least_used_album := &app_state.albums[cache_entry.album_idx]
+                least_used_album.cover_art_cache_entry_idx = -1
+                current_entry := app_state.album_art_cache.entries[cache_entry_idx]
+                rl.UnloadTexture(current_entry.texture)
+
+                app_state.album_art_cache.entries[cache_entry_idx] = {}
+                app_state.album_art_cache.count -= 1
+
+                img := rl.LoadImage(album.cover_art_path)
+                rl.ImageResize(&img, 200, 200)
+                texture := rl.LoadTextureFromImage(img)
+                rl.UnloadImage(img)
+
+                new_cache_entry := new(Album_Art_Cache_Entry)
+                new_cache_entry.album_idx = album_idx
+                new_cache_entry.texture = texture
+                new_cache_entry.frame = app_state.current_frame_rendered
+
+                app_state.album_art_cache.entries[cache_entry_idx] = new_cache_entry
+                album.cover_art_cache_entry_idx = cache_entry_idx
+                app_state.album_art_cache.count += 1
+            } else {
+                img := rl.LoadImage(album.cover_art_path)
+                rl.ImageResize(&img, 200, 200)
+                texture := rl.LoadTextureFromImage(img)
+                rl.UnloadImage(img)
+
+                idx := -1
+                for e, i in app_state.album_art_cache.entries {
+                    // look for the first empty entry
+                    if e == nil {
+                        idx = i
+                    }
+                }
+                if idx >= 0 {
+                    new_cache_entry := new(Album_Art_Cache_Entry)
+                    new_cache_entry.album_idx = album_idx
+                    new_cache_entry.texture = texture
+                    new_cache_entry.frame = app_state.current_frame_rendered
+
+                    app_state.album_art_cache.entries[idx] = new_cache_entry
+                    app_state.album_art_cache.count += 1
+                    album.cover_art_cache_entry_idx = i32(idx)
+                }
+            }
+        }
+    }
+
+    clear(&app_state.album_art_load_queue)
+}
+
+// @todo: buggy
+@private
+invalidate_cache :: proc(app_state: ^App_State) {
+    max_frame_diff : u64 = 1000
+
+    entries_to_remove: [dynamic]i32
+    defer delete(entries_to_remove)
+
+    for entry, entry_idx in app_state.album_art_cache.entries {
+        if entry == nil do continue
+
+        // entry has not been accessed for the last 1000 frames
+        // remove from cache
+        if app_state.current_frame_rendered - entry.frame > max_frame_diff {
+            append(&entries_to_remove, i32(entry_idx))
+        }
+    }
+
+    for entry_idx_to_remove in entries_to_remove {
+        cache_entry := app_state.album_art_cache.entries[entry_idx_to_remove]
+        if cache_entry == nil do continue
+
+        album := &app_state.albums[cache_entry.album_idx]
+        if album == nil do continue
+
+        remove_entry_from_cache(&app_state.album_art_cache, entry_idx_to_remove)
+        album.cover_art_cache_entry_idx = -1
+    }
+
+    /*fmt.println("---start---")
+    for foo in app_state.album_art_cache.entries {
+        if foo != nil {
+            fmt.printfln("album Idx: %i; entry_frame: %i; current frame: %i", foo.album_idx, foo.frame, app_state.current_frame_rendered)
+        }
+    }
+    fmt.println("\n---end---")*/
+}
+
+@(private = "file")
+remove_entry_from_cache :: proc(cache: ^Album_Art_Cache, entry_idx: i32) {
+    entry := cache.entries[entry_idx]
+    if entry == nil do return
+
+    rl.UnloadTexture(entry.texture)
+    cache.entries[entry_idx] = nil
+    cache.count -= 1
+
+    assert(cache.count >= 0)
 }
 
 @private

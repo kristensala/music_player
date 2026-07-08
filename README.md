@@ -3,6 +3,7 @@
 ![Demo](/res/demo.png)
 ![Memory](/res/memory.png)
 
+- [ ] Logging and fix error handling
 - [ ] Playlist support
 - [ ] Debug cache invalidation (Something lives longer than it has to)
 - [ ] Fix taglib mp3 major version 2 parsing
