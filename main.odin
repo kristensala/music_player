@@ -58,11 +58,22 @@ Main_Panel :: struct {
     content_max_height: i32, // in pixels
 }
 
+Playback_Controls_Panel :: struct {
+    playback_controls_panel_rect: rl.Rectangle,
+
+    play_button_texture: rl.Texture2D,
+    pause_button_texture: rl.Texture2D,
+    next_button_texture: rl.Texture2D,
+    previous_button_texture: rl.Texture2D
+}
+
 App_State :: struct {
     using main_panel: Main_Panel,
     using side_panel: Side_Panel,
+    using playback_controls_panel: Playback_Controls_Panel,
 
     fonts: map[i32]rl.Font,
+
     library_path: string,
     is_library_path_set: bool,
 
@@ -72,21 +83,15 @@ App_State :: struct {
     playlist_path: string,
     playlists: [dynamic]Playlist,
 
-    queue: [dynamic]Track_Idx,
+    queue: [dynamic]Track_Idx, // @todo: not implemented
 
     default_album_cover_texture: rl.Texture2D,
-    play_button_texture: rl.Texture2D,
-    pause_button_texture: rl.Texture2D,
-    next_button_texture: rl.Texture2D,
-    previous_button_texture: rl.Texture2D,
 
     ma_engine: ma.engine,
     ma_sound: ^ma.sound,
 
     audio_state: AudioState,
     currently_playing_track: ^Track,
-
-    playback_controls_panel: rl.Rectangle,
 
     // filtering
     artist_list: [dynamic]cstring,
@@ -99,7 +104,7 @@ App_State :: struct {
 }
 
 Album_Art_Cache :: struct {
-    entries: [15]^Album_Art_Cache_Entry,
+    entries: [CACHE_MAX_CAPACITY]^Album_Art_Cache_Entry,
     count: i32,
 }
 
@@ -119,7 +124,7 @@ AudioState :: enum i32 {
 Track :: struct {
     title: cstring,
     artist: cstring,
-    album: cstring,
+    album_title: cstring,
     album_idx: i32, // @todo: use ^Album, then I can sort the Album list
     file_path: cstring,
     file_name: cstring,
@@ -177,7 +182,7 @@ init_state :: proc() -> ^App_State {
     }
 
     app_state.main_panel_rect = rl.Rectangle{ x = app_state.side_panel_rect.width + 20, y = 20}
-    app_state.playback_controls_panel = rl.Rectangle{ x = 0, height = 170 }
+    app_state.playback_controls_panel_rect = rl.Rectangle{ x = 0, height = 170 }
 
     if app_state.is_library_path_set {
         append(&app_state.artist_list, ALL_ARTISTS_OPTION)
@@ -301,7 +306,7 @@ destroy_state :: proc(app_state: ^App_State) {
         delete(t.file_path)
         delete(t.title)
         delete(t.artist)
-        delete(t.album)
+        delete(t.album_title)
     }
     delete(app_state.tracks)
 
@@ -332,12 +337,12 @@ destroy_state :: proc(app_state: ^App_State) {
 load_assets :: proc(app_state: ^App_State) {
     // fonts
     {
-        font_16 := rl.LoadFontEx("res/IBMPlexMono-Regular.ttf", FONT_18, nil, 0)
+        font_18 := rl.LoadFontEx("res/IBMPlexMono-Regular.ttf", FONT_18, nil, 0)
         font_20 := rl.LoadFontEx("res/IBMPlexMono-Regular.ttf", FONT_20, nil, 0)
         font_30 := rl.LoadFontEx("res/IBMPlexMono-Regular.ttf", FONT_30, nil, 0)
 
         fonts := make(map[i32]rl.Font)
-        fonts[FONT_18] = font_16
+        fonts[FONT_18] = font_18
         fonts[FONT_20] = font_20
         fonts[FONT_30] = font_30
 
@@ -407,6 +412,13 @@ create_config_file :: proc(path: string) {
 @(private = "file")
 load_config :: proc(app_state: ^App_State) {
     home_dir, err  := os.user_home_dir(context.allocator)
+    if err != nil {
+        fmt.eprintln(#procedure, "Failed to get user_home_dir: ", err)
+        return
+    }
+
+    defer delete(home_dir)
+
     config_path, join_err := filepath.join({home_dir, ".config", "music_player"}, context.allocator)
     assert(join_err == nil, "Probably programmer error")
     defer delete(config_path)
@@ -417,6 +429,8 @@ load_config :: proc(app_state: ^App_State) {
     defer delete(config_file_path)
 
     file_info, file_info_err := os.stat(config_path, context.allocator)
+    defer os.file_info_delete(file_info, context.allocator)
+
     if file_info_err == nil && file_info.type == .Directory {
         if os.exists(config_file_path) {
             file_data, err := os.read_entire_file_from_path(config_file_path, context.allocator)
@@ -492,24 +506,24 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
                 track := Track{
                     title = strings.clone_to_cstring(tag.title),
                     artist = strings.clone_to_cstring(tag.artist),
-                    album = strings.clone_to_cstring(tag.album),
+                    album_title = strings.clone_to_cstring(tag.album),
                     file_name = strings.clone_to_cstring(d.name),
                     file_path = strings.clone_to_cstring(d.fullpath)
                 }
 
                 // create album
                 {
-                    idx, album_exists := album_map[track.album]
+                    idx, album_exists := album_map[track.album_title]
                     if !album_exists {
                         idx = len(app_state.albums)
 
                         album := Album{
-                            title = track.album,
+                            title = track.album_title,
                             artist = track.artist,
                             cover_art_cache_entry_idx = -1
                         }
                         append(&app_state.albums, album)
-                        album_map[track.album] = idx
+                        album_map[track.album_title] = idx
                     }
                     track.album_idx = i32(idx)
 
@@ -615,7 +629,7 @@ least_used_cover_art_idx :: proc(app_state: ^App_State) -> (cache_entry_idx: i32
 
 @private
 request_cover_load :: proc(queue: ^[dynamic]i32, album_idx: i32) {
-    if len(queue) == 15 do return
+    if len(queue) == CACHE_MAX_CAPACITY do return
 
     is_in_queue := false
     for item in queue {
@@ -639,8 +653,10 @@ process_album_art_queue :: proc(app_state: ^App_State) {
             // cache is full
             if app_state.album_art_cache.count >= CACHE_MAX_CAPACITY {
                 cache_entry_idx, cache_entry := least_used_cover_art_idx(app_state)
+
                 least_used_album := &app_state.albums[cache_entry.album_idx]
                 least_used_album.cover_art_cache_entry_idx = -1
+
                 current_entry := app_state.album_art_cache.entries[cache_entry_idx]
                 rl.UnloadTexture(current_entry.texture)
 
@@ -802,6 +818,7 @@ create_playlist :: proc(app_state: ^App_State, playlist_name: string) {
         fmt.eprintln(#procedure, "Could not create the playlist: ", dir_read_err)
         return
     }
+    defer delete(files)
 
     next_file_name : string = "mppl0"
     if len(files) > 0 {
@@ -821,6 +838,7 @@ create_playlist :: proc(app_state: ^App_State, playlist_name: string) {
         next_file_name = fmt.tprintf("mppl%i", current_playlist_nr_int + 1)
     }
 
+    // @todo: handle error
     file_path, e := filepath.join({app_state.playlist_path, next_file_name}, context.allocator)
     defer delete(file_path)
 
@@ -879,10 +897,12 @@ get_or_create_playlist_dir :: proc(path: string) -> os.Error {
     if file_info_err != nil || file_info.type != .Directory {
         err := os.mkdir(path)
         if err != nil {
+            os.file_info_delete(file_info, context.allocator)
             return err
         }
     }
 
+    os.file_info_delete(file_info, context.allocator)
     return nil
 }
 

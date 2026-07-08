@@ -26,7 +26,7 @@ draw_main :: proc(app_state: ^App_State) {
             currently_playing_artist : cstring = ""
             if app_state.currently_playing_track != nil {
                 currently_playing_track_title = app_state.currently_playing_track.title
-                currently_playing_track_album = app_state.currently_playing_track.album
+                currently_playing_track_album = app_state.currently_playing_track.album_title
                 currently_playing_artist = app_state.currently_playing_track.artist
             }
 
@@ -70,7 +70,7 @@ draw_main :: proc(app_state: ^App_State) {
 @(private = "file")
 draw_playback_controls :: proc(app_state: ^App_State) {
     play_pause_button_bounds := rl.Rectangle{
-        x = (app_state.playback_controls_panel.width / 2) - (PLAYBACK_BUTTON_SIZE / 2),
+        x = (app_state.playback_controls_panel_rect.width / 2) - (PLAYBACK_BUTTON_SIZE / 2),
         y = f32(rl.GetScreenHeight() - 110),
         width = 50,
         height = 50
@@ -97,7 +97,7 @@ draw_playback_controls :: proc(app_state: ^App_State) {
     // draw next song button
     {
         next_song_button_bounds := rl.Rectangle{
-            x = f32(app_state.playback_controls_panel.width / 2) - (PLAYBACK_BUTTON_SIZE / 2) + 50,
+            x = f32(app_state.playback_controls_panel_rect.width / 2) - (PLAYBACK_BUTTON_SIZE / 2) + 50,
             y = f32(rl.GetScreenHeight() - 110),
             width = 50,
             height = 50
@@ -117,7 +117,7 @@ draw_playback_controls :: proc(app_state: ^App_State) {
     // draw prev song button
     {
         prev_song_button_bounds := rl.Rectangle{
-            x = f32(app_state.playback_controls_panel.width / 2) - (PLAYBACK_BUTTON_SIZE / 2) - 50,
+            x = f32(app_state.playback_controls_panel_rect.width / 2) - (PLAYBACK_BUTTON_SIZE / 2) - 50,
             y = f32(rl.GetScreenHeight() - 110),
             width = 50,
             height = 50
@@ -502,7 +502,7 @@ draw_track_list_item :: proc(app_state: ^App_State, pos_y: f32, row: ^Row) {
 
         rl.DrawTextEx(
             app_state.fonts[FONT_20],
-            row.track.album,
+            row.track.album_title,
             { list_item.x + 500, txt_y},
             f32(FONT_20),
             0,
@@ -574,10 +574,10 @@ draw_progress_bar :: proc(value: f32, max_value: f32, pos: [2]f32, w, h: f32) {
 update_layout :: proc(app_state: ^App_State) {
     // -40 := 20px padding from left and right
     app_state.main_panel_rect.width = f32(rl.GetScreenWidth() - 40)
-    app_state.main_panel_rect.height = f32(rl.GetScreenHeight()) - app_state.playback_controls_panel.height
+    app_state.main_panel_rect.height = f32(rl.GetScreenHeight()) - app_state.playback_controls_panel_rect.height
     app_state.side_panel_rect.height = app_state.main_panel_rect.height + app_state.main_panel_rect.y // @explain
     app_state.side_panel_option_content_rect.height = app_state.side_panel_rect.height - app_state.side_panel_options_rect.height
 
-    app_state.playback_controls_panel.width = f32(rl.GetScreenWidth())
-    app_state.playback_controls_panel.y = app_state.main_panel_rect.height
+    app_state.playback_controls_panel_rect.width = f32(rl.GetScreenWidth())
+    app_state.playback_controls_panel_rect.y = app_state.main_panel_rect.height
 }
