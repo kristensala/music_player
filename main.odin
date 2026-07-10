@@ -12,25 +12,27 @@ import "core:path/filepath"
 import "core:os"
 import tl "taglib"
 
-SCROLL_INCREMENT :: 5 // five rows
-BOTTOM_BAR_PADDING :: 50
-FONT_18 :: 18
-FONT_20 :: 20
-FONT_30 :: 30
-PLAYBACK_BUTTON_SIZE :: 30
-SIDE_PANEL_ROW_HEIGHT :: 35
-ROW_HEIGHT :: 40
-TRACK_LIST_OFFSET_X :: 250
-CACHE_MAX_CAPACITY :: 15
+FONT_DATA :: #load("res/IBMPlexMono-Regular.ttf")
 
-ALL_ARTISTS_OPTION :: "All Artists"
+SCROLL_INCREMENT           :: 5 // five rows
+BOTTOM_BAR_PADDING         :: 50
+FONT_18                    :: 18
+FONT_20                    :: 20
+FONT_30                    :: 30
+PLAYBACK_BUTTON_SIZE       :: 30
+SIDE_PANEL_ROW_HEIGHT      :: 35
+ROW_HEIGHT                 :: 40
+TRACK_LIST_OFFSET_X        :: 250
+CACHE_MAX_CAPACITY         :: 15
+
+ALL_ARTISTS_OPTION         :: "All Artists"
 
 Track_Idx :: i32
 
 Row :: struct {
-    is_album_row : bool, // if true then track is nil
-    album_idx: i32,
-    track: ^Track,
+    is_album_row    : bool, // if true then track is nil
+    album_idx       : i32,
+    track           : ^Track,
 }
 
 Playlist :: struct {
@@ -67,6 +69,7 @@ Playback_Controls_Panel :: struct {
     previous_button_texture: rl.Texture2D
 }
 
+// @todo: should App_State have it's own allocator?
 App_State :: struct {
     using main_panel: Main_Panel,
     using side_panel: Side_Panel,
@@ -100,19 +103,19 @@ App_State :: struct {
     album_art_cache: Album_Art_Cache,
     album_art_load_queue: [dynamic]i32, // ref album idx
 
-    current_frame_rendered: u64 // current rendered frame
+    current_frame_rendered: u64, // current rendered frame
 }
 
 Album_Art_Cache :: struct {
-    entries: [CACHE_MAX_CAPACITY]^Album_Art_Cache_Entry,
-    count: i32,
+    entries  : [CACHE_MAX_CAPACITY]^Album_Art_Cache_Entry,
+    count    : i32,
 }
 
 Album_Art_Cache_Entry :: struct {
-    texture: rl.Texture2D,
-    album_idx: i32,
+    texture      : rl.Texture2D,
+    album_idx    : i32,
 
-    frame: u64 // last frame it was rendered
+    frame        : u64 // last frame it was rendered
 }
 
 AudioState :: enum i32 {
@@ -254,6 +257,7 @@ main :: proc() {
         rl.BeginDrawing()
         rl.ClearBackground(rl.RAYWHITE)
 
+
         if app_state.is_library_path_set {
             draw_main(app_state)
         } else {
@@ -337,9 +341,9 @@ destroy_state :: proc(app_state: ^App_State) {
 load_assets :: proc(app_state: ^App_State) {
     // fonts
     {
-        font_18 := rl.LoadFontEx("res/IBMPlexMono-Regular.ttf", FONT_18, nil, 0)
-        font_20 := rl.LoadFontEx("res/IBMPlexMono-Regular.ttf", FONT_20, nil, 0)
-        font_30 := rl.LoadFontEx("res/IBMPlexMono-Regular.ttf", FONT_30, nil, 0)
+        font_18 := rl.LoadFontFromMemory(".ttf", raw_data(FONT_DATA), i32(len(FONT_DATA)), 18, nil, 0)
+        font_20 := rl.LoadFontFromMemory(".ttf", raw_data(FONT_DATA), i32(len(FONT_DATA)), 20, nil, 0)
+        font_30 := rl.LoadFontFromMemory(".ttf", raw_data(FONT_DATA), i32(len(FONT_DATA)), 30, nil, 0)
 
         fonts := make(map[i32]rl.Font)
         fonts[FONT_18] = font_18
@@ -419,15 +423,21 @@ load_config :: proc(app_state: ^App_State) {
 
     defer delete(home_dir)
 
-    config_path, join_err := filepath.join({home_dir, ".config", "music_player"}, context.allocator)
-    assert(join_err == nil, "Probably programmer error")
+    config_path, config_path_join_err := filepath.join({home_dir, ".config", "music_player"}, context.allocator)
+    if config_path_join_err != nil {
+        // @todo: handle error
+        return
+    }
     defer delete(config_path)
 
-    // @todo: handle err
-    config_file_path, e := filepath.join({config_path, "config"}, context.allocator)
-    assert(e == nil, "Probably programmer error")
+    config_file_path, config_file_path_join_err := filepath.join({config_path, "config"}, context.allocator)
+    if config_file_path_join_err != nil {
+        // @todo: handle err
+        return
+    }
     defer delete(config_file_path)
 
+    // @todo: handle error
     file_info, file_info_err := os.stat(config_path, context.allocator)
     defer os.file_info_delete(file_info, context.allocator)
 

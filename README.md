@@ -15,3 +15,4 @@
 - [ ] Support playlist creation (~/.config/music_player/playlists/mppl0 etc)
 - [ ] Create/Read config file ~/.config/music_player/config
 - [ ] Command Palette for settings etc
+- [ ] File dialog lib: https://github.com/btzy/nativefiledialog-extended
