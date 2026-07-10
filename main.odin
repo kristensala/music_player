@@ -13,6 +13,11 @@ import "core:os"
 import tl "taglib"
 
 FONT_DATA :: #load("res/IBMPlexMono-Regular.ttf")
+ALBUM_ART_PLACEHOLDER :: #load("./res/album_placeholder.png")
+PLAY_IMG_DATA :: #load("./res/play.png")
+PAUSE_IMG_DATA :: #load("./res/pause.png")
+NEXT_IMG_DATA :: #load("./res/next.png")
+PREVIOUS_IMG_DATA :: #load("./res/previous.png")
 
 SCROLL_INCREMENT           :: 5 // five rows
 BOTTOM_BAR_PADDING         :: 50
@@ -104,6 +109,8 @@ App_State :: struct {
     album_art_load_queue: [dynamic]i32, // ref album idx
 
     current_frame_rendered: u64, // current rendered frame
+
+    show_debug_panel: bool
 }
 
 Album_Art_Cache :: struct {
@@ -264,6 +271,10 @@ main :: proc() {
             draw_insert_library_path_screen(app_state)
         }
 
+        if app_state.show_debug_panel {
+            draw_debug_panel(app_state)
+        }
+
         rl.EndDrawing()
     }
 
@@ -355,7 +366,7 @@ load_assets :: proc(app_state: ^App_State) {
 
     // album art placeholder
     {
-        album_placeholder_img := rl.LoadImage("./res/album_placeholder.png")
+        album_placeholder_img := rl.LoadImageFromMemory(".png", raw_data(ALBUM_ART_PLACEHOLDER), i32(len(ALBUM_ART_PLACEHOLDER)))
         rl.ImageResize(&album_placeholder_img, 200, 200)
         app_state.default_album_cover_texture = rl.LoadTextureFromImage(album_placeholder_img)
         rl.UnloadImage(album_placeholder_img)
@@ -363,7 +374,7 @@ load_assets :: proc(app_state: ^App_State) {
 
     // Load play button image
     {
-        play_btn_img := rl.LoadImage("./res/play.png")
+        play_btn_img := rl.LoadImageFromMemory(".png", raw_data(PLAY_IMG_DATA), i32(len(PLAY_IMG_DATA)))
         rl.ImageResize(&play_btn_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
         app_state.play_button_texture =  rl.LoadTextureFromImage(play_btn_img)
         rl.UnloadImage(play_btn_img)
@@ -371,7 +382,7 @@ load_assets :: proc(app_state: ^App_State) {
 
     // Load pause button image
     {
-        pause_btn_img := rl.LoadImage("./res/pause.png")
+        pause_btn_img := rl.LoadImageFromMemory(".png", raw_data(PAUSE_IMG_DATA), i32(len(PAUSE_IMG_DATA)))
         rl.ImageResize(&pause_btn_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
         app_state.pause_button_texture =  rl.LoadTextureFromImage(pause_btn_img)
         rl.UnloadImage(pause_btn_img)
@@ -379,7 +390,7 @@ load_assets :: proc(app_state: ^App_State) {
 
     // Load next button image
     {
-        next_btn_img := rl.LoadImage("./res/next.png")
+        next_btn_img := rl.LoadImageFromMemory(".png", raw_data(NEXT_IMG_DATA), i32(len(NEXT_IMG_DATA)))
         rl.ImageResize(&next_btn_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
         app_state.next_button_texture =  rl.LoadTextureFromImage(next_btn_img)
         rl.UnloadImage(next_btn_img)
@@ -387,7 +398,7 @@ load_assets :: proc(app_state: ^App_State) {
 
     // Load previous button image
     {
-        prev_btn_img := rl.LoadImage("./res/previous.png")
+        prev_btn_img := rl.LoadImageFromMemory(".png", raw_data(PREVIOUS_IMG_DATA), i32(len(PREVIOUS_IMG_DATA)))
         rl.ImageResize(&prev_btn_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
         app_state.previous_button_texture =  rl.LoadTextureFromImage(prev_btn_img)
         rl.UnloadImage(prev_btn_img)
@@ -483,6 +494,10 @@ handle_keyboard_events :: proc(app_state: ^App_State) {
         }
 
         handle_play_pause(app_state)
+    }
+
+    if rl.IsKeyPressed(rl.KeyboardKey.D) {
+        app_state.show_debug_panel = !app_state.show_debug_panel
     }
 }
 

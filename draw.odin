@@ -570,6 +570,45 @@ draw_progress_bar :: proc(value: f32, max_value: f32, pos: [2]f32, w, h: f32) {
         0, 2, rl.BLACK)
 }
 
+draw_debug_panel :: proc(app_state: ^App_State) {
+    bounds := rl.Rectangle{
+        x = f32(rl.GetScreenWidth() - 600),
+        y = 0,
+        height = f32(rl.GetScreenHeight()),
+        width = 600
+    }
+
+    rl.DrawRectangleRec(bounds, rl.Fade(rl.BLACK, 0.5))
+
+    rl.DrawTextEx(
+        app_state.fonts[FONT_20],
+        fmt.ctprintf("Current frame: %i", app_state.current_frame_rendered),
+        {bounds.x + 10, 20},
+        FONT_20, 0, rl.ORANGE)
+
+
+    rl.DrawTextEx(
+        app_state.fonts[FONT_20],
+        fmt.ctprintf("cache count: %i", app_state.album_art_cache.count),
+        {bounds.x + 10, 40},
+        FONT_20, 0, rl.ORANGE)
+
+    pos_y := 60
+    for entry, entry_idx in app_state.album_art_cache.entries {
+        if entry == nil do continue
+
+        album := app_state.albums[entry.album_idx]
+        
+        rl.DrawTextEx(
+            app_state.fonts[FONT_20],
+            fmt.ctprintf("ALBUM -> %s; entry_frame: %i", album.title, entry.frame),
+            {bounds.x + 10, f32(pos_y)},
+            FONT_20, 0, rl.ORANGE)
+
+        pos_y += 20
+    }
+}
+
 @private
 update_layout :: proc(app_state: ^App_State) {
     // -40 := 20px padding from left and right
