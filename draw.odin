@@ -1,6 +1,7 @@
 package main
 
 import "core:fmt"
+import "core:strings"
 import rl "vendor:raylib"
 import ma "vendor:miniaudio"
 
@@ -265,13 +266,16 @@ draw_artist_list :: proc(app_state: ^App_State) {
         if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_option_content_rect) {
             if rl.CheckCollisionPointRec(rl.GetMousePosition(), artist_item_bounds) {
                 if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
+                    // clicked on already active artist => Do nothing
+                    if artist == app_state.current_selected_artist do return
+
                     if artist == ALL_ARTISTS_OPTION {
                         app_state.current_selected_artist = nil
                     } else {
                         app_state.current_selected_artist = artist
                     }
                     app_state.main_panel_scroll_offset = 0
-                    build_rows(app_state)
+                    app_state.rebuild_rows = true
                 }
             }
         }
@@ -614,28 +618,31 @@ draw_debug_panel :: proc(app_state: ^App_State) {
 
     rl.DrawRectangleRec(bounds, rl.Fade(rl.BLACK, 0.5))
 
+    // @note: no memory allocation because it already exists on stack
+    buf: [32]u8
+    text := fmt.bprintf(buf[:], "%v", app_state.current_frame_rendered)
+    buf[len(text)] = 0
+    cstr := cstring(&buf[0])
+
     rl.DrawTextEx(
         app_state.fonts[FONT_20],
-        fmt.ctprintf("Current frame: %i", app_state.current_frame_rendered),
+        cstr,
         {bounds.x + 10, 20},
         FONT_20, 0, rl.ORANGE)
 
-
-    rl.DrawTextEx(
-        app_state.fonts[FONT_20],
-        fmt.ctprintf("cache count: %i", app_state.album_art_cache.count),
-        {bounds.x + 10, 40},
-        FONT_20, 0, rl.ORANGE)
-
     pos_y := 60
-    for entry, entry_idx in app_state.album_art_cache.entries {
+    for entry in app_state.album_art_cache.entries {
         if entry == nil do continue
 
         album := app_state.albums[entry.album_idx]
+
+        buf: [256]u8
+        text := fmt.bprintf(buf[:], "ALBUM -> %s; entry_frame: %i", album.title, entry.frame)
+        buf[len(text)] = 0
         
         rl.DrawTextEx(
             app_state.fonts[FONT_20],
-            fmt.ctprintf("ALBUM -> %s; entry_frame: %i", album.title, entry.frame),
+            cstring(&buf[0]),
             {bounds.x + 10, f32(pos_y)},
             FONT_20, 0, rl.ORANGE)
 

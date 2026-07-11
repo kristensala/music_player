@@ -62,6 +62,7 @@ Main_Panel :: struct {
     main_panel_scroll_offset: i32,
 
     rows: [dynamic]^Row,
+    rebuild_rows: bool,
     content_max_height: i32, // in pixels
 }
 
@@ -178,6 +179,7 @@ Side_Panel_Option :: enum i32 {
 init_state :: proc() -> ^App_State {
     app_state := new(App_State)
     app_state.active_viewport = .Main
+    app_state.rebuild_rows = true
     app_state.is_library_path_set = false
     app_state.ma_sound = nil
     app_state.audio_state = .Stopped
@@ -315,6 +317,10 @@ update_main :: proc(app_state: ^App_State) {
     process_album_art_queue(app_state)
     handle_keyboard_events(app_state)
 
+    if app_state.rebuild_rows {
+        build_rows(app_state)
+    }
+
     if ma.sound_at_end(app_state.ma_sound) {
         handle_next_song_pick(app_state)
     }
@@ -322,6 +328,7 @@ update_main :: proc(app_state: ^App_State) {
     if app_state.is_create_playlist_modal_open {
         app_state.active_viewport = .Create_Playlist_Modal
     }
+
 }
 
 @private
@@ -651,6 +658,9 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
 
 @private
 build_rows :: proc(app_state: ^App_State) {
+    assert(app_state.rebuild_rows == true)
+    app_state.rebuild_rows = false
+
     content_height : i32 = 0
 
     clear(&app_state.rows)
@@ -693,6 +703,8 @@ build_rows :: proc(app_state: ^App_State) {
     }
 
     app_state.content_max_height = content_height
+
+    assert(app_state.rebuild_rows == false)
 }
 
 @private
