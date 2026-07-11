@@ -182,13 +182,15 @@ init_state :: proc() -> ^App_State {
     app_state.ma_sound = nil
     app_state.audio_state = .Stopped
     app_state.selected_side_panel_option = .Artist_List // @todo: All_Music once implemented
+    app_state.library_path = "/home/salakris/Music/"
+    app_state.is_library_path_set = true
 
     load_assets(app_state)
-    load_config(app_state)
+    //load_config(app_state)
 
-    playlist_path, err := filepath.join({app_state.library_path, ".mppl"}, context.allocator)
+    /*playlist_path, err := filepath.join({app_state.library_path, ".mppl"}, context.allocator)
     assert(err == nil)
-    app_state.playlist_path = playlist_path
+    app_state.playlist_path = playlist_path*/
 
     app_state.side_panel_rect = rl.Rectangle{
         x = 0,
@@ -206,7 +208,6 @@ init_state :: proc() -> ^App_State {
         y = app_state.side_panel_rect.y + app_state.side_panel_options_rect.height,
         width = app_state.side_panel_rect.width,
     }
-
 
     app_state.main_panel_rect = rl.Rectangle{ x = app_state.side_panel_rect.width + 20, y = 20}
     app_state.playback_controls_panel_rect = rl.Rectangle{ x = 0, height = 170 }
@@ -253,7 +254,7 @@ main :: proc() {
         tmp_track := &app_state.tracks[0]
 
         add_track_to_playlist(tmp_playlist, tmp_track, app_state.library_path)*/
-        init_playlists_from_playlist_files(app_state)
+        //init_playlists_from_playlist_files(app_state)
     }
 
     engine_init_result := ma.engine_init(nil, &app_state.ma_engine)
@@ -368,8 +369,8 @@ destroy_state :: proc(app_state: ^App_State) {
     }
     delete(app_state.fonts)
 
-    delete(app_state.library_path)
-    delete(app_state.playlist_path)
+    //delete(app_state.library_path)
+    //delete(app_state.playlist_path)
     delete(app_state.create_playlist_modal_input)
 
     free(app_state)
@@ -650,9 +651,9 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
 
 @private
 build_rows :: proc(app_state: ^App_State) {
-    rows : [dynamic]^Row
     content_height : i32 = 0
 
+    clear(&app_state.rows)
     for &album, album_idx in app_state.albums {
         if app_state.current_selected_artist != nil {
             if album.artist != app_state.current_selected_artist do continue
@@ -662,7 +663,7 @@ build_rows :: proc(app_state: ^App_State) {
         album_title_row.is_album_row = true
         album_title_row.album_idx = i32(album_idx)
 
-        append(&rows, album_title_row)
+        append(&app_state.rows, album_title_row)
 
         content_height += ROW_HEIGHT
 
@@ -674,7 +675,7 @@ build_rows :: proc(app_state: ^App_State) {
             track_row := new(Row)
             track_row.track = track
 
-            append(&rows, track_row)
+            append(&app_state.rows, track_row)
 
             //content_height = pos_y + ROW_HEIGHT
             album_content_height += ROW_HEIGHT
@@ -683,7 +684,7 @@ build_rows :: proc(app_state: ^App_State) {
         if album_content_height < COVER_SIZE {
             diff := (COVER_SIZE - album_content_height) / ROW_HEIGHT
             for i in 0..<diff {
-                append(&rows, nil)
+                append(&app_state.rows, nil)
                 album_content_height += ROW_HEIGHT
             }
         }
@@ -691,7 +692,6 @@ build_rows :: proc(app_state: ^App_State) {
         content_height += album_content_height // padding after the album
     }
 
-    app_state.rows = rows
     app_state.content_max_height = content_height
 }
 
