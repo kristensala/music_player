@@ -74,11 +74,26 @@ Playback_Controls_Panel :: struct {
     previous_button_texture: rl.Texture2D
 }
 
+Create_Playlist_Modal :: struct {
+    create_playlist_modal_rect: rl.Rectangle,
+    create_playlist_modal_input: [dynamic]rune,
+
+    is_create_playlist_modal_open: bool
+}
+
+Active_Viewport :: enum i32 {
+    Main = 0,
+    Create_Playlist_Modal = 1
+}
+
 // @todo: should App_State have it's own allocator?
 App_State :: struct {
+    active_viewport: Active_Viewport,
+
     using main_panel: Main_Panel,
     using side_panel: Side_Panel,
     using playback_controls_panel: Playback_Controls_Panel,
+    using create_playlist_modal: Create_Playlist_Modal,
 
     fonts: map[i32]rl.Font,
 
@@ -162,6 +177,7 @@ Side_Panel_Option :: enum i32 {
 @require_results
 init_state :: proc() -> ^App_State {
     app_state := new(App_State)
+    app_state.active_viewport = .Main
     app_state.is_library_path_set = false
     app_state.ma_sound = nil
     app_state.audio_state = .Stopped
@@ -190,6 +206,7 @@ init_state :: proc() -> ^App_State {
         y = app_state.side_panel_rect.y + app_state.side_panel_options_rect.height,
         width = app_state.side_panel_rect.width,
     }
+
 
     app_state.main_panel_rect = rl.Rectangle{ x = app_state.side_panel_rect.width + 20, y = 20}
     app_state.playback_controls_panel_rect = rl.Rectangle{ x = 0, height = 170 }
@@ -267,6 +284,10 @@ main :: proc() {
 
         if app_state.is_library_path_set {
             draw_main(app_state)
+
+            if app_state.is_create_playlist_modal_open {
+                draw_create_playlist_modal(app_state)
+            }
         } else {
             draw_insert_library_path_screen(app_state)
         }
@@ -295,6 +316,10 @@ update_main :: proc(app_state: ^App_State) {
 
     if ma.sound_at_end(app_state.ma_sound) {
         handle_next_song_pick(app_state)
+    }
+
+    if app_state.is_create_playlist_modal_open {
+        app_state.active_viewport = .Create_Playlist_Modal
     }
 }
 
@@ -342,8 +367,10 @@ destroy_state :: proc(app_state: ^App_State) {
         rl.UnloadFont(value)
     }
     delete(app_state.fonts)
+
     delete(app_state.library_path)
     delete(app_state.playlist_path)
+    delete(app_state.create_playlist_modal_input)
 
     free(app_state)
 }
@@ -488,6 +515,17 @@ load_config :: proc(app_state: ^App_State) {
 
 @private
 handle_keyboard_events :: proc(app_state: ^App_State) {
+    switch app_state.active_viewport {
+    case .Main:
+        handle_main_view_keyboard_events(app_state)
+    case .Create_Playlist_Modal:
+        handle_create_playlist_modal_keyboard_events(app_state)
+    }
+}
+
+handle_main_view_keyboard_events :: proc(app_state: ^App_State) {
+    assert(app_state.active_viewport == .Main)
+
     if rl.IsKeyPressed(rl.KeyboardKey.SPACE) {
         if app_state.ma_sound == nil {
             return
@@ -499,6 +537,34 @@ handle_keyboard_events :: proc(app_state: ^App_State) {
     if rl.IsKeyPressed(rl.KeyboardKey.D) {
         app_state.show_debug_panel = !app_state.show_debug_panel
     }
+}
+
+// @todo
+handle_create_playlist_modal_keyboard_events :: proc(app_state: ^App_State) {
+    assert(app_state.active_viewport == .Create_Playlist_Modal)
+
+    input := rl.GetCharPressed()
+    if input > 0 {
+        append(&app_state.create_playlist_modal_input, input)
+    }
+
+    if rl.IsKeyPressed(rl.KeyboardKey.ESCAPE) {
+        clear(&app_state.create_playlist_modal_input)
+
+        app_state.is_create_playlist_modal_open = false
+        app_state.active_viewport = .Main
+
+    }
+
+    if rl.IsKeyPressed(rl.KeyboardKey.ENTER) {
+        // @todo: create the playlist
+        // do not allow empty input or duplicate playlist names
+
+        /*clear(&app_state.create_playlist_modal_input)
+        app_state.is_create_playlist_modal_open = false
+        app_state.active_viewport = .Main*/
+    }
+
 }
 
 @(private = "file")
@@ -525,6 +591,7 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
                 // after the tracks are found, use track file_path and match with the cover art path
 
                 //fmt.printfln(d.fullpath)
+                // @todo
                 tag, tl_error := tl.get_tag(d.fullpath)
                 //fmt.printfln("md.title len=%d value=%q", len(tag.title), tag.title)
 
@@ -562,6 +629,7 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
                 }
 
                 append(&app_state.tracks, track)
+                tl.tag_destroy(&tag)
 
                 if !slice.contains(app_state.artist_list[:], current_album.artist) {
                     append(&app_state.artist_list, current_album.artist)
@@ -671,8 +739,6 @@ process_album_art_queue :: proc(app_state: ^App_State) {
     for album_idx, idx in app_state.album_art_load_queue {
         album := &app_state.albums[album_idx]
 
-        fmt.println("loading album art for: ", album.title)
-
         if len(album.cover_art_path) > 0 {
             // cache is full
             if app_state.album_art_cache.count >= CACHE_MAX_CAPACITY {
@@ -757,14 +823,6 @@ invalidate_cache :: proc(app_state: ^App_State) {
         remove_entry_from_cache(&app_state.album_art_cache, entry_idx_to_remove)
         album.cover_art_cache_entry_idx = -1
     }
-
-    /*fmt.println("---start---")
-    for foo in app_state.album_art_cache.entries {
-        if foo != nil {
-            fmt.printfln("album Idx: %i; entry_frame: %i; current frame: %i", foo.album_idx, foo.frame, app_state.current_frame_rendered)
-        }
-    }
-    fmt.println("\n---end---")*/
 }
 
 @(private = "file")

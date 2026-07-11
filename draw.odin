@@ -195,6 +195,39 @@ handle_next_song_pick :: proc(app_state: ^App_State) {
 }
 
 @private
+draw_playlist_list :: proc(app_state: ^App_State) {
+    pos_y : f32 = app_state.side_panel_option_content_rect.y
+
+    new_playlist_rect_bounds := rl.Rectangle{
+        x = 0,
+        y = pos_y,
+        width = app_state.side_panel_option_content_rect.width,
+        height = SIDE_PANEL_ROW_HEIGHT
+    }
+    // center text
+    txt_measurement := rl.MeasureTextEx(app_state.fonts[20], "+ new playlist", FONT_20, 0)
+    //txt_y := ((new_playlist_rect_bounds.height - new_playlist_rect_bounds.y) / 2) + new_playlist_rect_bounds.y
+
+    txt_left_padding : f32 = 20
+    rl.DrawTextEx(
+        app_state.fonts[FONT_20],
+        "+ new playlist",
+        {new_playlist_rect_bounds.x + txt_left_padding, pos_y},
+        FONT_20, 0, rl.BLACK)
+
+    if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_option_content_rect) {
+        if rl.CheckCollisionPointRec(rl.GetMousePosition(), new_playlist_rect_bounds) {
+            if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
+                app_state.is_create_playlist_modal_open = true
+                app_state.active_viewport = .Create_Playlist_Modal
+                // open enter playlist name prompt
+                //create_playlist(app_state, "test")
+            }
+        }
+    }
+}
+
+@private
 draw_artist_list :: proc(app_state: ^App_State) {
     pos_y : f32 = app_state.side_panel_option_content_rect.y + 10
     end_y := app_state.side_panel_option_content_rect.height + app_state.side_panel_option_content_rect.y
@@ -205,7 +238,6 @@ draw_artist_list :: proc(app_state: ^App_State) {
             break
         }
 
-        artist_txt_measurements := rl.MeasureTextEx(app_state.fonts[20], artist, FONT_20, 0)
         artist_item_bounds := rl.Rectangle{
             x = 0,
             y = pos_y,
@@ -218,6 +250,7 @@ draw_artist_list :: proc(app_state: ^App_State) {
         }
 
         // center text
+        artist_txt_measurements := rl.MeasureTextEx(app_state.fonts[20], artist, FONT_20, 0)
         txt_y := ((artist_item_bounds.height - artist_txt_measurements.y) / 2) + artist_item_bounds.y
 
         txt_left_padding : f32 = 20
@@ -342,7 +375,7 @@ draw_side_panel :: proc(app_state: ^App_State) {
     if app_state.selected_side_panel_option == .Artist_List {
         draw_artist_list(app_state)
     } else if app_state.selected_side_panel_option == .Playlists {
-        // @todo: draw_playlist_list()
+        draw_playlist_list(app_state)
     }
 
     rl.EndScissorMode()
@@ -392,7 +425,7 @@ draw_main_panel_content :: proc(app_state: ^App_State) {
 
     // Handle main panel scrolling
     wheel := rl.GetMouseWheelMove()
-    if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel_rect) {
+    if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel_rect) && app_state.active_viewport == .Main {
         if wheel < 0 { // scroll down
             //fmt.printfln("max height: %i; offset: %i; panel height: %f", app_state.content_max_height, app_state.main_panel_scroll_offset, app_state.main_panel.height)
             if app_state.main_panel_scroll_offset + i32(app_state.main_panel_rect.height) < app_state.content_max_height + 150 { // 150 just a random buffer to fix minor calcualtion mistakes
@@ -470,6 +503,7 @@ draw_track_list_item :: proc(app_state: ^App_State, pos_y: f32, row: ^Row) {
 
     // detect track clicked
     if (
+        app_state.active_viewport == .Main &&
         rl.CheckCollisionPointRec(rl.GetMousePosition(), list_item) &&
         rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel_rect)
     ) {
@@ -607,6 +641,31 @@ draw_debug_panel :: proc(app_state: ^App_State) {
 
         pos_y += 20
     }
+}
+
+// @todo: input field 
+draw_create_playlist_modal :: proc(app_state: ^App_State) {
+    assert(app_state.active_viewport == .Create_Playlist_Modal)
+
+    rl.DrawRectangleRec(rl.Rectangle{0, 0, f32(rl.GetScreenWidth()), f32(rl.GetScreenHeight())}, rl.Fade(rl.BLACK, 0.5))
+
+    // @todo: is it ok to do this inside draw?
+    app_state.create_playlist_modal_rect = rl.Rectangle{
+        x = f32(rl.GetScreenWidth() / 2 - 150),
+        y = 200,
+        height = 100,
+        width = 300
+    }
+    rl.DrawRectangleRec(app_state.create_playlist_modal_rect, rl.WHITE)
+
+    input_bounds := rl.Rectangle{
+        x = app_state.create_playlist_modal_rect.x + (app_state.create_playlist_modal_rect.width / 2) - 100,
+        y = app_state.create_playlist_modal_rect.y + 10,
+        height = 30,
+        width = 200
+    }
+    rl.DrawRectangleLinesEx(input_bounds, 1, rl.GRAY)
+    // @todo: draw the input text
 }
 
 @private

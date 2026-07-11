@@ -325,7 +325,6 @@ tag_destroy :: proc(tag: ^Tag) {
     delete(tag.title)
     delete(tag.album)
     delete(tag.artist)
-    free(tag)
 }
 
 @private
