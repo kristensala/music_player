@@ -568,12 +568,6 @@ destroy_state :: proc(app_state: ^App_State) {
     delete(app_state.tracks)
 
 
-    for p in app_state.playlists {
-        delete(p.tracks)
-    }
-    delete(app_state.playlists)
-
-
     rl.UnloadTexture(app_state.default_album_cover_texture)
     rl.UnloadTexture(app_state.play_button_texture)
     rl.UnloadTexture(app_state.pause_button_texture)

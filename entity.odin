@@ -27,7 +27,6 @@ App_State :: struct {
 
     tracks: [dynamic]Track,
     albums: [dynamic]Album,
-    playlists: [dynamic]Playlist,
 
     // @todo: playback_queue
     //queue: [dynamic]i32, //track indices
