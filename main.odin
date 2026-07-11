@@ -184,11 +184,9 @@ init_state :: proc() -> ^App_State {
     app_state.ma_sound = nil
     app_state.audio_state = .Stopped
     app_state.selected_side_panel_option = .Artist_List // @todo: All_Music once implemented
-    app_state.library_path = "/home/salakris/Music/"
-    app_state.is_library_path_set = true
 
     load_assets(app_state)
-    //load_config(app_state)
+    load_config(app_state)
 
     /*playlist_path, err := filepath.join({app_state.library_path, ".mppl"}, context.allocator)
     assert(err == nil)
@@ -376,7 +374,7 @@ destroy_state :: proc(app_state: ^App_State) {
     }
     delete(app_state.fonts)
 
-    //delete(app_state.library_path)
+    delete(app_state.library_path)
     //delete(app_state.playlist_path)
     delete(app_state.create_playlist_modal_input)
 
@@ -483,7 +481,7 @@ load_config :: proc(app_state: ^App_State) {
     }
     defer delete(config_file_path)
 
-    // @todo: handle error
+    // @todo: handle error. if not exist create else return
     file_info, file_info_err := os.stat(config_path, context.allocator)
     defer os.file_info_delete(file_info, context.allocator)
 
