@@ -488,7 +488,7 @@ draw_album_title_row :: proc(app_state: ^App_State, row: ^Row, pos_y: ^f32) {
         if len(album.cover_art_path) > 0 {
             fmt.println("add album to queue: ", album.title)
             request_cover_load(&app_state.album_art_load_queue, row.album_idx)
-        } else { // now cover. Load default placeholder
+        } else { // no cover. Load default placeholder
             rl.DrawTexture(app_state.default_album_cover_texture, i32(app_state.main_panel_rect.x), i32(pos_y^), rl.WHITE)
         }
     }

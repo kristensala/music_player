@@ -582,6 +582,12 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
     }
     defer delete(data)
 
+    sort.quick_sort_proc(data, proc(a, b: os.File_Info) -> int {
+        if a.name < b.name do return -1
+        if a.name > b.name do return 1
+        return 0
+    })
+
     album_map := make(map[cstring]int)
     defer delete(album_map)
 
@@ -642,7 +648,6 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
                 }
 
             } else if filepath.ext(d.fullpath) == ".jpg" || filepath.ext(d.fullpath) == ".jpeg" || filepath.ext(d.fullpath) == ".png" {
-                // found an image. Assume this is the cover for the album
                 if current_album != nil {
                     current_album.cover_art_path = strings.clone_to_cstring(d.fullpath)
                 }
@@ -752,16 +757,16 @@ process_album_art_queue :: proc(app_state: ^App_State) {
         if len(album.cover_art_path) > 0 {
             // cache is full
             if app_state.album_art_cache.count >= CACHE_MAX_CAPACITY {
-                cache_entry_idx, cache_entry := least_used_cover_art_idx(app_state)
+                cache_entry_idx, least_used_cache_entry := least_used_cover_art_idx(app_state)
 
-                least_used_album := &app_state.albums[cache_entry.album_idx]
-                least_used_album.cover_art_cache_entry_idx = -1
+                cache_entry_album := &app_state.albums[least_used_cache_entry.album_idx]
+                cache_entry_album.cover_art_cache_entry_idx = -1
 
-                current_entry := app_state.album_art_cache.entries[cache_entry_idx]
-                rl.UnloadTexture(current_entry.texture)
+                rl.UnloadTexture(least_used_cache_entry.texture)
 
-                app_state.album_art_cache.entries[cache_entry_idx] = {}
+                app_state.album_art_cache.entries[cache_entry_idx] = nil
                 app_state.album_art_cache.count -= 1
+                free(least_used_cache_entry)
 
                 img := rl.LoadImage(album.cover_art_path)
                 rl.ImageResize(&img, 200, 200)
@@ -841,6 +846,7 @@ remove_entry_from_cache :: proc(cache: ^Album_Art_Cache, entry_idx: i32) {
     if entry == nil do return
 
     rl.UnloadTexture(entry.texture)
+    free(entry)
     cache.entries[entry_idx] = nil
     cache.count -= 1
 
