@@ -303,6 +303,8 @@ main :: proc() {
         rl.EndDrawing()
     }
 
+    free_all(context.temp_allocator)
+
     // cleanup
     {
         destroy_state(app_state)
@@ -577,16 +579,15 @@ handle_create_playlist_modal_keyboard_events :: proc(app_state: ^App_State) {
 }
 
 // @todo: what if different artists have the same album name
+// example: chill bump - ego trip and Papa roach - ego trip
 init_library :: proc(app_state: ^App_State) {
     album_map := make(map[Album_Title]Album_Idx)
     defer delete(album_map)
 
-    current_album_identifier : Album_Title = nil
-
-    walk_music_dir_v2(app_state, app_state.library_path, &album_map, current_album_identifier)
+    walk_music_dir_v2(app_state, app_state.library_path, &album_map)
 }
 
-walk_music_dir_v2 :: proc(app_state: ^App_State, current_working_dir: string, album_map: ^map[Album_Title]Album_Idx, album_identifier: Album_Title) {
+walk_music_dir_v2 :: proc(app_state: ^App_State, current_working_dir: string, album_map: ^map[Album_Title]Album_Idx) {
     data, err := os.read_directory_by_path(current_working_dir, 0, context.allocator)
     if err != nil {
         fmt.printf("Could not read the dir", err)
@@ -606,17 +607,11 @@ walk_music_dir_v2 :: proc(app_state: ^App_State, current_working_dir: string, al
 
     for d in data {
         if d.type == .Directory {
-            walk_music_dir_v2(app_state, d.fullpath, album_map, "todo")
+            walk_music_dir_v2(app_state, d.fullpath, album_map)
         } else if d.type == .Regular {
             if filepath.ext(d.fullpath) == ".mp3" || filepath.ext(d.fullpath) == ".flac" || filepath.ext(d.fullpath) == ".wav" {
-                // @todo: if image found `cover.jpeg/png` save to a map with base path as key
-                // map[string]string and value as path to the cover art
-                // after the tracks are found, use track file_path and match with the cover art path
-
-                //fmt.printfln(d.fullpath)
-                // @todo
+                // @todo: handle error
                 tag, tl_error := tl.get_tag(d.fullpath)
-                //fmt.printfln("md.title len=%d value=%q", len(tag.title), tag.title)
 
                 track := Track{
                     title = strings.clone_to_cstring(tag.title),
@@ -628,7 +623,8 @@ walk_music_dir_v2 :: proc(app_state: ^App_State, current_working_dir: string, al
 
                 // create album
                 {
-                    idx, album_exists := album_map[track.album_title]
+                    album_identifier := fmt.ctprintf("%s-%s", current_working_dir, track.album_title)
+                    idx, album_exists := album_map[album_identifier]
                     if !album_exists {
                         idx = i32(len(app_state.albums))
 
@@ -640,7 +636,7 @@ walk_music_dir_v2 :: proc(app_state: ^App_State, current_working_dir: string, al
                         }
                         
                         append(&app_state.albums, album)
-                        album_map[track.album_title] = idx
+                        album_map[album_identifier] = idx
                     }
                     track.album_idx = i32(idx)
 
