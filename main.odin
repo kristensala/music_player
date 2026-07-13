@@ -33,6 +33,8 @@ CACHE_MAX_CAPACITY         :: 15
 ALL_ARTISTS_OPTION         :: "All Artists"
 
 Track_Idx :: i32
+Album_Idx :: i32
+Album_Title :: cstring
 
 Row :: struct {
     is_album_row    : bool, // if true then track is nil
@@ -214,7 +216,8 @@ init_state :: proc() -> ^App_State {
 
     if app_state.is_library_path_set {
         append(&app_state.artist_list, ALL_ARTISTS_OPTION)
-        walk_music_dir(app_state, app_state.library_path)
+        //walk_music_dir(app_state, app_state.library_path)
+        init_library(app_state)
         build_rows(app_state) // for ui
     }
 
@@ -573,6 +576,106 @@ handle_create_playlist_modal_keyboard_events :: proc(app_state: ^App_State) {
 
 }
 
+// @todo: what if different artists have the same album name
+init_library :: proc(app_state: ^App_State) {
+    album_map := make(map[Album_Title]Album_Idx)
+    defer delete(album_map)
+
+    current_album_identifier : Album_Title = nil
+
+    walk_music_dir_v2(app_state, app_state.library_path, &album_map, current_album_identifier)
+}
+
+walk_music_dir_v2 :: proc(app_state: ^App_State, current_working_dir: string, album_map: ^map[Album_Title]Album_Idx, album_identifier: Album_Title) {
+    data, err := os.read_directory_by_path(current_working_dir, 0, context.allocator)
+    if err != nil {
+        fmt.printf("Could not read the dir", err)
+        return
+    }
+    defer delete(data)
+
+    // @todo: ignore case
+    sort.quick_sort_proc(data, proc(a, b: os.File_Info) -> int {
+        if a.name < b.name do return -1
+        if a.name > b.name do return 1
+        return 0
+    })
+
+    current_album : ^Album
+    found_album_art_path : cstring
+
+    for d in data {
+        if d.type == .Directory {
+            walk_music_dir_v2(app_state, d.fullpath, album_map, "todo")
+        } else if d.type == .Regular {
+            if filepath.ext(d.fullpath) == ".mp3" || filepath.ext(d.fullpath) == ".flac" || filepath.ext(d.fullpath) == ".wav" {
+                // @todo: if image found `cover.jpeg/png` save to a map with base path as key
+                // map[string]string and value as path to the cover art
+                // after the tracks are found, use track file_path and match with the cover art path
+
+                //fmt.printfln(d.fullpath)
+                // @todo
+                tag, tl_error := tl.get_tag(d.fullpath)
+                //fmt.printfln("md.title len=%d value=%q", len(tag.title), tag.title)
+
+                track := Track{
+                    title = strings.clone_to_cstring(tag.title),
+                    artist = strings.clone_to_cstring(tag.artist),
+                    album_title = strings.clone_to_cstring(tag.album),
+                    file_name = strings.clone_to_cstring(d.name),
+                    file_path = strings.clone_to_cstring(d.fullpath)
+                }
+
+                // create album
+                {
+                    idx, album_exists := album_map[track.album_title]
+                    if !album_exists {
+                        idx = i32(len(app_state.albums))
+
+                        album := Album{
+                            title = track.album_title,
+                            artist = track.artist,
+                            cover_art_path = found_album_art_path,
+                            cover_art_cache_entry_idx = -1
+                        }
+                        
+                        append(&app_state.albums, album)
+                        album_map[track.album_title] = idx
+                    }
+                    track.album_idx = i32(idx)
+
+                    track_idx := len(app_state.tracks)
+                    append(&app_state.albums[idx].track_indices, i32(track_idx))
+
+                    track_pos := len(app_state.albums[idx].track_indices) - 1
+                    track.order_nr_in_album = i32(track_pos)
+
+                    current_album = &app_state.albums[len(app_state.albums) - 1]
+                }
+
+                append(&app_state.tracks, track)
+                tl.tag_destroy(&tag)
+
+                if !slice.contains(app_state.artist_list[:], current_album.artist) {
+                    append(&app_state.artist_list, current_album.artist)
+                }
+
+            } else if filepath.ext(d.fullpath) == ".jpg" || filepath.ext(d.fullpath) == ".jpeg" || filepath.ext(d.fullpath) == ".png" {
+                found_album_art_path = strings.clone_to_cstring(d.fullpath)
+                if current_album != nil {
+                    current_album.cover_art_path = found_album_art_path
+                }
+            }
+        }
+    }
+
+    // @todo: ignore case
+    sort.quick_sort(app_state.artist_list[1:])
+}
+
+// @bug: currently assumes that your folder structure is correct, meaning that albums are folder based.
+// Should read albums based on tag data.
+// Also if it finds an image as the first file then the current album does not exist and the album does not get the cover art
 @(private = "file")
 walk_music_dir :: proc(app_state: ^App_State, path: string) {
     data, err := os.read_directory_by_path(path, 0, context.allocator)
@@ -582,6 +685,7 @@ walk_music_dir :: proc(app_state: ^App_State, path: string) {
     }
     defer delete(data)
 
+    // @todo: ignore case
     sort.quick_sort_proc(data, proc(a, b: os.File_Info) -> int {
         if a.name < b.name do return -1
         if a.name > b.name do return 1
