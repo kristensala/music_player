@@ -26,6 +26,7 @@ Tag :: struct {
     title: string,
     artist: string,
     album: string,
+    album_artist: string
 }
 
 Tag_Field :: enum {
@@ -246,6 +247,8 @@ mp3_parse_tag :: proc(tag_data: []byte, tag_size: u32, major_version: u8) -> Tag
             result.album = decode_text(frame_data)
         case "TPE1": 
             result.artist = decode_text(frame_data)
+        case "TPE2": 
+            result.album_artist = decode_text(frame_data)
         }
 
         i = i + MP3_PADDING + int(frame_size)
@@ -325,10 +328,6 @@ tag_destroy :: proc(tag: ^Tag) {
     delete(tag.title)
     delete(tag.album)
     delete(tag.artist)
-
-    /*tag.title = ""
-    tag.album = ""
-    tag.artist = ""*/
 }
 
 @private

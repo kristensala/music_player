@@ -3,6 +3,7 @@
 ![Demo](/res/demo.png)
 ![Memory](/res/memory.png)
 
+- [ ] Logging and fix error handling
 - [ ] Playlist support
 - [ ] Debug cache invalidation (Something lives longer than it has to)
 - [ ] Fix taglib mp3 major version 2 parsing
@@ -14,3 +15,4 @@
 - [ ] Support playlist creation (~/.config/music_player/playlists/mppl0 etc)
 - [ ] Create/Read config file ~/.config/music_player/config
 - [ ] Command Palette for settings etc
+- [ ] File dialog lib: https://github.com/btzy/nativefiledialog-extended
