@@ -19,6 +19,7 @@ PAUSE_IMG_DATA :: #load("./res/pause.png")
 NEXT_IMG_DATA :: #load("./res/next.png")
 PREVIOUS_IMG_DATA :: #load("./res/previous.png")
 
+COVER_SIZE                 :: 200
 SCROLL_INCREMENT           :: 5 // five rows
 BOTTOM_BAR_PADDING         :: 50
 FONT_18                    :: 18
