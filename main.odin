@@ -41,6 +41,7 @@ Row :: struct {
     is_album_row    : bool, // if true then track is nil
     album_idx       : i32,
     track           : ^Track,
+    track_idx       : Track_Idx,
 }
 
 Playlist :: struct {
@@ -111,6 +112,7 @@ App_State :: struct {
     playlists: [dynamic]Playlist,
 
     queue: [dynamic]Track_Idx, // @todo: not implemented
+    current_position_in_queue: i32,
 
     default_album_cover_texture: rl.Texture2D,
 
@@ -119,6 +121,7 @@ App_State :: struct {
 
     audio_state: AudioState,
     currently_playing_track: ^Track,
+    currently_playing_track_idx: i32, // -1 means nothing is playing
 
     // filtering
     artist_list: [dynamic]cstring,
@@ -326,7 +329,7 @@ update_main :: proc(app_state: ^App_State) {
     }
 
     if ma.sound_at_end(app_state.ma_sound) {
-        handle_next_song_pick(app_state)
+        handle_next_song_pick_v2(app_state)
     }
 
     if app_state.is_create_playlist_modal_open {
@@ -377,6 +380,7 @@ destroy_state :: proc(app_state: ^App_State) {
     delete(app_state.library_path)
     //delete(app_state.playlist_path)
     delete(app_state.create_playlist_modal_input)
+    delete(app_state.queue)
 
     free(app_state)
 }
@@ -770,6 +774,7 @@ build_rows :: proc(app_state: ^App_State) {
         album_title_row := new(Row)
         album_title_row.is_album_row = true
         album_title_row.album_idx = i32(album_idx)
+        album_title_row.track_idx = -1
 
         append(&app_state.rows, album_title_row)
 
@@ -782,6 +787,7 @@ build_rows :: proc(app_state: ^App_State) {
 
             track_row := new(Row)
             track_row.track = track
+            track_row.track_idx = track_idx
 
             append(&app_state.rows, track_row)
 
@@ -803,6 +809,37 @@ build_rows :: proc(app_state: ^App_State) {
     app_state.content_max_height = content_height
 
     assert(app_state.rebuild_rows == false)
+}
+
+build_queue :: proc(app_state: ^App_State) {
+    clear(&app_state.queue)
+    app_state.current_position_in_queue = 0
+
+    assert(app_state.currently_playing_track_idx != -1)
+
+    for album, album_idx in app_state.albums[app_state.currently_playing_track.album_idx:] {
+        if album.artist != app_state.current_selected_artist && app_state.current_selected_artist != nil do break
+
+        found_current_track := false
+        is_current_album := i32(album_idx) == 0
+
+        for track_idx in album.track_indices {
+            if !is_current_album {
+                append(&app_state.queue, track_idx)
+                continue
+            }
+
+            if track_idx == app_state.currently_playing_track_idx {
+                found_current_track = true
+                append(&app_state.queue, track_idx)
+                continue
+            }
+
+            if found_current_track {
+                append(&app_state.queue, track_idx)
+            }
+        }
+    }
 }
 
 @private

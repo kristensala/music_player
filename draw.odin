@@ -109,7 +109,7 @@ draw_playback_controls :: proc(app_state: ^App_State) {
 
         if rl.CheckCollisionPointRec(rl.GetMousePosition(), next_song_button_bounds) {
             if rl.IsMouseButtonPressed(.LEFT) {
-                handle_next_song_pick(app_state)
+                handle_next_song_pick_v2(app_state)
             }
         }
     }
@@ -145,6 +145,46 @@ handle_play_pause :: proc(app_state: ^App_State) {
             app_state.audio_state = .Playing
         } else {
             fmt.eprintln("Could not start the sound: ", start_response)
+        }
+    }
+}
+
+handle_next_song_pick_v2 :: proc(app_state: ^App_State) {
+    assert(app_state.currently_playing_track != nil)
+
+    queue_len := i32(len(app_state.queue))
+    if queue_len == 0 {
+        fmt.println("Nothing in queue")
+        return
+    }
+
+    if app_state.current_position_in_queue == queue_len - 1 {
+        fmt.println("End of queue")
+        return
+    }
+
+    app_state.current_position_in_queue += 1
+    fmt.println("queue pos: ", app_state.current_position_in_queue)
+    next_track_idx := app_state.queue[app_state.current_position_in_queue]
+    next_track := &app_state.tracks[next_track_idx]
+
+    ma.sound_uninit(app_state.ma_sound)
+    app_state.ma_sound = nil
+    app_state.audio_state = .Stopped
+    app_state.currently_playing_track = nil
+    app_state.currently_playing_track_idx = -1
+
+    app_state.ma_sound = new(ma.sound)
+    res := ma.sound_init_from_file(&app_state.ma_engine, next_track.file_path, {.STREAM}, nil, nil, app_state.ma_sound)
+    if res != .SUCCESS {
+        app_state.ma_sound = nil
+        fmt.println("Could not start the next track")
+    } else {
+        sound_start_result := ma.sound_start(app_state.ma_sound)
+        if sound_start_result == .SUCCESS {
+            app_state.audio_state = .Playing
+            app_state.currently_playing_track = next_track
+            app_state.currently_playing_track_idx = next_track_idx
         }
     }
 }
@@ -514,7 +554,7 @@ draw_track_list_item :: proc(app_state: ^App_State, pos_y: f32, row: ^Row) {
         rl.DrawRectangleRec(list_item, rl.ORANGE)
 
         if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
-            handle_track_selection(app_state, row.track)
+            handle_track_selection(app_state, row.track, row.track_idx)
         }
     }
 
@@ -559,7 +599,7 @@ draw_track_list_item :: proc(app_state: ^App_State, pos_y: f32, row: ^Row) {
             txt_color)
     }
 
-    handle_track_selection :: proc(app_state: ^App_State, selected_track: ^Track) {
+    handle_track_selection :: proc(app_state: ^App_State, selected_track: ^Track, selected_track_idx: Track_Idx) {
         if app_state.ma_sound != nil {
             ma.sound_uninit(app_state.ma_sound)
             app_state.ma_sound = nil
@@ -575,6 +615,8 @@ draw_track_list_item :: proc(app_state: ^App_State, pos_y: f32, row: ^Row) {
             if sound_start_result == .SUCCESS {
                 app_state.audio_state = .Playing
                 app_state.currently_playing_track = selected_track
+                app_state.currently_playing_track_idx = selected_track_idx
+                build_queue(app_state)
             }
         }
     }
