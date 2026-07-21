@@ -91,7 +91,6 @@ Active_Viewport :: enum i32 {
     Create_Playlist_Modal = 1
 }
 
-// @todo: should App_State have it's own allocator?
 App_State :: struct {
     active_viewport: Active_Viewport,
 
@@ -113,6 +112,7 @@ App_State :: struct {
 
     queue: [dynamic]Track_Idx, // @todo: not implemented
     current_position_in_queue: i32,
+    rebuild_queue: bool,
 
     default_album_cover_texture: rl.Texture2D,
 
@@ -137,13 +137,12 @@ App_State :: struct {
 
 Album_Art_Cache :: struct {
     entries  : [CACHE_MAX_CAPACITY]^Album_Art_Cache_Entry,
-    count    : i32,
+    count    : i32, // cache count
 }
 
 Album_Art_Cache_Entry :: struct {
     texture      : rl.Texture2D,
     album_idx    : i32,
-
     frame        : u64 // last frame it was rendered
 }
 
@@ -186,6 +185,7 @@ init_state :: proc() -> ^App_State {
     app_state := new(App_State)
     app_state.active_viewport = .Main
     app_state.rebuild_rows = true
+    app_state.rebuild_queue = false
     app_state.is_library_path_set = false
     app_state.ma_sound = nil
     app_state.audio_state = .Stopped
@@ -332,6 +332,12 @@ update_main :: proc(app_state: ^App_State) {
         if !res {
             reset_player(app_state)
         }
+    }
+
+    if app_state.rebuild_queue {
+        build_queue(app_state)
+        find_and_set_current_position_in_queue(app_state)
+        app_state.rebuild_queue = false
     }
 
     if app_state.is_create_playlist_modal_open {
@@ -771,32 +777,6 @@ build_queue :: proc(app_state: ^App_State) {
             append(&app_state.queue, ..album.track_indices[:])
         }
     }
-
-    // @todo: if artist is selected
-
-    /*for album, album_idx in app_state.albums[app_state.currently_playing_track.album_idx:] {
-        if album.artist != app_state.current_selected_artist && app_state.current_selected_artist != nil do break
-
-        found_current_track := false
-        is_current_album := i32(album_idx) == 0
-
-        for track_idx in album.track_indices {
-            if !is_current_album {
-                append(&app_state.queue, track_idx)
-                continue
-            }
-
-            if track_idx == app_state.currently_playing_track_idx {
-                found_current_track = true
-                append(&app_state.queue, track_idx)
-                continue
-            }
-
-            if found_current_track {
-                append(&app_state.queue, track_idx)
-            }
-        }
-    }*/
 }
 
 @private

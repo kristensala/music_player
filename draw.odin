@@ -303,7 +303,6 @@ draw_artist_list :: proc(app_state: ^App_State) {
                     }
                     app_state.main_panel_scroll_offset = 0
                     app_state.rebuild_rows = true
-                    build_queue(app_state)
                 }
             }
         }
@@ -606,7 +605,7 @@ draw_track_list_item :: proc(app_state: ^App_State, pos_y: f32, row: ^Row) {
                 app_state.currently_playing_track = selected_track
                 app_state.currently_playing_track_idx = selected_track_idx
 
-                find_and_set_current_position_in_queue(app_state)
+                app_state.rebuild_queue = true
             }
         }
     }
