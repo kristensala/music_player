@@ -287,7 +287,7 @@ main :: proc() {
         }
 
         rl.BeginDrawing()
-        rl.ClearBackground(rl.RAYWHITE)
+        rl.ClearBackground(rl.BLACK)
 
 
         if app_state.is_library_path_set {

@@ -15,7 +15,7 @@ draw_main :: proc(app_state: ^App_State) {
             {0, app_state.main_panel_rect.y + app_state.main_panel_rect.height}, 
             {f32(rl.GetScreenWidth()), app_state.main_panel_rect.y + app_state.main_panel_rect.height},
             1.5,
-            rl.LIGHTGRAY
+            rl.GRAY
         )
         draw_playback_controls(app_state)
 
@@ -34,13 +34,13 @@ draw_main :: proc(app_state: ^App_State) {
                 app_state.fonts[FONT_18],
                 currently_playing_track_title,
                 {BOTTOM_BAR_PADDING, f32(rl.GetScreenHeight() - BOTTOM_BAR_PADDING - 70)},
-                FONT_18, 0, rl.BLACK)
+                FONT_18, 0, rl.WHITE)
 
             rl.DrawTextEx(
                 app_state.fonts[FONT_18],
                 currently_playing_artist,
                 {BOTTOM_BAR_PADDING, f32(rl.GetScreenHeight() - BOTTOM_BAR_PADDING - 50)},
-                FONT_18, 0, rl.PURPLE)
+                FONT_18, 0, rl.YELLOW)
 
             rl.DrawTextEx(
                 app_state.fonts[FONT_18],
@@ -80,12 +80,12 @@ draw_playback_controls :: proc(app_state: ^App_State) {
         rl.DrawTexture(
             app_state.pause_button_texture,
             i32(play_pause_button_bounds.x), i32(play_pause_button_bounds.y),
-            rl.BLACK)
+            rl.WHITE)
     } else if app_state.audio_state == .Paused || app_state.audio_state == .Stopped {
         rl.DrawTexture(
             app_state.play_button_texture,
             i32(play_pause_button_bounds.x), i32(play_pause_button_bounds.y),
-            rl.BLACK)
+            rl.WHITE)
     }
 
     if rl.CheckCollisionPointRec(rl.GetMousePosition(), play_pause_button_bounds) {
@@ -105,7 +105,7 @@ draw_playback_controls :: proc(app_state: ^App_State) {
         rl.DrawTexture(
             app_state.next_button_texture,
             i32(next_song_button_bounds.x), i32(next_song_button_bounds.y),
-            rl.BLACK)
+            rl.WHITE)
 
         if rl.CheckCollisionPointRec(rl.GetMousePosition(), next_song_button_bounds) {
             if rl.IsMouseButtonPressed(.LEFT) {
@@ -125,7 +125,7 @@ draw_playback_controls :: proc(app_state: ^App_State) {
         rl.DrawTexture(
             app_state.previous_button_texture,
             i32(prev_song_button_bounds.x), i32(prev_song_button_bounds.y),
-            rl.BLACK)
+            rl.WHITE)
 
         if rl.CheckCollisionPointRec(rl.GetMousePosition(), prev_song_button_bounds) {
             if rl.IsMouseButtonPressed(.LEFT) {
@@ -274,7 +274,7 @@ draw_artist_list :: proc(app_state: ^App_State) {
         }
 
         if artist == app_state.current_selected_artist || (artist == ALL_ARTISTS_OPTION && app_state.current_selected_artist == nil) {
-            rl.DrawRectangleRec(artist_item_bounds, rl.LIGHTGRAY)
+            rl.DrawRectangleRec(artist_item_bounds, rl.GRAY)
         }
 
         // center text
@@ -286,7 +286,7 @@ draw_artist_list :: proc(app_state: ^App_State) {
             app_state.fonts[FONT_20],
             artist,
             {artist_item_bounds.x + txt_left_padding, txt_y},
-            FONT_20, 0, rl.BLACK)
+            FONT_20, 0, rl.WHITE)
 
         pos_y += artist_item_bounds.height
 
@@ -354,7 +354,7 @@ draw_side_panel :: proc(app_state: ^App_State) {
             {app_state.side_panel_rect.x + 20, txt_y},
             FONT_20,
             0,
-            rl.BLACK)
+            rl.WHITE)
 
         playlists_option_bounds := rl.Rectangle{
             x = app_state.side_panel_options_rect.x,
@@ -376,7 +376,7 @@ draw_side_panel :: proc(app_state: ^App_State) {
             {app_state.side_panel_rect.x + 20, txt_y},
             FONT_20,
             0,
-            rl.BLACK)
+            rl.WHITE)
 
         // handle on options click
         if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_options_rect) {
@@ -395,7 +395,7 @@ draw_side_panel :: proc(app_state: ^App_State) {
         {0, app_state.side_panel_options_rect.y + app_state.side_panel_options_rect.height},
         {app_state.side_panel_options_rect.width, app_state.side_panel_options_rect.y + app_state.side_panel_options_rect.height},
         1.5,
-        rl.LIGHTGRAY)
+        rl.GRAY)
 
 
     rl.BeginScissorMode(
@@ -416,7 +416,7 @@ draw_side_panel :: proc(app_state: ^App_State) {
         {app_state.side_panel_rect.x + app_state.side_panel_rect.width, 0},
         {app_state.side_panel_rect.x + app_state.side_panel_rect.width, app_state.main_panel_rect.y + app_state.main_panel_rect.height},
         1.5,
-        rl.LIGHTGRAY
+        rl.GRAY
     )
 }
 
@@ -476,7 +476,7 @@ draw_main_panel_content :: proc(app_state: ^App_State) {
 
 @(private)
 draw_insert_library_path_screen :: proc(app_state: ^App_State) {
-    rl.DrawText("Set LIBRARY_PATH in ~/.config/music_player/config", 100, 100, FONT_30, rl.BLACK)
+    rl.DrawText("Set LIBRARY_PATH in ~/.config/music_player/config", 100, 100, FONT_30, rl.WHITE)
 }
 
 @(private = "file")
@@ -497,14 +497,14 @@ draw_album_title_row :: proc(app_state: ^App_State, row: ^Row, pos_y: ^f32) {
         { app_state.main_panel_rect.x, pos_y^},
         FONT_30,
         0,
-        rl.BLACK)
+        rl.WHITE)
 
     rl.DrawLine(
         i32(text_measurement.x + app_state.main_panel_rect.x + 20), 
         i32(pos_y^ + FONT_30 / 2),
         i32(app_state.main_panel_rect.width),
         i32(pos_y^ + FONT_30 / 2),
-        rl.PURPLE)
+        rl.GRAY)
 
     pos_y^ += ROW_HEIGHT
 
@@ -550,10 +550,10 @@ draw_track_list_item :: proc(app_state: ^App_State, pos_y: f32, row: ^Row) {
     text_measurement := rl.MeasureTextEx(app_state.fonts[FONT_20], "placeholder", FONT_20, 0)
     txt_y := ((list_item.height - text_measurement.y) / 2) + list_item.y
 
-    txt_color := rl.BLACK
+    txt_color := rl.WHITE
     is_playing := app_state.currently_playing_track != nil && row.track.file_path == app_state.currently_playing_track.file_path
     if is_playing {
-        txt_color = rl.PURPLE
+        txt_color = rl.YELLOW
     }
 
     // artist - album - title
@@ -636,7 +636,7 @@ draw_progress_bar :: proc(value: f32, max_value: f32, pos: [2]f32, w, h: f32) {
     rl.DrawRectangleRoundedLinesEx(
         bounds,
         0.1,
-        0, 2, rl.BLACK)
+        0, 2, rl.RAYWHITE)
 }
 
 draw_debug_panel :: proc(app_state: ^App_State) {
