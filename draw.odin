@@ -189,6 +189,7 @@ handle_next_song_pick_v2 :: proc(app_state: ^App_State) {
     }
 }
 
+// @todo: remove
 @private
 handle_next_song_pick :: proc(app_state: ^App_State) {
     current_album := app_state.albums[app_state.currently_playing_track.album_idx]

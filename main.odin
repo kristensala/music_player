@@ -220,7 +220,6 @@ init_state :: proc() -> ^App_State {
 
     if app_state.is_library_path_set {
         append(&app_state.artist_list, ALL_ARTISTS_OPTION)
-        //walk_music_dir(app_state, app_state.library_path)
         init_library(app_state)
         build_rows(app_state) // for ui
     }
@@ -586,6 +585,8 @@ init_library :: proc(app_state: ^App_State) {
     walk_music_dir_v2(app_state, app_state.library_path, &album_map)
 }
 
+// @todo: first read all the tracks and then build the albums.
+// How do I set the album art then?
 walk_music_dir_v2 :: proc(app_state: ^App_State, current_working_dir: string, album_map: ^map[Album_Title]Album_Idx) {
     data, err := os.read_directory_by_path(current_working_dir, 0, context.allocator)
     if err != nil {
@@ -596,8 +597,11 @@ walk_music_dir_v2 :: proc(app_state: ^App_State, current_working_dir: string, al
 
     // @todo: ignore case
     sort.quick_sort_proc(data, proc(a, b: os.File_Info) -> int {
-        if a.name < b.name do return -1
-        if a.name > b.name do return 1
+        x, err_x := strings.to_lower(a.name, context.temp_allocator)
+        y, err_y := strings.to_lower(b.name, context.temp_allocator)
+
+        if x < y do return -1
+        if x > y do return 1
         return 0
     })
 
@@ -664,13 +668,20 @@ walk_music_dir_v2 :: proc(app_state: ^App_State, current_working_dir: string, al
         }
     }
 
-    // @todo: ignore case
-    sort.quick_sort(app_state.artist_list[1:])
+    sort.quick_sort_proc(app_state.artist_list[1:], proc(a, b: cstring) -> int {
+        x, err_x := strings.to_lower(string(a), context.temp_allocator)
+        y, err_y := strings.to_lower(string(b), context.temp_allocator)
+
+        if x < y do return -1
+        if x > y do return 1
+        return 0
+    })
 }
 
 // @bug: currently assumes that your folder structure is correct, meaning that albums are folder based.
 // Should read albums based on tag data.
 // Also if it finds an image as the first file then the current album does not exist and the album does not get the cover art
+// @todo: remove; use _v2
 @(private = "file")
 walk_music_dir :: proc(app_state: ^App_State, path: string) {
     data, err := os.read_directory_by_path(path, 0, context.allocator)
@@ -811,6 +822,8 @@ build_rows :: proc(app_state: ^App_State) {
     assert(app_state.rebuild_rows == false)
 }
 
+// @todo: do not build a queue from current track.
+// queue should have all the tracks if there is no filtering
 build_queue :: proc(app_state: ^App_State) {
     clear(&app_state.queue)
     app_state.current_position_in_queue = 0
@@ -843,7 +856,7 @@ build_queue :: proc(app_state: ^App_State) {
 }
 
 @private
-least_used_cover_art_idx :: proc(app_state: ^App_State) -> (cache_entry_idx: i32, cache_entry: ^Album_Art_Cache_Entry) {
+least_used_cover_art_cache_entry :: proc(app_state: ^App_State) -> (cache_entry_idx: i32, cache_entry: ^Album_Art_Cache_Entry) {
     smallest_usage : u64
     entry_idx: i32
     e : ^Album_Art_Cache_Entry
@@ -889,7 +902,7 @@ process_album_art_queue :: proc(app_state: ^App_State) {
         if len(album.cover_art_path) > 0 {
             // cache is full
             if app_state.album_art_cache.count >= CACHE_MAX_CAPACITY {
-                cache_entry_idx, least_used_cache_entry := least_used_cover_art_idx(app_state)
+                cache_entry_idx, least_used_cache_entry := least_used_cover_art_cache_entry(app_state)
 
                 cache_entry_album := &app_state.albums[least_used_cache_entry.album_idx]
                 cache_entry_album.cover_art_cache_entry_idx = -1
