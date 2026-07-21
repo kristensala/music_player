@@ -222,6 +222,7 @@ init_state :: proc() -> ^App_State {
         append(&app_state.artist_list, ALL_ARTISTS_OPTION)
         init_library(app_state)
         build_rows(app_state) // for ui
+        build_queue(app_state)
     }
 
     return app_state
@@ -314,7 +315,6 @@ main :: proc() {
     }
 }
 
-
 @(private = "file")
 update_main :: proc(app_state: ^App_State) {
     app_state.current_frame_rendered += 1
@@ -328,13 +328,24 @@ update_main :: proc(app_state: ^App_State) {
     }
 
     if ma.sound_at_end(app_state.ma_sound) {
-        handle_next_song_pick_v2(app_state)
+        res := handle_next_song_pick(app_state)
+        if !res {
+            reset_player(app_state)
+        }
     }
 
     if app_state.is_create_playlist_modal_open {
         app_state.active_viewport = .Create_Playlist_Modal
     }
 
+}
+
+reset_player :: proc(app_state: ^App_State) {
+    ma.sound_uninit(app_state.ma_sound)
+    app_state.ma_sound = nil
+    app_state.audio_state = .Stopped
+    app_state.currently_playing_track = nil
+    app_state.currently_playing_track_idx = -1
 }
 
 @private
@@ -822,15 +833,39 @@ build_rows :: proc(app_state: ^App_State) {
     assert(app_state.rebuild_rows == false)
 }
 
-// @todo: do not build a queue from current track.
-// queue should have all the tracks if there is no filtering
+find_and_set_current_position_in_queue :: proc(app_state: ^App_State) {
+    assert(len(app_state.queue) > 0)
+
+    for track_idx, i in app_state.queue {
+        track_in_queue := app_state.tracks[track_idx]
+        if app_state.currently_playing_track.file_path == track_in_queue.file_path {
+            app_state.current_position_in_queue = i32(i)
+            break
+        }
+    }
+}
+
+// Initial build has all the tracks in queue,
+// unless there is an artist filter, or playlist selected(playlists not done)
 build_queue :: proc(app_state: ^App_State) {
     clear(&app_state.queue)
-    app_state.current_position_in_queue = 0
 
     assert(app_state.currently_playing_track_idx != -1)
 
-    for album, album_idx in app_state.albums[app_state.currently_playing_track.album_idx:] {
+    filtered_by_artist := app_state.current_selected_artist != nil
+    for album, album_idx in app_state.albums {
+        if filtered_by_artist {
+            if album.artist == app_state.current_selected_artist {
+                append(&app_state.queue, ..album.track_indices[:])
+            }
+        } else {
+            append(&app_state.queue, ..album.track_indices[:])
+        }
+    }
+
+    // @todo: if artist is selected
+
+    /*for album, album_idx in app_state.albums[app_state.currently_playing_track.album_idx:] {
         if album.artist != app_state.current_selected_artist && app_state.current_selected_artist != nil do break
 
         found_current_track := false
@@ -852,7 +887,7 @@ build_queue :: proc(app_state: ^App_State) {
                 append(&app_state.queue, track_idx)
             }
         }
-    }
+    }*/
 }
 
 @private

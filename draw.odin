@@ -109,7 +109,7 @@ draw_playback_controls :: proc(app_state: ^App_State) {
 
         if rl.CheckCollisionPointRec(rl.GetMousePosition(), next_song_button_bounds) {
             if rl.IsMouseButtonPressed(.LEFT) {
-                handle_next_song_pick_v2(app_state)
+                handle_next_song_pick(app_state)
             }
         }
     }
@@ -126,6 +126,12 @@ draw_playback_controls :: proc(app_state: ^App_State) {
             app_state.previous_button_texture,
             i32(prev_song_button_bounds.x), i32(prev_song_button_bounds.y),
             rl.BLACK)
+
+        if rl.CheckCollisionPointRec(rl.GetMousePosition(), prev_song_button_bounds) {
+            if rl.IsMouseButtonPressed(.LEFT) {
+                handle_prev_song_pick(app_state)
+            }
+        }
     }
 
 }
@@ -149,18 +155,46 @@ handle_play_pause :: proc(app_state: ^App_State) {
     }
 }
 
-handle_next_song_pick_v2 :: proc(app_state: ^App_State) {
+handle_prev_song_pick :: proc(app_state: ^App_State) -> bool {
+    if app_state.current_position_in_queue == 0 do return false
+
+    app_state.current_position_in_queue -= 1
+    prev_track_idx := app_state.queue[app_state.current_position_in_queue]
+    prev_track := &app_state.tracks[prev_track_idx]
+
+    reset_player(app_state)
+
+    app_state.ma_sound = new(ma.sound)
+    res := ma.sound_init_from_file(&app_state.ma_engine, prev_track.file_path, {.STREAM}, nil, nil, app_state.ma_sound)
+    if res != .SUCCESS {
+        app_state.ma_sound = nil
+        fmt.println("Could not start the next track")
+        return false
+    } else {
+        sound_start_result := ma.sound_start(app_state.ma_sound)
+        if sound_start_result == .SUCCESS {
+            app_state.audio_state = .Playing
+            app_state.currently_playing_track = prev_track
+            app_state.currently_playing_track_idx = prev_track_idx
+        }
+    }
+
+    return true
+}
+
+@private
+handle_next_song_pick :: proc(app_state: ^App_State) -> bool {
     assert(app_state.currently_playing_track != nil)
 
     queue_len := i32(len(app_state.queue))
     if queue_len == 0 {
         fmt.println("Nothing in queue")
-        return
+        return false
     }
 
     if app_state.current_position_in_queue == queue_len - 1 {
         fmt.println("End of queue")
-        return
+        return false
     }
 
     app_state.current_position_in_queue += 1
@@ -168,17 +202,14 @@ handle_next_song_pick_v2 :: proc(app_state: ^App_State) {
     next_track_idx := app_state.queue[app_state.current_position_in_queue]
     next_track := &app_state.tracks[next_track_idx]
 
-    ma.sound_uninit(app_state.ma_sound)
-    app_state.ma_sound = nil
-    app_state.audio_state = .Stopped
-    app_state.currently_playing_track = nil
-    app_state.currently_playing_track_idx = -1
+    reset_player(app_state)
 
     app_state.ma_sound = new(ma.sound)
     res := ma.sound_init_from_file(&app_state.ma_engine, next_track.file_path, {.STREAM}, nil, nil, app_state.ma_sound)
     if res != .SUCCESS {
         app_state.ma_sound = nil
         fmt.println("Could not start the next track")
+        return false
     } else {
         sound_start_result := ma.sound_start(app_state.ma_sound)
         if sound_start_result == .SUCCESS {
@@ -187,52 +218,8 @@ handle_next_song_pick_v2 :: proc(app_state: ^App_State) {
             app_state.currently_playing_track_idx = next_track_idx
         }
     }
-}
 
-// @todo: remove
-@private
-handle_next_song_pick :: proc(app_state: ^App_State) {
-    current_album := app_state.albums[app_state.currently_playing_track.album_idx]
-    next_track : ^Track = nil
-
-    assert(app_state.currently_playing_track != nil)
-
-    // Is last song of the album. Switch to the next one
-    if len(current_album.track_indices) - 1 == int(app_state.currently_playing_track.order_nr_in_album) {
-        is_last_album := len(app_state.albums) - 1  == int(app_state.currently_playing_track.album_idx)
-        if is_last_album {
-            app_state.currently_playing_track = nil
-            app_state.ma_sound = nil
-            app_state.audio_state = .Stopped
-            return
-        }
-
-        next_track_idx := app_state.albums[app_state.currently_playing_track.album_idx + 1].track_indices[0]
-        next_track = &app_state.tracks[next_track_idx]
-    } else {
-        next_track_idx := current_album.track_indices[app_state.currently_playing_track.order_nr_in_album + 1]
-        next_track = &app_state.tracks[next_track_idx]
-    }
-
-    ma.sound_uninit(app_state.ma_sound)
-    app_state.ma_sound = nil
-    app_state.audio_state = .Stopped
-    app_state.currently_playing_track = nil
-
-    if next_track != nil {
-        app_state.ma_sound = new(ma.sound)
-        res := ma.sound_init_from_file(&app_state.ma_engine, next_track.file_path, {.STREAM}, nil, nil, app_state.ma_sound)
-        if res != .SUCCESS {
-            app_state.ma_sound = nil
-            fmt.println("Could not start the next track")
-        } else {
-            sound_start_result := ma.sound_start(app_state.ma_sound)
-            if sound_start_result == .SUCCESS {
-                app_state.audio_state = .Playing
-                app_state.currently_playing_track = next_track
-            }
-        }
-    }
+    return true
 }
 
 @private
@@ -316,6 +303,7 @@ draw_artist_list :: proc(app_state: ^App_State) {
                     }
                     app_state.main_panel_scroll_offset = 0
                     app_state.rebuild_rows = true
+                    build_queue(app_state)
                 }
             }
         }
@@ -617,7 +605,8 @@ draw_track_list_item :: proc(app_state: ^App_State, pos_y: f32, row: ^Row) {
                 app_state.audio_state = .Playing
                 app_state.currently_playing_track = selected_track
                 app_state.currently_playing_track_idx = selected_track_idx
-                build_queue(app_state)
+
+                find_and_set_current_position_in_queue(app_state)
             }
         }
     }
