@@ -3,6 +3,8 @@
 ![Demo](/res/demo.png)
 ![Memory](/res/memory.png)
 
+- [ ] Shuffle queue
+- [ ] Repeat song or queue button
 - [ ] Logging and fix error handling
 - [ ] Playlist support
 - [ ] Debug cache invalidation (Something lives longer than it has to)
