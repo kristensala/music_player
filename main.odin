@@ -14,10 +14,10 @@ import tl "taglib"
 
 FONT_DATA :: #load("res/Inter.ttf")
 ALBUM_ART_PLACEHOLDER :: #load("./res/album_placeholder.png")
-PLAY_IMG_DATA :: #load("./res/play.png")
-PAUSE_IMG_DATA :: #load("./res/pause.png")
-NEXT_IMG_DATA :: #load("./res/next.png")
-PREVIOUS_IMG_DATA :: #load("./res/previous.png")
+PLAY_IMG_DATA :: #load("./res/play-white.png")
+PAUSE_IMG_DATA :: #load("./res/pause-white.png")
+NEXT_IMG_DATA :: #load("./res/forward-white.png")
+PREVIOUS_IMG_DATA :: #load("./res/backward-white.png")
 
 ALBUM_COVER_SIZE           :: 200
 SCROLL_INCREMENT           :: 5 // five rows
@@ -426,7 +426,7 @@ load_assets :: proc(app_state: ^App_State) {
     {
         play_btn_img := rl.LoadImageFromMemory(".png", raw_data(PLAY_IMG_DATA), i32(len(PLAY_IMG_DATA)))
         rl.ImageResize(&play_btn_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
-        app_state.play_button_texture =  rl.LoadTextureFromImage(play_btn_img)
+        app_state.play_button_texture = rl.LoadTextureFromImage(play_btn_img)
         rl.UnloadImage(play_btn_img)
     }
 
