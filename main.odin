@@ -12,36 +12,38 @@ import "core:path/filepath"
 import "core:os"
 import tl "taglib"
 
-FONT_DATA :: #load("res/IBMPlexMono-Regular.ttf")
+FONT_DATA :: #load("res/Inter.ttf")
 ALBUM_ART_PLACEHOLDER :: #load("./res/album_placeholder.png")
 PLAY_IMG_DATA :: #load("./res/play.png")
 PAUSE_IMG_DATA :: #load("./res/pause.png")
 NEXT_IMG_DATA :: #load("./res/next.png")
 PREVIOUS_IMG_DATA :: #load("./res/previous.png")
 
-COVER_SIZE                 :: 200
+ALBUM_COVER_SIZE           :: 200
 SCROLL_INCREMENT           :: 5 // five rows
 BOTTOM_BAR_PADDING         :: 50
 FONT_18                    :: 18
 FONT_20                    :: 20
 FONT_30                    :: 30
 PLAYBACK_BUTTON_SIZE       :: 30
-SIDE_PANEL_ROW_HEIGHT      :: 35
-ROW_HEIGHT                 :: 40
+SIDE_PANEL_ROW_HEIGHT      :: 30
+ROW_HEIGHT                 :: 30
 TRACK_LIST_OFFSET_X        :: 250
 CACHE_MAX_CAPACITY         :: 15
 
 ALL_ARTISTS_OPTION         :: "All Artists"
+
+CONFIG_LIBRARY_PATH_PREFIX : string = "LIBRARY_PATH="
 
 Track_Idx :: i32
 Album_Idx :: i32
 Album_Title :: cstring
 
 Row :: struct {
-    is_album_row    : bool, // if true then track is nil
-    album_idx       : i32,
-    track           : ^Track,
-    track_idx       : Track_Idx,
+    is_album_title_row  : bool, // if true then track is nil
+    album_idx           : i32,
+    track               : ^Track,
+    track_idx           : Track_Idx,
 }
 
 Playlist :: struct {
@@ -94,25 +96,25 @@ Active_Viewport :: enum i32 {
 App_State :: struct {
     active_viewport: Active_Viewport,
 
-    using main_panel: Main_Panel,
-    using side_panel: Side_Panel,
-    using playback_controls_panel: Playback_Controls_Panel,
-    using create_playlist_modal: Create_Playlist_Modal,
+    using main_panel              : Main_Panel,
+    using side_panel              : Side_Panel,
+    using playback_controls_panel : Playback_Controls_Panel,
+    using create_playlist_modal   : Create_Playlist_Modal,
 
     fonts: map[i32]rl.Font,
 
-    library_path: string,
-    is_library_path_set: bool,
+    library_path        : string,
+    is_library_path_set : bool,
 
     tracks: [dynamic]Track,
     albums: [dynamic]Album,
 
-    playlist_path: string,
-    playlists: [dynamic]Playlist,
+    playlist_path : string,
+    playlists     : [dynamic]Playlist,
 
-    queue: [dynamic]Track_Idx, // @todo: not implemented
-    current_position_in_queue: i32,
-    rebuild_queue: bool,
+    queue                     : [dynamic]Track_Idx,
+    current_position_in_queue : i32,
+    rebuild_queue             : bool,
 
     default_album_cover_texture: rl.Texture2D,
 
@@ -128,7 +130,7 @@ App_State :: struct {
     current_selected_artist: cstring, // nil means show all the tracks
 
     album_art_cache: Album_Art_Cache,
-    album_art_load_queue: [dynamic]i32, // ref album idx
+    album_art_load_queue: [dynamic]Album_Idx, // ref album idx
 
     current_frame_rendered: u64, // current rendered frame
 
@@ -156,7 +158,7 @@ Track :: struct {
     title: cstring,
     artist: cstring,
     album_title: cstring,
-    album_idx: i32, // @todo: use ^Album, then I can sort the Album list
+    album_idx: i32,
     file_path: cstring,
     file_name: cstring,
 
@@ -184,7 +186,6 @@ Side_Panel_Option :: enum i32 {
 init_state :: proc() -> ^App_State {
     app_state := new(App_State)
     app_state.active_viewport = .Main
-    app_state.rebuild_rows = true
     app_state.rebuild_queue = false
     app_state.is_library_path_set = false
     app_state.ma_sound = nil
@@ -192,17 +193,15 @@ init_state :: proc() -> ^App_State {
     app_state.selected_side_panel_option = .Artist_List // @todo: All_Music once implemented
 
     load_assets(app_state)
-    load_config(app_state)
+    is_load_config_success := load_config(app_state)
+    if is_load_config_success do app_state.rebuild_rows = true
 
     /*playlist_path, err := filepath.join({app_state.library_path, ".mppl"}, context.allocator)
     assert(err == nil)
     app_state.playlist_path = playlist_path*/
 
-    app_state.side_panel_rect = rl.Rectangle{
-        x = 0,
-        y = 0,
-        width = 300
-    }
+    app_state.side_panel_rect = rl.Rectangle{0, 0, 350, 0}
+
     app_state.side_panel_options_rect = rl.Rectangle{
         x = app_state.side_panel_rect.x,
         y = app_state.side_panel_rect.y,
@@ -289,25 +288,24 @@ main :: proc() {
         rl.BeginDrawing()
         rl.ClearBackground(rl.BLACK)
 
-
         if app_state.is_library_path_set {
             draw_main(app_state)
 
             if app_state.is_create_playlist_modal_open {
                 draw_create_playlist_modal(app_state)
             }
+
+            if app_state.show_debug_panel {
+                draw_debug_panel(app_state)
+            }
         } else {
             draw_insert_library_path_screen(app_state)
         }
 
-        if app_state.show_debug_panel {
-            draw_debug_panel(app_state)
-        }
-
         rl.EndDrawing()
-    }
 
-    free_all(context.temp_allocator)
+        free_all(context.temp_allocator)
+    }
 
     // cleanup
     {
@@ -381,7 +379,6 @@ destroy_state :: proc(app_state: ^App_State) {
     }
     delete(app_state.tracks)
 
-
     rl.UnloadTexture(app_state.default_album_cover_texture)
     rl.UnloadTexture(app_state.play_button_texture)
     rl.UnloadTexture(app_state.pause_button_texture)
@@ -405,9 +402,9 @@ destroy_state :: proc(app_state: ^App_State) {
 load_assets :: proc(app_state: ^App_State) {
     // fonts
     {
-        font_18 := rl.LoadFontFromMemory(".ttf", raw_data(FONT_DATA), i32(len(FONT_DATA)), 18, nil, 0)
-        font_20 := rl.LoadFontFromMemory(".ttf", raw_data(FONT_DATA), i32(len(FONT_DATA)), 20, nil, 0)
-        font_30 := rl.LoadFontFromMemory(".ttf", raw_data(FONT_DATA), i32(len(FONT_DATA)), 30, nil, 0)
+        font_18 := rl.LoadFontFromMemory(".ttf", raw_data(FONT_DATA), i32(len(FONT_DATA)), FONT_18, nil, 0)
+        font_20 := rl.LoadFontFromMemory(".ttf", raw_data(FONT_DATA), i32(len(FONT_DATA)), FONT_20, nil, 0)
+        font_30 := rl.LoadFontFromMemory(".ttf", raw_data(FONT_DATA), i32(len(FONT_DATA)), FONT_30, nil, 0)
 
         fonts := make(map[i32]rl.Font)
         fonts[FONT_18] = font_18
@@ -459,30 +456,30 @@ load_assets :: proc(app_state: ^App_State) {
 }
 
 @(private = "file")
-create_config_file :: proc(path: string) {
+create_config_file :: proc(path: string) -> bool {
     config_file, err := os.create(path)
     if err != nil {
         fmt.println("Could not create config file")
-        return
+        return false
     }
     defer os.close(config_file)
 
-    s := "LIBRARY_PATH="
-    _, err = os.write(config_file, transmute([]byte)s)
+    _, err = os.write(config_file, transmute([]byte)CONFIG_LIBRARY_PATH_PREFIX)
     if err != nil {
         fmt.eprintln("Could not write to config file")
-        return
+        return false
     }
 
+    return true
 }
 
 // @todo: windows
 @(private = "file")
-load_config :: proc(app_state: ^App_State) {
+load_config :: proc(app_state: ^App_State) -> bool {
     home_dir, err  := os.user_home_dir(context.allocator)
     if err != nil {
         fmt.eprintln(#procedure, "Failed to get user_home_dir: ", err)
-        return
+        return false
     }
 
     defer delete(home_dir)
@@ -490,14 +487,14 @@ load_config :: proc(app_state: ^App_State) {
     config_path, config_path_join_err := filepath.join({home_dir, ".config", "music_player"}, context.allocator)
     if config_path_join_err != nil {
         // @todo: handle error
-        return
+        return false
     }
     defer delete(config_path)
 
     config_file_path, config_file_path_join_err := filepath.join({config_path, "config"}, context.allocator)
     if config_file_path_join_err != nil {
         // @todo: handle err
-        return
+        return false
     }
     defer delete(config_file_path)
 
@@ -510,15 +507,19 @@ load_config :: proc(app_state: ^App_State) {
             file_data, err := os.read_entire_file_from_path(config_file_path, context.allocator)
             if err != nil {
                 fmt.eprintln("Could not read config file")
-                return
+                return false
             }
             defer delete(file_data)
 
             it := string(file_data)
             for line in strings.split_lines_iterator(&it) {
                 // process line
-                if strings.has_prefix(line, "LIBRARY_PATH=") {
-                    library_path := line[len("LIBRARY_PATH="):]
+                if strings.has_prefix(line, CONFIG_LIBRARY_PATH_PREFIX) {
+                    library_path := line[len(CONFIG_LIBRARY_PATH_PREFIX):]
+
+                    is_valid_library_path := os.exists(library_path)
+                    if !is_valid_library_path do continue
+
                     if len(library_path) > 0 {
                         app_state.library_path = strings.clone(library_path)
                         app_state.is_library_path_set = true
@@ -532,11 +533,13 @@ load_config :: proc(app_state: ^App_State) {
         mkdir_err := os.mkdir(config_path)
         if mkdir_err != nil {
             fmt.eprintln("Could not create music_player directory")
-            return
+            return false
         }
 
-        create_config_file(config_file_path)
+        return create_config_file(config_file_path)
     }
+
+    return true
 }
 
 @private
@@ -709,7 +712,7 @@ build_rows :: proc(app_state: ^App_State) {
         }
 
         album_title_row := new(Row)
-        album_title_row.is_album_row = true
+        album_title_row.is_album_title_row = true
         album_title_row.album_idx = i32(album_idx)
         album_title_row.track_idx = -1
 
@@ -732,8 +735,8 @@ build_rows :: proc(app_state: ^App_State) {
             album_content_height += ROW_HEIGHT
         }
 
-        if album_content_height < COVER_SIZE {
-            diff := (COVER_SIZE - album_content_height) / ROW_HEIGHT
+        if album_content_height < ALBUM_COVER_SIZE {
+            diff := (ALBUM_COVER_SIZE - album_content_height) / ROW_HEIGHT
             for i in 0..<diff {
                 append(&app_state.rows, nil)
                 album_content_height += ROW_HEIGHT

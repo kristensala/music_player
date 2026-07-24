@@ -257,10 +257,12 @@ draw_playlist_list :: proc(app_state: ^App_State) {
 
 @private
 draw_artist_list :: proc(app_state: ^App_State) {
-    pos_y : f32 = app_state.side_panel_option_content_rect.y + 10
+    pos_y : f32 = app_state.side_panel_option_content_rect.y
     end_y := app_state.side_panel_option_content_rect.height + app_state.side_panel_option_content_rect.y
 
     start := i32(app_state.side_panel_scroll_offset / SIDE_PANEL_ROW_HEIGHT)
+    assert(start >= 0)
+
     for artist in app_state.artist_list[start:] {
         if pos_y >= end_y {
             break
@@ -278,7 +280,7 @@ draw_artist_list :: proc(app_state: ^App_State) {
         }
 
         // center text
-        artist_txt_measurements := rl.MeasureTextEx(app_state.fonts[20], artist, FONT_20, 0)
+        artist_txt_measurements := rl.MeasureTextEx(app_state.fonts[FONT_20], artist, FONT_20, 0)
         txt_y := ((artist_item_bounds.height - artist_txt_measurements.y) / 2) + artist_item_bounds.y
 
         txt_left_padding : f32 = 20
@@ -336,7 +338,7 @@ draw_side_panel :: proc(app_state: ^App_State) {
             x = app_state.side_panel_options_rect.x,
             y = app_state.side_panel_options_rect.y + 20,
             width = app_state.side_panel_options_rect.width,
-            height = 25
+            height = ROW_HEIGHT
         }
 
         // highlight the option
@@ -359,7 +361,7 @@ draw_side_panel :: proc(app_state: ^App_State) {
             x = app_state.side_panel_options_rect.x,
             y = app_state.side_panel_options_rect.y + 50,
             width = app_state.side_panel_options_rect.width,
-            height = 25
+            height = ROW_HEIGHT
         }
 
         // highlight the option
@@ -429,7 +431,11 @@ draw_main_panel_content :: proc(app_state: ^App_State) {
 
     pos_y := app_state.main_panel_rect.y
 
+    if len(app_state.rows) == 0 do return
+
     start := i32(app_state.main_panel_scroll_offset / ROW_HEIGHT)
+    assert(start >= 0)
+
     if start > i32(len(app_state.rows) - 1) {
         start = i32(len(app_state.rows) - 1)
     }
@@ -443,7 +449,7 @@ draw_main_panel_content :: proc(app_state: ^App_State) {
             continue
         }
 
-        if row.is_album_row {
+        if row.is_album_title_row {
             pos_y += ROW_HEIGHT
             draw_album_title_row(app_state, row, &pos_y)
         } else {

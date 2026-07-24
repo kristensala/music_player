@@ -3,6 +3,7 @@
 ![Demo](/res/demo.png)
 ![Memory](/res/memory.png)
 
+- [ ] Maybe?? add podcast rss feed??
 - [ ] Shuffle queue
 - [ ] Repeat song or queue button
 - [ ] Logging and fix error handling
