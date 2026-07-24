@@ -275,8 +275,10 @@ draw_artist_list :: proc(app_state: ^App_State) {
             height = SIDE_PANEL_ROW_HEIGHT
         }
 
+        artist_txt_color := rl.LIGHTGRAY
         if artist == app_state.current_selected_artist || (artist == ALL_ARTISTS_OPTION && app_state.current_selected_artist == nil) {
             rl.DrawRectangleRec(artist_item_bounds, rl.GRAY)
+            artist_txt_color = rl.WHITE
         }
 
         // center text
@@ -288,7 +290,7 @@ draw_artist_list :: proc(app_state: ^App_State) {
             app_state.fonts[FONT_20],
             artist,
             {artist_item_bounds.x + txt_left_padding, txt_y},
-            FONT_20, 0, rl.WHITE)
+            FONT_20, 0, artist_txt_color)
 
         pos_y += artist_item_bounds.height
 
@@ -555,7 +557,7 @@ draw_track_list_item :: proc(app_state: ^App_State, pos_y: f32, row: ^Row) {
     text_measurement := rl.MeasureTextEx(app_state.fonts[FONT_20], "placeholder", FONT_20, 0)
     txt_y := ((list_item.height - text_measurement.y) / 2) + list_item.y
 
-    txt_color := rl.WHITE
+    txt_color := rl.LIGHTGRAY
     is_playing := app_state.currently_playing_track != nil && row.track.file_path == app_state.currently_playing_track.file_path
     if is_playing {
         txt_color = rl.YELLOW
