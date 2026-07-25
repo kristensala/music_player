@@ -365,12 +365,14 @@ player_repeat_one :: proc(app_state: ^App_State) {
     res := ma.sound_seek_to_pcm_frame(app_state.ma_sound, 0)
     if res != .SUCCESS {
         fmt.println("Could not seek sound to 0 pcm frame: ", res)
+        reset_player(app_state)
         return
     }
 
     sound_start_result := ma.sound_start(app_state.ma_sound)
     if sound_start_result != .SUCCESS {
         fmt.println("Failed to start the sound", sound_start_result)
+        reset_player(app_state)
         return
     }
 }
