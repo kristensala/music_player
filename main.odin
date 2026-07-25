@@ -358,7 +358,6 @@ update_main :: proc(app_state: ^App_State) {
     if app_state.is_create_playlist_modal_open {
         app_state.active_viewport = .Create_Playlist_Modal
     }
-
 }
 
 player_repeat_one :: proc(app_state: ^App_State) {
@@ -527,67 +526,61 @@ create_config_file :: proc(path: string) -> bool {
 // @todo: windows
 @(private = "file")
 load_config :: proc(app_state: ^App_State) -> bool {
-    home_dir, err  := os.user_home_dir(context.allocator)
+    home_dir, err := os.user_home_dir(context.allocator)
     if err != nil {
         fmt.eprintln(#procedure, "Failed to get user_home_dir: ", err)
         return false
     }
-
     defer delete(home_dir)
 
     config_path, config_path_join_err := filepath.join({home_dir, ".config", "music_player"}, context.allocator)
     if config_path_join_err != nil {
-        // @todo: handle error
+        fmt.eprintln("filepath.join error for config: ", config_path_join_err)
         return false
     }
     defer delete(config_path)
 
     config_file_path, config_file_path_join_err := filepath.join({config_path, "config"}, context.allocator)
     if config_file_path_join_err != nil {
-        // @todo: handle err
+        fmt.eprintln("filepath.join error for config file: ", config_file_path_join_err)
         return false
     }
     defer delete(config_file_path)
 
-    // @todo: handle error. if not exist create else return
-    file_info, file_info_err := os.stat(config_path, context.allocator)
-    defer os.file_info_delete(file_info, context.allocator)
-
-    if file_info_err == nil && file_info.type == .Directory {
-        if os.exists(config_file_path) {
-            file_data, err := os.read_entire_file_from_path(config_file_path, context.allocator)
-            if err != nil {
-                fmt.eprintln("Could not read config file")
-                return false
-            }
-            defer delete(file_data)
-
-            it := string(file_data)
-            for line in strings.split_lines_iterator(&it) {
-                // process line
-                if strings.has_prefix(line, CONFIG_LIBRARY_PATH_PREFIX) {
-                    library_path := line[len(CONFIG_LIBRARY_PATH_PREFIX):]
-
-                    is_valid_library_path := os.exists(library_path)
-                    if !is_valid_library_path do continue
-
-                    if len(library_path) > 0 {
-                        app_state.library_path = strings.clone(library_path)
-                        app_state.is_library_path_set = true
-                    }
-                }
-            }
-        } else {
-            create_config_file(config_file_path)
-        }
-    } else {
+    config_path_exists := os.exists(config_path)
+    if !config_path_exists {
         mkdir_err := os.mkdir(config_path)
         if mkdir_err != nil {
             fmt.eprintln("Could not create music_player directory")
             return false
         }
+    }
 
-        return create_config_file(config_file_path)
+    if !os.exists(config_file_path) {
+        create_result := create_config_file(config_file_path)
+        if !create_result do return false
+    }
+
+    file_data, read_err := os.read_entire_file_from_path(config_file_path, context.allocator)
+    if read_err != nil {
+        fmt.eprintln("Could not read config file: ", read_err)
+        return false
+    }
+    defer delete(file_data)
+
+    it := string(file_data)
+    for line in strings.split_lines_iterator(&it) {
+        // process line
+        if strings.has_prefix(line, CONFIG_LIBRARY_PATH_PREFIX) {
+            library_path := line[len(CONFIG_LIBRARY_PATH_PREFIX):]
+            is_valid_library_path := os.exists(library_path)
+            if !is_valid_library_path do continue
+
+            if len(library_path) > 0 {
+                app_state.library_path = strings.clone(library_path)
+                app_state.is_library_path_set = true
+            }
+        }
     }
 
     return true
@@ -1114,6 +1107,7 @@ remove_track_from_playlist :: proc(playlist: ^Playlist, track_to_remove: Track) 
 
 @require_results
 get_or_create_playlist_dir :: proc(path: string) -> os.Error {
+    // @todo: should be able to use os.exists
     file_info, file_info_err := os.stat(path, context.allocator)
     if file_info_err != nil || file_info.type != .Directory {
         err := os.mkdir(path)
