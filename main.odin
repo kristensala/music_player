@@ -12,12 +12,14 @@ import "core:path/filepath"
 import "core:os"
 import tl "taglib"
 
-FONT_DATA :: #load("res/Inter.ttf")
-ALBUM_ART_PLACEHOLDER :: #load("./res/album_placeholder.png")
-PLAY_IMG_DATA :: #load("./res/play-white.png")
-PAUSE_IMG_DATA :: #load("./res/pause-white.png")
-NEXT_IMG_DATA :: #load("./res/forward-white.png")
-PREVIOUS_IMG_DATA :: #load("./res/backward-white.png")
+FONT_DATA :: #load("assets/Inter.ttf")
+ALBUM_ART_PLACEHOLDER :: #load("./assets/album_placeholder.png")
+PLAY_IMG_DATA :: #load("./assets/play-white.png")
+PAUSE_IMG_DATA :: #load("./assets/pause-white.png")
+REPEAT_IMG_DATA :: #load("./assets/repeat-white.png")
+REPEAT_ONE_IMG_DATA :: #load("./assets/repeat-one-white.png")
+NEXT_IMG_DATA :: #load("./assets/forward-white.png")
+PREVIOUS_IMG_DATA :: #load("./assets/backward-white.png")
 
 ALBUM_COVER_SIZE           :: 200
 SCROLL_INCREMENT           :: 5 // five rows
@@ -78,7 +80,9 @@ Playback_Controls_Panel :: struct {
     play_button_texture: rl.Texture2D,
     pause_button_texture: rl.Texture2D,
     next_button_texture: rl.Texture2D,
-    previous_button_texture: rl.Texture2D
+    previous_button_texture: rl.Texture2D,
+    repeat_button_texture: rl.Texture2D,
+    repeat_one_button_texture: rl.Texture2D
 }
 
 Create_Playlist_Modal :: struct {
@@ -93,8 +97,16 @@ Active_Viewport :: enum i32 {
     Create_Playlist_Modal = 1
 }
 
+Playback_Mode :: enum i32 {
+    Normal = 0,
+    Repeat_One = 1,
+    Repeat_Queue = 2,
+    Shuffle = 3
+}
+
 App_State :: struct {
     active_viewport: Active_Viewport,
+    playback_mode: Playback_Mode,
 
     using main_panel              : Main_Panel,
     using side_panel              : Side_Panel,
@@ -186,6 +198,7 @@ Side_Panel_Option :: enum i32 {
 init_state :: proc() -> ^App_State {
     app_state := new(App_State)
     app_state.active_viewport = .Main
+    app_state.playback_mode = .Normal
     app_state.rebuild_queue = false
     app_state.is_library_path_set = false
     app_state.ma_sound = nil
@@ -326,9 +339,13 @@ update_main :: proc(app_state: ^App_State) {
     }
 
     if ma.sound_at_end(app_state.ma_sound) {
-        res := handle_next_song_pick(app_state)
-        if !res {
-            reset_player(app_state)
+        if app_state.playback_mode == .Normal {
+            res := handle_next_song_pick(app_state)
+            if !res {
+                reset_player(app_state)
+            }
+        } else if app_state.playback_mode == .Repeat_One {
+            player_repeat_one(app_state)
         }
     }
 
@@ -342,6 +359,20 @@ update_main :: proc(app_state: ^App_State) {
         app_state.active_viewport = .Create_Playlist_Modal
     }
 
+}
+
+player_repeat_one :: proc(app_state: ^App_State) {
+    res := ma.sound_seek_to_pcm_frame(app_state.ma_sound, 0)
+    if res != .SUCCESS {
+        fmt.println("Could not seek sound to 0 pcm frame: ", res)
+        return
+    }
+
+    sound_start_result := ma.sound_start(app_state.ma_sound)
+    if sound_start_result != .SUCCESS {
+        fmt.println("Failed to start the sound", sound_start_result)
+        return
+    }
 }
 
 reset_player :: proc(app_state: ^App_State) {
@@ -384,6 +415,8 @@ destroy_state :: proc(app_state: ^App_State) {
     rl.UnloadTexture(app_state.pause_button_texture)
     rl.UnloadTexture(app_state.next_button_texture)
     rl.UnloadTexture(app_state.previous_button_texture)
+    rl.UnloadTexture(app_state.repeat_button_texture)
+    rl.UnloadTexture(app_state.repeat_one_button_texture)
 
     for key, value in app_state.fonts {
         rl.UnloadFont(value)
@@ -452,6 +485,22 @@ load_assets :: proc(app_state: ^App_State) {
         rl.ImageResize(&prev_btn_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
         app_state.previous_button_texture =  rl.LoadTextureFromImage(prev_btn_img)
         rl.UnloadImage(prev_btn_img)
+    }
+
+    // Repeat button img
+    {
+        repeat_btn_img := rl.LoadImageFromMemory(".png", raw_data(REPEAT_IMG_DATA), i32(len(REPEAT_IMG_DATA)))
+        rl.ImageResize(&repeat_btn_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
+        app_state.repeat_button_texture =  rl.LoadTextureFromImage(repeat_btn_img)
+        rl.UnloadImage(repeat_btn_img)
+    }
+
+    // Repeat one button img
+    {
+        repeat_one_btn_img := rl.LoadImageFromMemory(".png", raw_data(REPEAT_ONE_IMG_DATA), i32(len(REPEAT_ONE_IMG_DATA)))
+        rl.ImageResize(&repeat_one_btn_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
+        app_state.repeat_one_button_texture =  rl.LoadTextureFromImage(repeat_one_btn_img)
+        rl.UnloadImage(repeat_one_btn_img)
     }
 }
 

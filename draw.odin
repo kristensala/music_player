@@ -134,6 +134,45 @@ draw_playback_controls :: proc(app_state: ^App_State) {
         }
     }
 
+    // repeat
+    {
+        button_bounds := rl.Rectangle{
+            x = f32(app_state.playback_controls_panel_rect.width / 2) - (PLAYBACK_BUTTON_SIZE / 2) + 100,
+            y = f32(rl.GetScreenHeight() - 110),
+            width = 50,
+            height = 50
+        }
+
+        if app_state.playback_mode == .Normal {
+            rl.DrawTexture(
+                app_state.repeat_button_texture,
+                i32(button_bounds.x), i32(button_bounds.y),
+                rl.WHITE)
+        } else if app_state.playback_mode == .Repeat_One {
+            rl.DrawTexture(
+                app_state.repeat_one_button_texture,
+                i32(button_bounds.x), i32(button_bounds.y),
+                rl.WHITE)
+        }
+
+
+        if rl.CheckCollisionPointRec(rl.GetMousePosition(), button_bounds) {
+            if rl.IsMouseButtonPressed(.LEFT) {
+                handle_repeat_pressed(app_state)
+            }
+        }
+    }
+
+}
+
+@private
+handle_repeat_pressed :: proc(app_state: ^App_State) {
+    current_mode := app_state.playback_mode
+
+    #partial switch current_mode {
+    case .Normal: app_state.playback_mode = .Repeat_One
+    case .Repeat_One: app_state.playback_mode = .Normal
+    }
 }
 
 @private

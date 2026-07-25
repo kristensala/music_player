@@ -1,8 +1,9 @@
 # music_player
 
-![Demo](/res/demo.png)
-![Memory](/res/memory.png)
+![Demo](/images/demo.png)
+![Memory](/images/memory.png)
 
+- [ ] D-Bus MPRIS support (so I can control the player with playerctl)
 - [ ] Maybe?? add podcast rss feed??
 - [ ] Shuffle queue
 - [ ] Repeat song or queue button
