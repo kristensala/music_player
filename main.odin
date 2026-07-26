@@ -17,7 +17,8 @@ ALBUM_ART_PLACEHOLDER :: #load("./assets/album_placeholder.png")
 PLAY_IMG_DATA :: #load("./assets/play-white.png")
 PAUSE_IMG_DATA :: #load("./assets/pause-white.png")
 REPEAT_IMG_DATA :: #load("./assets/repeat-white.png")
-REPEAT_ONE_IMG_DATA :: #load("./assets/repeat-one-white.png")
+REPEAT_ONE_IMG_DATA :: #load("./assets/repeat-one.png")
+REPEAT_QUEUE_IMG_DATA :: #load("./assets/repeat-queue.png")
 NEXT_IMG_DATA :: #load("./assets/forward-white.png")
 PREVIOUS_IMG_DATA :: #load("./assets/backward-white.png")
 
@@ -81,8 +82,10 @@ Playback_Controls_Panel :: struct {
     pause_button_texture: rl.Texture2D,
     next_button_texture: rl.Texture2D,
     previous_button_texture: rl.Texture2D,
+
     repeat_button_texture: rl.Texture2D,
-    repeat_one_button_texture: rl.Texture2D
+    repeat_one_button_texture: rl.Texture2D,
+    repeat_queue_button_texture: rl.Texture2D
 }
 
 Create_Playlist_Modal :: struct {
@@ -93,15 +96,15 @@ Create_Playlist_Modal :: struct {
 }
 
 Active_Viewport :: enum i32 {
-    Main = 0,
+    Main                  = 0,
     Create_Playlist_Modal = 1
 }
 
 Playback_Mode :: enum i32 {
-    Normal = 0,
-    Repeat_One = 1,
+    Normal       = 0,
+    Repeat_One   = 1,
     Repeat_Queue = 2,
-    Shuffle = 3
+    Shuffle      = 3
 }
 
 App_State :: struct {
@@ -128,8 +131,6 @@ App_State :: struct {
     current_position_in_queue : i32,
     rebuild_queue             : bool,
 
-    default_album_cover_texture: rl.Texture2D,
-
     ma_engine: ma.engine,
     ma_sound: ^ma.sound,
 
@@ -143,6 +144,7 @@ App_State :: struct {
 
     album_art_cache: Album_Art_Cache,
     album_art_load_queue: [dynamic]Album_Idx, // ref album idx
+    default_album_cover_texture: rl.Texture2D,
 
     current_frame_rendered: u64, // current rendered frame
 
@@ -339,9 +341,9 @@ update_main :: proc(app_state: ^App_State) {
     }
 
     if ma.sound_at_end(app_state.ma_sound) {
-        if app_state.playback_mode == .Normal {
-            res := handle_next_song_pick(app_state)
-            if !res {
+        if app_state.playback_mode == .Normal || app_state.playback_mode == .Repeat_Queue {
+            result := handle_next_song_pick(app_state)
+            if !result {
                 reset_player(app_state)
             }
         } else if app_state.playback_mode == .Repeat_One {
@@ -418,6 +420,7 @@ destroy_state :: proc(app_state: ^App_State) {
     rl.UnloadTexture(app_state.previous_button_texture)
     rl.UnloadTexture(app_state.repeat_button_texture)
     rl.UnloadTexture(app_state.repeat_one_button_texture)
+    rl.UnloadTexture(app_state.repeat_queue_button_texture)
 
     for key, value in app_state.fonts {
         rl.UnloadFont(value)
@@ -502,6 +505,14 @@ load_assets :: proc(app_state: ^App_State) {
         rl.ImageResize(&repeat_one_btn_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
         app_state.repeat_one_button_texture =  rl.LoadTextureFromImage(repeat_one_btn_img)
         rl.UnloadImage(repeat_one_btn_img)
+    }
+
+    // Repeat queue button img
+    {
+        repeat_queue_img := rl.LoadImageFromMemory(".png", raw_data(REPEAT_QUEUE_IMG_DATA), i32(len(REPEAT_QUEUE_IMG_DATA)))
+        rl.ImageResize(&repeat_queue_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
+        app_state.repeat_queue_button_texture =  rl.LoadTextureFromImage(repeat_queue_img)
+        rl.UnloadImage(repeat_queue_img)
     }
 }
 
@@ -824,6 +835,10 @@ build_queue :: proc(app_state: ^App_State) {
             append(&app_state.queue, ..album.track_indices[:])
         }
     }
+}
+
+shuffle_queue :: proc(app_state: ^App_State) {
+    // @todo
 }
 
 @private

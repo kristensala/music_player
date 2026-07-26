@@ -257,6 +257,19 @@ mp3_parse_tag :: proc(tag_data: []byte, tag_size: u32, major_version: u8) -> Tag
     return result
 }
 
+@private
+normalize_ascii :: proc(s: string) -> string {
+    builder := strings.builder_make()
+    for r in s {
+        switch r {
+        case '’': strings.write_rune(&builder, '\'')
+        case: strings.write_rune(&builder, r)
+        }
+    }
+
+    return strings.to_string(builder)
+}
+
 /*
    Frames that allow different types of text encoding contains a text
    encoding description byte. Possible encodings:

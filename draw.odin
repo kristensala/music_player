@@ -148,6 +148,11 @@ draw_playback_controls :: proc(app_state: ^App_State) {
                 app_state.repeat_button_texture,
                 i32(button_bounds.x), i32(button_bounds.y),
                 rl.WHITE)
+        } else if app_state.playback_mode == .Repeat_Queue {
+            rl.DrawTexture(
+                app_state.repeat_queue_button_texture,
+                i32(button_bounds.x), i32(button_bounds.y),
+                rl.WHITE)
         } else if app_state.playback_mode == .Repeat_One {
             rl.DrawTexture(
                 app_state.repeat_one_button_texture,
@@ -170,7 +175,8 @@ handle_repeat_pressed :: proc(app_state: ^App_State) {
     current_mode := app_state.playback_mode
 
     #partial switch current_mode {
-    case .Normal: app_state.playback_mode = .Repeat_One
+    case .Normal: app_state.playback_mode = .Repeat_Queue
+    case .Repeat_Queue: app_state.playback_mode = .Repeat_One
     case .Repeat_One: app_state.playback_mode = .Normal
     }
 }
@@ -231,13 +237,19 @@ handle_next_song_pick :: proc(app_state: ^App_State) -> bool {
         return false
     }
 
+    // reached end of the queue
     if app_state.current_position_in_queue == queue_len - 1 {
-        fmt.println("End of queue")
-        return false
+        if app_state.playback_mode == .Repeat_Queue {
+            // move back to the start of the queue
+            app_state.current_position_in_queue = 0
+        } else {
+            return false
+        }
+    } else {
+        // continue the queue
+        app_state.current_position_in_queue += 1
     }
 
-    app_state.current_position_in_queue += 1
-    fmt.println("queue pos: ", app_state.current_position_in_queue)
     next_track_idx := app_state.queue[app_state.current_position_in_queue]
     next_track := &app_state.tracks[next_track_idx]
 
@@ -246,8 +258,8 @@ handle_next_song_pick :: proc(app_state: ^App_State) -> bool {
     app_state.ma_sound = new(ma.sound)
     res := ma.sound_init_from_file(&app_state.ma_engine, next_track.file_path, {.STREAM}, nil, nil, app_state.ma_sound)
     if res != .SUCCESS {
-        app_state.ma_sound = nil
         fmt.println("Could not start the next track")
+        reset_player(app_state)
         return false
     } else {
         sound_start_result := ma.sound_start(app_state.ma_sound)
@@ -255,6 +267,8 @@ handle_next_song_pick :: proc(app_state: ^App_State) -> bool {
             app_state.audio_state = .Playing
             app_state.currently_playing_track = next_track
             app_state.currently_playing_track_idx = next_track_idx
+        } else {
+            return false
         }
     }
 
@@ -625,6 +639,7 @@ draw_track_list_item :: proc(app_state: ^App_State, pos_y: f32, row: ^Row) {
         if len(title) == 0 {
             title = row.track.file_name
         }
+
         rl.DrawTextEx(
             app_state.fonts[FONT_20],
             title,

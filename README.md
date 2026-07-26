@@ -3,7 +3,8 @@
 ![Demo](/images/demo.png)
 ![Memory](/images/memory.png)
 
-- [ ] D-Bus MPRIS support (so I can control the player with playerctl)
+- [ ] Unix domain socket (IPC) for playback control
+- [ ] Taglib text encoding bug (' is not properly encoded, returns ?)
 - [ ] Maybe?? add podcast rss feed??
 - [ ] Shuffle queue
 - [ ] Repeat song or queue button
