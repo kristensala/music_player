@@ -229,7 +229,11 @@ handle_prev_song_pick :: proc(app_state: ^App_State) -> bool {
 
 @private
 handle_next_song_pick :: proc(app_state: ^App_State) -> bool {
-    assert(app_state.currently_playing_track != nil)
+    // do not allow to pick a next track if there is no current track playing
+    // or if the player is in a Stopped state
+    if app_state.currently_playing_track == nil || app_state.audio_state == .Stopped {
+        return false
+    }
 
     queue_len := i32(len(app_state.queue))
     if queue_len == 0 {
@@ -237,12 +241,12 @@ handle_next_song_pick :: proc(app_state: ^App_State) -> bool {
         return false
     }
 
-    // reached end of the queue
     if app_state.current_position_in_queue == queue_len - 1 {
         if app_state.playback_mode == .Repeat_Queue {
             // move back to the start of the queue
             app_state.current_position_in_queue = 0
         } else {
+            // reached end of the queue
             return false
         }
     } else {

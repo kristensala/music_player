@@ -378,6 +378,7 @@ player_repeat_one :: proc(app_state: ^App_State) {
     }
 }
 
+// Sets the player into a Stopped state
 reset_player :: proc(app_state: ^App_State) {
     ma.sound_uninit(app_state.ma_sound)
     app_state.ma_sound = nil
