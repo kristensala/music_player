@@ -109,7 +109,7 @@ draw_playback_controls :: proc(app_state: ^App_State) {
 
         if rl.CheckCollisionPointRec(rl.GetMousePosition(), next_song_button_bounds) {
             if rl.IsMouseButtonPressed(.LEFT) {
-                handle_next_song_pick(app_state)
+                handle_next_track_pick(app_state)
             }
         }
     }
@@ -228,7 +228,7 @@ handle_prev_song_pick :: proc(app_state: ^App_State) -> bool {
 }
 
 @private
-handle_next_song_pick :: proc(app_state: ^App_State) -> bool {
+handle_next_track_pick :: proc(app_state: ^App_State) -> bool {
     // do not allow to pick a next track if there is no current track playing
     // or if the player is in a Stopped state
     if app_state.currently_playing_track == nil || app_state.audio_state == .Stopped {

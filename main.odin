@@ -342,7 +342,7 @@ update_main :: proc(app_state: ^App_State) {
 
     if ma.sound_at_end(app_state.ma_sound) {
         if app_state.playback_mode == .Normal || app_state.playback_mode == .Repeat_Queue {
-            result := handle_next_song_pick(app_state)
+            result := handle_next_track_pick(app_state)
             if !result {
                 reset_player(app_state)
             }
