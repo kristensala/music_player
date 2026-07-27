@@ -1,6 +1,7 @@
 package main
 
 import "core:fmt"
+import "core:unicode/utf8"
 import rl "vendor:raylib"
 import ma "vendor:miniaudio"
 
@@ -351,7 +352,7 @@ draw_artist_list :: proc(app_state: ^App_State) {
 
         pos_y += artist_item_bounds.height
 
-        if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_option_content_rect) {
+        if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_option_content_rect) && app_state.active_viewport == .Main {
             if rl.CheckCollisionPointRec(rl.GetMousePosition(), artist_item_bounds) {
                 if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
                     // clicked on already active artist => Do nothing
@@ -746,13 +747,58 @@ draw_debug_panel :: proc(app_state: ^App_State) {
     }
 }
 
+draw_search_panel :: proc(app_state: ^App_State) {
+    rl.DrawRectangleRec(rl.Rectangle{0, 0, f32(rl.GetScreenWidth()), f32(rl.GetScreenHeight())}, rl.Fade(rl.GRAY, 0.5))
+
+    app_state.search_panel_rect = rl.Rectangle{
+        x = f32(rl.GetScreenWidth() / 2 - 500),
+        y = 200,
+        height = 1000,
+        width = 1000
+    }
+
+    rl.DrawRectangleRec(app_state.search_panel_rect, rl.BLACK)
+
+    input := utf8.runes_to_string(app_state.search_input[:], context.temp_allocator)
+    cinput := fmt.ctprintf("%s", app_state.search_input)
+
+    rl.DrawTextEx(
+        app_state.fonts[FONT_18],
+        cinput,
+        {app_state.search_panel_rect.x, app_state.search_panel_rect.y},
+        FONT_18, 0, rl.WHITE)
+
+    y := app_state.search_panel_rect.y + 20
+    for key, value in app_state.search_results {
+        bounds := rl.Rectangle{app_state.search_panel_rect.x, y, 100, 20}
+        rl.DrawTextEx(
+            app_state.fonts[FONT_18],
+            value.artist_name,
+            {app_state.search_panel_rect.x, y},
+            FONT_18, 0, rl.WHITE)
+
+        if rl.CheckCollisionPointRec(rl.GetMousePosition(), bounds) {
+            if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
+                if value.artist_name == app_state.current_selected_artist do return
+
+                app_state.current_selected_artist = value.artist_name
+                app_state.main_panel_scroll_offset = 0
+                app_state.rebuild_rows = true
+                close_search_panel(app_state)
+            }
+        }
+
+        y += 20
+    }
+    // @todo: draw input
+}
+
 // @todo: input field 
 draw_create_playlist_modal :: proc(app_state: ^App_State) {
     assert(app_state.active_viewport == .Create_Playlist_Modal)
 
-    rl.DrawRectangleRec(rl.Rectangle{0, 0, f32(rl.GetScreenWidth()), f32(rl.GetScreenHeight())}, rl.Fade(rl.BLACK, 0.5))
+    rl.DrawRectangleRec(rl.Rectangle{0, 0, f32(rl.GetScreenWidth()), f32(rl.GetScreenHeight())}, rl.Fade(rl.LIGHTGRAY, 0.5))
 
-    // @todo: is it ok to do this inside draw?
     app_state.create_playlist_modal_rect = rl.Rectangle{
         x = f32(rl.GetScreenWidth() / 2 - 150),
         y = 200,

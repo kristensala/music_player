@@ -1,6 +1,7 @@
 package main
 
 import "core:fmt"
+import "core:unicode/utf8"
 import "core:strings"
 import "core:strconv"
 import "core:slice"
@@ -38,6 +39,7 @@ ALL_ARTISTS_OPTION         :: "All Artists"
 
 CONFIG_LIBRARY_PATH_PREFIX : string = "LIBRARY_PATH="
 
+EMPTY_IDX :: -1
 Track_Idx :: i32
 Album_Idx :: i32
 Album_Title :: cstring
@@ -88,6 +90,27 @@ Playback_Controls_Panel :: struct {
     repeat_queue_button_texture: rl.Texture2D
 }
 
+Search_Panel :: struct {
+    search_panel_rect: rl.Rectangle,
+
+    search_input: [dynamic]rune,
+    search_results: map[cstring]Search_Result_Row
+}
+
+Search_Result_Type :: enum {
+    Album,
+    Track,
+    Artist
+}
+
+Search_Result_Row :: struct {
+    type: Search_Result_Type,
+
+    artist_name: cstring,
+    track_idx: Track_Idx,
+    album_idx: Album_Idx
+}
+
 Create_Playlist_Modal :: struct {
     create_playlist_modal_rect: rl.Rectangle,
     create_playlist_modal_input: [dynamic]rune,
@@ -97,7 +120,8 @@ Create_Playlist_Modal :: struct {
 
 Active_Viewport :: enum i32 {
     Main                  = 0,
-    Create_Playlist_Modal = 1
+    Create_Playlist_Modal = 1,
+    Search                = 2
 }
 
 Playback_Mode :: enum i32 {
@@ -115,6 +139,7 @@ App_State :: struct {
     using side_panel              : Side_Panel,
     using playback_controls_panel : Playback_Controls_Panel,
     using create_playlist_modal   : Create_Playlist_Modal,
+    using search_panel            : Search_Panel,
 
     fonts: map[i32]rl.Font,
 
@@ -310,6 +335,10 @@ main :: proc() {
                 draw_create_playlist_modal(app_state)
             }
 
+            if app_state.active_viewport == .Search {
+                draw_search_panel(app_state)
+            }
+
             if app_state.show_debug_panel {
                 draw_debug_panel(app_state)
             }
@@ -384,7 +413,7 @@ reset_player :: proc(app_state: ^App_State) {
     app_state.ma_sound = nil
     app_state.audio_state = .Stopped
     app_state.currently_playing_track = nil
-    app_state.currently_playing_track_idx = -1
+    app_state.currently_playing_track_idx = EMPTY_IDX
 }
 
 @private
@@ -432,6 +461,9 @@ destroy_state :: proc(app_state: ^App_State) {
     //delete(app_state.playlist_path)
     delete(app_state.create_playlist_modal_input)
     delete(app_state.queue)
+
+    delete(app_state.search_input)
+    delete(app_state.search_results)
 
     free(app_state)
 }
@@ -605,6 +637,59 @@ handle_keyboard_events :: proc(app_state: ^App_State) {
         handle_main_view_keyboard_events(app_state)
     case .Create_Playlist_Modal:
         handle_create_playlist_modal_keyboard_events(app_state)
+    case .Search:
+        handle_search_panel_keyboard_events(app_state)
+    }
+}
+
+close_search_panel :: proc(app_state: ^App_State) {
+    app_state.active_viewport = .Main
+    clear(&app_state.search_input)
+    clear(&app_state.search_results)
+}
+
+// @todo
+handle_search_panel_keyboard_events :: proc(app_state: ^App_State) {
+    if rl.IsKeyPressed(rl.KeyboardKey.ESCAPE) {
+        close_search_panel(app_state)
+    }
+
+    if rl.IsKeyPressed(rl.KeyboardKey.BACKSPACE) {
+        if len(app_state.search_input) > 0 do pop(&app_state.search_input)
+        // @todo: update search results
+    }
+
+    input := rl.GetCharPressed()
+    if input > 0 {
+        append(&app_state.search_input, input)
+
+        input := utf8.runes_to_string(app_state.search_input[:], context.temp_allocator)
+        fmt.println("input: ", input)
+        for it in app_state.artist_list {
+            if strings.has_prefix(string(it), input) {
+                keys_to_remove: [dynamic]cstring
+                for key, value in app_state.search_results {
+                    if !strings.has_prefix(string(key), input) {
+                        append(&keys_to_remove, key)
+                    }
+                }
+
+                for it in keys_to_remove {
+                    delete_key(&app_state.search_results, it)
+                }
+                delete(keys_to_remove)
+
+                _, exists := app_state.search_results[it]
+                if !exists {
+                    result_row := Search_Result_Row{
+                        type = .Artist,
+                        artist_name = it
+                    }
+
+                    app_state.search_results[it] = result_row
+                }
+            }
+        }
     }
 }
 
@@ -617,6 +702,12 @@ handle_main_view_keyboard_events :: proc(app_state: ^App_State) {
         }
 
         handle_play_pause(app_state)
+    }
+
+    if rl.IsKeyDown(rl.KeyboardKey.LEFT_CONTROL) {
+        if rl.IsKeyPressed(rl.KeyboardKey.F) {
+            app_state.active_viewport = .Search
+        }
     }
 
     if rl.IsKeyPressed(rl.KeyboardKey.D) {
@@ -711,7 +802,7 @@ walk_music_dir :: proc(app_state: ^App_State, current_working_dir: string, album
                             title = track.album_title,
                             artist = track.artist,
                             cover_art_path = found_album_art_path,
-                            cover_art_cache_entry_idx = -1
+                            cover_art_cache_entry_idx = EMPTY_IDX
                         }
                         
                         append(&app_state.albums, album)
@@ -770,7 +861,7 @@ build_rows :: proc(app_state: ^App_State) {
         album_title_row := new(Row)
         album_title_row.is_album_title_row = true
         album_title_row.album_idx = i32(album_idx)
-        album_title_row.track_idx = -1
+        album_title_row.track_idx = EMPTY_IDX
 
         append(&app_state.rows, album_title_row)
 
@@ -824,7 +915,7 @@ find_and_set_current_position_in_queue :: proc(app_state: ^App_State) {
 build_queue :: proc(app_state: ^App_State) {
     clear(&app_state.queue)
 
-    assert(app_state.currently_playing_track_idx != -1)
+    assert(app_state.currently_playing_track_idx != EMPTY_IDX)
 
     filtered_by_artist := app_state.current_selected_artist != nil
     for album, album_idx in app_state.albums {
@@ -892,7 +983,7 @@ process_album_art_queue :: proc(app_state: ^App_State) {
                 cache_entry_idx, least_used_cache_entry := least_used_cover_art_cache_entry(app_state)
 
                 cache_entry_album := &app_state.albums[least_used_cache_entry.album_idx]
-                cache_entry_album.cover_art_cache_entry_idx = -1
+                cache_entry_album.cover_art_cache_entry_idx = EMPTY_IDX
 
                 rl.UnloadTexture(least_used_cache_entry.texture)
 
@@ -919,7 +1010,7 @@ process_album_art_queue :: proc(app_state: ^App_State) {
                 texture := rl.LoadTextureFromImage(img)
                 rl.UnloadImage(img)
 
-                idx := -1
+                idx := EMPTY_IDX
                 for e, i in app_state.album_art_cache.entries {
                     // look for the first empty entry
                     if e == nil {
@@ -968,7 +1059,7 @@ invalidate_cache :: proc(app_state: ^App_State) {
         if album == nil do continue
 
         remove_entry_from_cache(&app_state.album_art_cache, entry_idx_to_remove)
-        album.cover_art_cache_entry_idx = -1
+        album.cover_art_cache_entry_idx = EMPTY_IDX
     }
 }
 
