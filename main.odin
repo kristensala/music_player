@@ -669,7 +669,6 @@ close_search_panel :: proc(app_state: ^App_State) {
     clear(&app_state.search_results)
 }
 
-// @todo
 handle_search_panel_keyboard_events :: proc(app_state: ^App_State) {
     if rl.IsKeyPressed(rl.KeyboardKey.ESCAPE) {
         close_search_panel(app_state)
