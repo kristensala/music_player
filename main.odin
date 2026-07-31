@@ -11,6 +11,8 @@ import ma "vendor:miniaudio"
 import "core:mem"
 import "core:path/filepath"
 import "core:os"
+import "core:thread"
+import "core:sync"
 import tl "taglib"
 
 FONT_DATA :: #load("assets/Inter.ttf")
@@ -132,6 +134,8 @@ Playback_Mode :: enum i32 {
 }
 
 App_State :: struct {
+    mutex: sync.Mutex,
+    loading: bool,
     active_viewport: Active_Viewport,
     playback_mode: Playback_Mode,
 
@@ -257,6 +261,13 @@ init_state :: proc() -> ^App_State {
     app_state.main_panel_rect = rl.Rectangle{ x = app_state.side_panel_rect.width + 20, y = 20}
     app_state.playback_controls_panel_rect = rl.Rectangle{ x = 0, height = 170 }
 
+    return app_state
+}
+
+scan_library :: proc(app_state: ^App_State) {
+    sync.mutex_lock(&app_state.mutex)
+    app_state.loading = true
+
     if app_state.is_library_path_set {
         append(&app_state.artist_list, ALL_ARTISTS_OPTION)
         init_library(app_state)
@@ -264,7 +275,8 @@ init_state :: proc() -> ^App_State {
         build_queue(app_state)
     }
 
-    return app_state
+    app_state.loading = false
+    sync.mutex_unlock(&app_state.mutex)
 }
 
 main :: proc() {
@@ -292,6 +304,7 @@ main :: proc() {
     rl.SetExitKey(.KEY_NULL)
 
     app_state := init_state()
+    scanner := thread.create_and_start_with_poly_data(app_state, scan_library)
 
     // @nocheckin: testing
     {
@@ -320,7 +333,11 @@ main :: proc() {
             was_focused = is_focused
         }
 
-        if app_state.is_library_path_set {
+        sync.mutex_lock(&app_state.mutex)
+		loading := app_state.loading
+		sync.mutex_unlock(&app_state.mutex)
+
+        if app_state.is_library_path_set && !loading {
             update_main(app_state)
             update_layout(app_state)
         }
@@ -328,22 +345,24 @@ main :: proc() {
         rl.BeginDrawing()
         rl.ClearBackground(rl.BLACK)
 
-        if app_state.is_library_path_set {
-            draw_main(app_state)
+        if !loading {
+            if app_state.is_library_path_set {
+                draw_main(app_state)
 
-            if app_state.is_create_playlist_modal_open {
-                draw_create_playlist_modal(app_state)
-            }
+                if app_state.is_create_playlist_modal_open {
+                    draw_create_playlist_modal(app_state)
+                }
 
-            if app_state.active_viewport == .Search {
-                draw_search_panel(app_state)
-            }
+                if app_state.active_viewport == .Search {
+                    draw_search_panel(app_state)
+                }
 
-            if app_state.show_debug_panel {
-                draw_debug_panel(app_state)
+                if app_state.show_debug_panel {
+                    draw_debug_panel(app_state)
+                }
+            } else {
+                draw_insert_library_path_screen(app_state)
             }
-        } else {
-            draw_insert_library_path_screen(app_state)
         }
 
         rl.EndDrawing()
@@ -353,6 +372,8 @@ main :: proc() {
 
     // cleanup
     {
+        thread.join(scanner)
+        thread.destroy(scanner)
         destroy_state(app_state)
     }
 }
