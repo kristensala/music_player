@@ -1,6 +1,7 @@
 package main
 
 import "core:fmt"
+import "core:log"
 import "core:unicode/utf8"
 import rl "vendor:raylib"
 import ma "vendor:miniaudio"
@@ -189,14 +190,14 @@ handle_play_pause :: proc(app_state: ^App_State) {
         if stop_response == .SUCCESS {
             app_state.audio_state = .Paused
         } else {
-            fmt.eprintln("Could not stop the sound: ", stop_response)
+            log.errorf("ma.sound_stop failed: %v", stop_response)
         }
     } else if app_state.audio_state == .Paused && app_state.ma_sound != nil {
         start_response := ma.sound_start(app_state.ma_sound)
         if start_response == .SUCCESS {
             app_state.audio_state = .Playing
         } else {
-            fmt.eprintln("Could not start the sound: ", start_response)
+            log.errorf("ma.sound_start failed: %v", start_response)
         }
     }
 }
@@ -214,7 +215,7 @@ handle_prev_song_pick :: proc(app_state: ^App_State) -> bool {
     res := ma.sound_init_from_file(&app_state.ma_engine, prev_track.file_path, {.STREAM}, nil, nil, app_state.ma_sound)
     if res != .SUCCESS {
         app_state.ma_sound = nil
-        fmt.println("Could not start the next track")
+        log.errorf("ma.sound_init_from_file failed: %v", res)
         return false
     } else {
         sound_start_result := ma.sound_start(app_state.ma_sound)
@@ -238,7 +239,6 @@ handle_next_track_pick :: proc(app_state: ^App_State) -> bool {
 
     queue_len := i32(len(app_state.queue))
     if queue_len == 0 {
-        fmt.println("Nothing in queue")
         return false
     }
 
@@ -263,7 +263,7 @@ handle_next_track_pick :: proc(app_state: ^App_State) -> bool {
     app_state.ma_sound = new(ma.sound)
     res := ma.sound_init_from_file(&app_state.ma_engine, next_track.file_path, {.STREAM}, nil, nil, app_state.ma_sound)
     if res != .SUCCESS {
-        fmt.println("Could not start the next track")
+        log.errorf("ma.sound_init_from_file failed: %v", res)
         reset_player(app_state)
         return false
     } else {
@@ -280,6 +280,7 @@ handle_next_track_pick :: proc(app_state: ^App_State) -> bool {
     return true
 }
 
+// @todo
 @private
 draw_playlist_list :: proc(app_state: ^App_State) {
     pos_y : f32 = app_state.side_panel_option_content_rect.y
@@ -579,7 +580,6 @@ draw_album_title_row :: proc(app_state: ^App_State, row: ^Row, pos_y: ^f32) {
         rl.DrawTexture(cache_entry.texture, i32(app_state.main_panel_rect.x), i32(pos_y^), rl.WHITE)
     } else {
         if len(album.cover_art_path) > 0 {
-            fmt.println("add album to queue: ", album.title)
             request_cover_load(&app_state.album_art_load_queue, row.album_idx)
         } else { // no cover. Load default placeholder
             rl.DrawTexture(app_state.default_album_cover_texture, i32(app_state.main_panel_rect.x), i32(pos_y^), rl.WHITE)
@@ -664,7 +664,10 @@ draw_track_list_item :: proc(app_state: ^App_State, pos_y: f32, row: ^Row) {
         res := ma.sound_init_from_file(&app_state.ma_engine, selected_track.file_path, {.STREAM}, nil, nil, app_state.ma_sound)
         if res != .SUCCESS {
             app_state.ma_sound = nil
-            fmt.println("Could not init sound: ", res)
+            log.errorf(
+                "ma.sound_init_from_file failed: %v. FilePath: %s", 
+                res, selected_track.file_path
+            )
         } else {
             sound_start_result := ma.sound_start(app_state.ma_sound)
             if sound_start_result == .SUCCESS {

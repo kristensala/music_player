@@ -1,6 +1,7 @@
 package main
 
 import "core:fmt"
+import "core:log"
 import "core:unicode/utf8"
 import "core:strings"
 import "core:strconv"
@@ -177,7 +178,7 @@ App_State :: struct {
 
     current_frame_rendered: u64, // current rendered frame
 
-    show_debug_panel: bool
+    show_debug_panel: bool,
 }
 
 Album_Art_Cache :: struct {
@@ -295,6 +296,28 @@ main :: proc() {
 		}
 	}
 
+    log_dir, err := os.user_log_dir(context.temp_allocator)
+    assert(err == nil)
+
+    log_path, _ := filepath.join({log_dir, "music_player_log.txt"}, context.temp_allocator)
+    logh, logh_err := os.open(log_path, {.Create, .Trunc, .Read, .Write })
+
+    if logh_err == os.ERROR_NONE {
+        os.stdout = logh
+        os.stderr = logh
+    }
+
+    logger := logh_err == os.ERROR_NONE ? log.create_file_logger(logh) : log.create_console_logger()
+    context.logger = logger
+
+    defer {
+        if logh_err == os.ERROR_NONE {
+            log.destroy_file_logger(logger)
+        } else {
+            log.destroy_console_logger(logger)
+        }
+    }
+
     rl.SetConfigFlags({.WINDOW_RESIZABLE})
 
     rl.InitWindow(1800, 1250, "music_player")
@@ -318,7 +341,7 @@ main :: proc() {
 
     engine_init_result := ma.engine_init(nil, &app_state.ma_engine)
     if engine_init_result != .SUCCESS {
-        fmt.println("Could not init Mini audio engine: ", engine_init_result)
+        log.errorf("Could not init Mini audio engine: %v", engine_init_result)
         ma.engine_uninit(&app_state.ma_engine)
         return
     }
@@ -374,6 +397,7 @@ main :: proc() {
     {
         thread.join(scanner)
         thread.destroy(scanner)
+
         destroy_state(app_state)
     }
 }
@@ -415,14 +439,14 @@ update_main :: proc(app_state: ^App_State) {
 player_repeat_one :: proc(app_state: ^App_State) {
     res := ma.sound_seek_to_pcm_frame(app_state.ma_sound, 0)
     if res != .SUCCESS {
-        fmt.println("Could not seek sound to 0 pcm frame: ", res)
+        log.errorf("Could not seek sound to 0 pcm frame: %v", res)
         reset_player(app_state)
         return
     }
 
     sound_start_result := ma.sound_start(app_state.ma_sound)
     if sound_start_result != .SUCCESS {
-        fmt.println("Failed to start the sound", sound_start_result)
+        log.errorf("Failed to start the sound: %v", sound_start_result)
         reset_player(app_state)
         return
     }
@@ -574,14 +598,14 @@ load_assets :: proc(app_state: ^App_State) {
 create_config_file :: proc(path: string) -> bool {
     config_file, err := os.create(path)
     if err != nil {
-        fmt.println("Could not create config file")
+        log.errorf("Could not create config file: %v", err)
         return false
     }
     defer os.close(config_file)
 
     _, err = os.write(config_file, transmute([]byte)CONFIG_LIBRARY_PATH_PREFIX)
     if err != nil {
-        fmt.eprintln("Could not write to config file")
+        log.errorf("Could not write to config file: %v", err)
         return false
     }
 
@@ -593,14 +617,14 @@ create_config_file :: proc(path: string) -> bool {
 load_config :: proc(app_state: ^App_State) -> bool {
     home_dir, err := os.user_home_dir(context.allocator)
     if err != nil {
-        fmt.eprintln(#procedure, "Failed to get user_home_dir: ", err)
+        log.errorf("Failed to get user_home_dir: %v", err)
         return false
     }
     defer delete(home_dir)
 
     config_path, config_path_join_err := filepath.join({home_dir, ".config", "music_player"}, context.allocator)
     if config_path_join_err != nil {
-        fmt.eprintln("filepath.join error for config: ", config_path_join_err)
+        log.errorf("filepath.join error for config: %v", config_path_join_err)
         return false
     }
     defer delete(config_path)
@@ -616,7 +640,7 @@ load_config :: proc(app_state: ^App_State) -> bool {
     if !config_path_exists {
         mkdir_err := os.mkdir(config_path)
         if mkdir_err != nil {
-            fmt.eprintln("Could not create music_player directory")
+            log.errorf("Could not create music_player config directory: %v", mkdir_err)
             return false
         }
     }
@@ -628,7 +652,7 @@ load_config :: proc(app_state: ^App_State) -> bool {
 
     file_data, read_err := os.read_entire_file_from_path(config_file_path, context.allocator)
     if read_err != nil {
-        fmt.eprintln("Could not read config file: ", read_err)
+        log.errorf("Could not read config file: %v", read_err)
         return false
     }
     defer delete(file_data)
@@ -684,7 +708,6 @@ handle_search_panel_keyboard_events :: proc(app_state: ^App_State) {
         append(&app_state.search_input, input)
 
         input := utf8.runes_to_string(app_state.search_input[:], context.temp_allocator)
-        fmt.println("input: ", input)
         for it in app_state.artist_list {
             if strings.has_prefix(string(it), input) {
                 keys_to_remove: [dynamic]cstring
@@ -777,7 +800,7 @@ init_library :: proc(app_state: ^App_State) {
 walk_music_dir :: proc(app_state: ^App_State, current_working_dir: string, album_map: ^map[Album_Title]Album_Idx) {
     data, err := os.read_directory_by_path(current_working_dir, 0, context.allocator)
     if err != nil {
-        fmt.printf("Could not read the dir", err)
+        log.errorf("Could not read the dir: %v; Current working dir: %s", err, current_working_dir)
         return
     }
     defer delete(data)
