@@ -4,7 +4,7 @@
 ![Memory](/images/memory.png)
 
 # TODO
-- [ ] Windows: use Win32 api to scan the music library
+- [ ] **Windows: use Win32 api to scan the music library** (Startup on Windows is really slow)
 - [ ] Unix domain socket (IPC) for playback control
 - [ ] Search
 - [ ] Taglib text encoding bug (' is not properly encoded, returns ?)
