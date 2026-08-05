@@ -94,21 +94,13 @@ Search_Panel :: struct {
     search_panel_rect: rl.Rectangle,
 
     search_input: [dynamic]rune,
-    search_results: map[cstring]Search_Result_Row
+    search_result: Search_Result
 }
 
-Search_Result_Type :: enum {
-    Album,
-    Track,
-    Artist
-}
-
-Search_Result_Row :: struct {
-    type: Search_Result_Type,
-
-    artist_name: cstring,
-    track_idx: Track_Idx,
-    album_idx: Album_Idx
+Search_Result :: struct {
+    artists: map[cstring]cstring,
+    tracks: map[Track_Idx]^Track,
+    albums: map[Album_Idx]^Album,
 }
 
 Create_Playlist_Modal :: struct {
@@ -463,7 +455,9 @@ destroy_state :: proc(app_state: ^App_State) {
     delete(app_state.queue)
 
     delete(app_state.search_input)
-    delete(app_state.search_results)
+    delete(app_state.search_result.artists)
+    delete(app_state.search_result.tracks)
+    delete(app_state.search_result.albums)
 
     free(app_state)
 }
@@ -645,10 +639,14 @@ handle_keyboard_events :: proc(app_state: ^App_State) {
 close_search_panel :: proc(app_state: ^App_State) {
     app_state.active_viewport = .Main
     clear(&app_state.search_input)
-    clear(&app_state.search_results)
+    clear(&app_state.search_result.artists)
+    clear(&app_state.search_result.tracks)
+    clear(&app_state.search_result.albums)
 }
 
-// @todo
+// @todo: search track list and album list
+// On enter pressed take the first result
+// Move between results with arrow keys
 handle_search_panel_keyboard_events :: proc(app_state: ^App_State) {
     if rl.IsKeyPressed(rl.KeyboardKey.ESCAPE) {
         close_search_panel(app_state)
@@ -665,28 +663,47 @@ handle_search_panel_keyboard_events :: proc(app_state: ^App_State) {
 
         input := utf8.runes_to_string(app_state.search_input[:], context.temp_allocator)
         fmt.println("input: ", input)
-        for it in app_state.artist_list {
-            if strings.has_prefix(string(it), input) {
-                keys_to_remove: [dynamic]cstring
-                for key, value in app_state.search_results {
-                    if !strings.has_prefix(string(key), input) {
-                        append(&keys_to_remove, key)
-                    }
-                }
 
-                for it in keys_to_remove {
-                    delete_key(&app_state.search_results, it)
-                }
-                delete(keys_to_remove)
+        keys_to_remove: [dynamic]cstring
+        for key, value in app_state.search_result.artists {
+            if !strings.contains(string(key), input) {
+                append(&keys_to_remove, key)
+            }
+        }
 
-                _, exists := app_state.search_results[it]
+        for it in keys_to_remove {
+            delete_key(&app_state.search_result.artists, it)
+        }
+        delete(keys_to_remove)
+
+        to_remove: [dynamic]i32
+        for key, value in app_state.search_result.tracks {
+            if !strings.contains(string(value.artist), input) {
+                append(&to_remove, key)
+            }
+        }
+        for it in to_remove {
+            delete_key(&app_state.search_result.tracks, it)
+        }
+        delete(to_remove)
+
+        for &track, idx in app_state.tracks {
+            if strings.contains(string(track.artist), input) {
+                _, exists := app_state.search_result.artists[track.artist]
                 if !exists {
-                    result_row := Search_Result_Row{
-                        type = .Artist,
-                        artist_name = it
-                    }
+                    app_state.search_result.artists[track.artist] = track.artist
+                }
 
-                    app_state.search_results[it] = result_row
+                _, exists = app_state.search_result.tracks[Track_Idx(idx)]
+                if !exists {
+                    app_state.search_result.tracks[Track_Idx(idx)] = &track
+                }
+            }
+
+            if strings.contains(string(track.title), input) {
+                _, exists := app_state.search_result.tracks[Track_Idx(idx)]
+                if !exists {
+                    app_state.search_result.tracks[Track_Idx(idx)] = &track
                 }
             }
         }

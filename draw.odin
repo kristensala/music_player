@@ -769,24 +769,53 @@ draw_search_panel :: proc(app_state: ^App_State) {
         FONT_18, 0, rl.WHITE)
 
     y := app_state.search_panel_rect.y + 20
-    for key, value in app_state.search_results {
-        bounds := rl.Rectangle{app_state.search_panel_rect.x, y, 100, 20}
+    for key, value in app_state.search_result.artists {
+        bounds := rl.Rectangle{app_state.search_panel_rect.x, y, 200, 20}
+
         rl.DrawTextEx(
             app_state.fonts[FONT_18],
-            value.artist_name,
+            value,
             {app_state.search_panel_rect.x, y},
             FONT_18, 0, rl.WHITE)
 
-        if rl.CheckCollisionPointRec(rl.GetMousePosition(), bounds) {
+        /*if rl.CheckCollisionPointRec(rl.GetMousePosition(), bounds) {
             if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
+                // @todo: check the search result type
                 if value.artist_name == app_state.current_selected_artist do return
 
                 app_state.current_selected_artist = value.artist_name
                 app_state.main_panel_scroll_offset = 0
                 app_state.rebuild_rows = true
+
                 close_search_panel(app_state)
             }
-        }
+        }*/
+
+        y += 20
+    }
+
+    y += 20
+    for key, value in app_state.search_result.tracks {
+        bounds := rl.Rectangle{app_state.search_panel_rect.x, y, 200, 20}
+
+        rl.DrawTextEx(
+            app_state.fonts[FONT_18],
+            value.title,
+            {app_state.search_panel_rect.x, y},
+            FONT_18, 0, rl.WHITE)
+
+        /*if rl.CheckCollisionPointRec(rl.GetMousePosition(), bounds) {
+            if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
+                // @todo: check the search result type
+                if value.artist_name == app_state.current_selected_artist do return
+
+                app_state.current_selected_artist = value.artist_name
+                app_state.main_panel_scroll_offset = 0
+                app_state.rebuild_rows = true
+
+                close_search_panel(app_state)
+            }
+        }*/
 
         y += 20
     }
