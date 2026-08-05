@@ -2,7 +2,6 @@ package taglib
 
 import "core:unicode/utf16"
 import "core:strings"
-import "core:fmt"
 import "core:os"
 import "core:path/filepath"
 
@@ -16,10 +15,13 @@ import "core:path/filepath"
 
 // @todo: custom and system errors
 Taglib_Error :: enum {
-    None,
-    General,
-    Failed_To_Read_File,
-    ID3_Tag_Not_Found
+    ID3_Tag_Not_Found,
+    Invalid_Flac_Signature
+}
+
+Error :: union {
+    os.Error,
+    Taglib_Error
 }
 
 Tag :: struct {
@@ -35,8 +37,11 @@ Tag_Field :: enum {
     Album
 }
 
+/*
+   Need to pair with tag_destroy(tag)
+ */
 @require_results
-get_tag :: proc(file_path: string) -> (tag: Tag, err: Taglib_Error) {
+get_tag :: proc(file_path: string) -> (tag: Tag, err: Error) {
     ext := filepath.ext(file_path)
 
     switch ext {
@@ -57,11 +62,10 @@ set_tag_field :: proc(filepath: string, tag_field: Tag_Field) {
 }
 
 @private
-parse_mp3 :: proc(filepath: string) -> (_tag: Tag, error: Taglib_Error) {
+parse_mp3 :: proc(filepath: string) -> (_tag: Tag, error: Error) {
     file, err := os.open(filepath)
     if err != nil {
-        fmt.eprintln("Could not open file: ", err)
-        return {}, .Failed_To_Read_File
+        return {}, err
     }
     defer os.close(file)
 
@@ -70,14 +74,12 @@ parse_mp3 :: proc(filepath: string) -> (_tag: Tag, error: Taglib_Error) {
 
     _, read_err := os.read(file, header)
     if read_err != nil {
-        fmt.eprintln("Could not read file header: ", err)
-        return {}, .Failed_To_Read_File
+        return {}, read_err
     }
 
     file_identifier := header[:3]
     if string(file_identifier) != "ID3" {
-        fmt.println("Could not find ID3 tag")
-        return {}, nil
+        return {}, .ID3_Tag_Not_Found
     }
 
     major_version := header[3]
@@ -98,8 +100,7 @@ parse_mp3 :: proc(filepath: string) -> (_tag: Tag, error: Taglib_Error) {
 
     _, read_err = os.read(file, tag_data)
     if read_err != nil {
-        fmt.eprintln("Could not read tag_data: ", read_err)
-        return {}, nil
+        return {}, read_err
     }
 
     md := mp3_parse_tag(tag_data[:tag_size], tag_size, major_version)
@@ -107,11 +108,10 @@ parse_mp3 :: proc(filepath: string) -> (_tag: Tag, error: Taglib_Error) {
 }
 
 @private
-parse_flac :: proc(filepath: string) -> (_tag: Tag, error: Taglib_Error) {
+parse_flac :: proc(filepath: string) -> (_tag: Tag, error: Error) {
     file, err := os.open(filepath)
     if err != nil {
-        fmt.eprintln("Could not open file: ", err)
-        return {}, nil
+        return {}, err
     }
     defer os.close(file)
 
@@ -120,13 +120,11 @@ parse_flac :: proc(filepath: string) -> (_tag: Tag, error: Taglib_Error) {
 
     _, read_err := os.read(file, header)
     if read_err != nil {
-        fmt.eprintln("Could not read header data from file: ", err)
-        return {}, nil
+        return {}, read_err
     }
 
     if string(header[:4]) != "fLaC" {
-        fmt.println("invalid signature")
-        return {}, nil
+        return {}, .Invalid_Flac_Signature
     }
 
     for ;; {
@@ -135,8 +133,7 @@ parse_flac :: proc(filepath: string) -> (_tag: Tag, error: Taglib_Error) {
 
         _, read_err := os.read(file, header)
         if read_err != nil {
-            fmt.eprintln("Could not read header: ", err)
-            return
+            return {}, read_err
         }
 
         is_last := (header[0] & 0x80) != 0
@@ -150,8 +147,7 @@ parse_flac :: proc(filepath: string) -> (_tag: Tag, error: Taglib_Error) {
 
             _, read_err = os.read(file, block_data)
             if read_err != nil {
-                fmt.eprintln("Error")
-                return
+                return {}, read_err
             }
 
             return flac_parse_vorbis_comment(block_data), nil
