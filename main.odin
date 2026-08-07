@@ -234,10 +234,11 @@ init_state :: proc() -> ^App_State {
     app_state.ma_sound = nil
     app_state.audio_state = .Stopped
     app_state.selected_side_panel_option = .Artist_List // @todo: All_Music once implemented
+    app_state.rebuild_rows = true
 
     load_assets(app_state)
-    is_load_config_success := load_config(app_state)
-    if is_load_config_success do app_state.rebuild_rows = true
+    if !load_config(app_state) do panic("Failed to load config")
+
 
     /*playlist_path, err := filepath.join({app_state.library_path, ".mppl"}, context.allocator)
     assert(err == nil)
