@@ -217,7 +217,7 @@ handle_shuffle_pressed :: proc(app_state: ^App_State) {
     if app_state.is_shuffle_play {
         shuffle_queue(app_state)
     } else {
-        build_queue(app_state)
+        app_state.rebuild_queue = true
     }
 }
 

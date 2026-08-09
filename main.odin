@@ -986,13 +986,27 @@ build_queue :: proc(app_state: ^App_State) {
             append(&app_state.queue, ..album.tracks[:])
         }
     }
+
+    if app_state.is_shuffle_play {
+        shuffle_queue(app_state)
+    }
 }
 
 shuffle_queue :: proc(app_state: ^App_State) {
     for i := len(app_state.queue) - 1; i >= 1; i -= 1 {
         j := rand.int31_max(i32(len(app_state.queue)))
-        app_state.queue[i], app_state.queue[j] = app_state.queue[j], app_state.queue[i]
+
+        // currently playing track should be at the beginning of the queue when shuffled
+        if app_state.queue[i].file_path == app_state.currently_playing_track.file_path {
+            app_state.queue[0], app_state.queue[i] = app_state.queue[i], app_state.queue[0] 
+        } else if app_state.queue[j].file_path == app_state.currently_playing_track.file_path {
+            app_state.queue[0], app_state.queue[j] = app_state.queue[j], app_state.queue[0]
+        } else {
+            app_state.queue[i], app_state.queue[j] = app_state.queue[j], app_state.queue[i]
+        }
     }
+
+    find_and_set_current_position_in_queue(app_state)
 }
 
 @private
