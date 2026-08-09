@@ -1,6 +1,7 @@
 package main
 
 import "core:fmt"
+import "core:math/rand"
 import "core:log"
 import "core:unicode/utf8"
 import "core:strings"
@@ -24,6 +25,8 @@ REPEAT_ONE_IMG_DATA :: #load("./assets/repeat-one.png")
 REPEAT_QUEUE_IMG_DATA :: #load("./assets/repeat-queue.png")
 NEXT_IMG_DATA :: #load("./assets/forward-white.png")
 PREVIOUS_IMG_DATA :: #load("./assets/backward-white.png")
+SHUFFLE_IMG_DATA :: #load("./assets/shuffle-solid.png")
+SHUFFLE_ON_IMG_DATA :: #load("./assets/shuffle-on.png")
 
 ALBUM_COVER_SIZE           :: 200
 SCROLL_INCREMENT           :: 5 // five rows
@@ -88,7 +91,9 @@ Playback_Controls_Panel :: struct {
 
     repeat_button_texture: rl.Texture2D,
     repeat_one_button_texture: rl.Texture2D,
-    repeat_queue_button_texture: rl.Texture2D
+    repeat_queue_button_texture: rl.Texture2D,
+    shuffle_off_button_texture: rl.Texture2D,
+    shuffle_on_button_texture: rl.Texture2D
 }
 
 Search_Panel :: struct {
@@ -129,13 +134,13 @@ Playback_Mode :: enum i32 {
     Normal       = 0,
     Repeat_One   = 1,
     Repeat_Queue = 2,
-    Shuffle      = 3
 }
 
 App_State :: struct {
     mutex: sync.Mutex,
     active_viewport: Active_Viewport,
     playback_mode: Playback_Mode,
+    is_shuffle_play: bool,
 
     using main_panel              : Main_Panel,
     using side_panel              : Side_Panel,
@@ -472,6 +477,8 @@ destroy_state :: proc(app_state: ^App_State) {
     rl.UnloadTexture(app_state.repeat_button_texture)
     rl.UnloadTexture(app_state.repeat_one_button_texture)
     rl.UnloadTexture(app_state.repeat_queue_button_texture)
+    rl.UnloadTexture(app_state.shuffle_on_button_texture)
+    rl.UnloadTexture(app_state.shuffle_off_button_texture)
 
     for key, value in app_state.fonts {
         rl.UnloadFont(value)
@@ -567,6 +574,21 @@ load_assets :: proc(app_state: ^App_State) {
         rl.ImageResize(&repeat_queue_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
         app_state.repeat_queue_button_texture =  rl.LoadTextureFromImage(repeat_queue_img)
         rl.UnloadImage(repeat_queue_img)
+    }
+
+    // Shuffle off
+    {
+        shuffle_queue := rl.LoadImageFromMemory(".png", raw_data(SHUFFLE_IMG_DATA), i32(len(SHUFFLE_IMG_DATA)))
+        rl.ImageResize(&shuffle_queue, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
+        app_state.shuffle_off_button_texture =  rl.LoadTextureFromImage(shuffle_queue)
+        rl.UnloadImage(shuffle_queue)
+    }
+    // Shuffle on
+    {
+        shuffle_queue := rl.LoadImageFromMemory(".png", raw_data(SHUFFLE_ON_IMG_DATA), i32(len(SHUFFLE_ON_IMG_DATA)))
+        rl.ImageResize(&shuffle_queue, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
+        app_state.shuffle_on_button_texture =  rl.LoadTextureFromImage(shuffle_queue)
+        rl.UnloadImage(shuffle_queue)
     }
 }
 
@@ -967,7 +989,10 @@ build_queue :: proc(app_state: ^App_State) {
 }
 
 shuffle_queue :: proc(app_state: ^App_State) {
-    // @todo
+    for i := len(app_state.queue) - 1; i >= 1; i -= 1 {
+        j := rand.int31_max(i32(len(app_state.queue)))
+        app_state.queue[i], app_state.queue[j] = app_state.queue[j], app_state.queue[i]
+    }
 }
 
 @private

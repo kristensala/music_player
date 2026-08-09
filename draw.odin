@@ -136,6 +136,34 @@ draw_playback_controls :: proc(app_state: ^App_State) {
         }
     }
 
+    // shuffle
+    {
+        button_bounds := rl.Rectangle{
+            x = f32(app_state.playback_controls_panel_rect.width / 2) - (PLAYBACK_BUTTON_SIZE / 2) - 100,
+            y = f32(rl.GetScreenHeight() - 110),
+            width = 50,
+            height = 50
+        }
+
+        if app_state.is_shuffle_play {
+            rl.DrawTexture(
+                app_state.shuffle_on_button_texture,
+                i32(button_bounds.x), i32(button_bounds.y),
+                rl.WHITE)
+        } else {
+            rl.DrawTexture(
+                app_state.shuffle_off_button_texture,
+                i32(button_bounds.x), i32(button_bounds.y),
+                rl.WHITE)
+        }
+
+        if rl.CheckCollisionPointRec(rl.GetMousePosition(), button_bounds) {
+            if rl.IsMouseButtonPressed(.LEFT) {
+                handle_shuffle_pressed(app_state)
+            }
+        }
+    }
+
     // repeat
     {
         button_bounds := rl.Rectangle{
@@ -180,6 +208,16 @@ handle_repeat_pressed :: proc(app_state: ^App_State) {
     case .Normal: app_state.playback_mode = .Repeat_Queue
     case .Repeat_Queue: app_state.playback_mode = .Repeat_One
     case .Repeat_One: app_state.playback_mode = .Normal
+    }
+}
+
+handle_shuffle_pressed :: proc(app_state: ^App_State) {
+    app_state.is_shuffle_play = !app_state.is_shuffle_play
+
+    if app_state.is_shuffle_play {
+        shuffle_queue(app_state)
+    } else {
+        build_queue(app_state)
     }
 }
 
