@@ -49,8 +49,7 @@ Album_Title :: cstring
 Row :: struct {
     is_album_title_row  : bool, // if true then track is nil
     album_idx           : i32,
-    track               : ^Track,
-    track_idx           : Track_Idx,
+    track               : ^Track
 }
 
 Playlist :: struct {
@@ -155,7 +154,7 @@ App_State :: struct {
     playlist_path : string,
     playlists     : [dynamic]Playlist,
 
-    queue                     : [dynamic]Track_Idx,
+    queue                     : [dynamic]^Track,
     current_position_in_queue : i32,
     rebuild_queue             : bool,
 
@@ -164,7 +163,6 @@ App_State :: struct {
 
     audio_state: AudioState,
     currently_playing_track: ^Track,
-    currently_playing_track_idx: i32, // -1 means nothing is playing
 
     // filtering
     artist_list: [dynamic]cstring,
@@ -203,8 +201,6 @@ Track :: struct {
     album_idx: i32,
     file_path: cstring,
     file_name: cstring,
-
-    order_nr_in_album: i32
 }
 
 Album :: struct {
@@ -214,7 +210,7 @@ Album :: struct {
     cover_art_path: cstring,
     cover_art_cache_entry_idx: i32,
 
-    track_indices: [dynamic]Track_Idx // reference to the app_state.tracks @todo: should use [dynamic]^Track then I can sort the list of tracks
+    tracks: [dynamic]^Track,
 }
 
 Side_Panel_Option :: enum i32 {
@@ -439,7 +435,6 @@ reset_player :: proc(app_state: ^App_State) {
     app_state.ma_sound = nil
     app_state.audio_state = .Stopped
     app_state.currently_playing_track = nil
-    app_state.currently_playing_track_idx = EMPTY_IDX
 }
 
 @private
@@ -455,7 +450,7 @@ destroy_state :: proc(app_state: ^App_State) {
     }
 
     for a in app_state.albums {
-        delete(a.track_indices)
+        delete(a.tracks)
         delete(a.cover_art_path)
     }
     delete(app_state.albums)
@@ -766,16 +761,10 @@ handle_create_playlist_modal_keyboard_events :: proc(app_state: ^App_State) {
     }
 
 }
-
-// @todo: what if different artists have the same album name
-// example: chill bump - ego trip and Papa roach - ego trip
 init_library :: proc(app_state: ^App_State) {
-    tmp_album_map := make(map[Album_Title]Album_Idx)
-    defer delete(tmp_album_map)
+    scan_library(app_state, app_state.library_path)
+    create_albums(app_state)
 
-    scan_library(app_state, app_state.library_path, &tmp_album_map)
-
-    // @note: exlude the "All artist" option from sorting to keep it first
     sort.quick_sort_proc(app_state.artist_list[1:], proc(a, b: cstring) -> int {
         x, err_x := strings.to_lower(string(a), context.temp_allocator)
         y, err_y := strings.to_lower(string(b), context.temp_allocator)
@@ -793,6 +782,17 @@ init_library :: proc(app_state: ^App_State) {
         if x > y do return 1
         return 0
     })
+
+    for a in app_state.albums {
+        sort.quick_sort_proc(a.tracks[:], proc(a, b: ^Track) -> int {
+            x, err_x := strings.to_lower(string(a.file_name), context.temp_allocator)
+            y, err_y := strings.to_lower(string(b.file_name), context.temp_allocator)
+
+            if x < y do return -1
+            if x > y do return 1
+            return 0
+        })
+    }
 }
 
 create_track :: proc(file_name: string, file_path: string) -> (Track, tl.Error) {
@@ -814,44 +814,7 @@ create_track :: proc(file_name: string, file_path: string) -> (Track, tl.Error) 
     return track, nil
 }
 
-create_or_find_album :: proc(
-    app_state: ^App_State,
-    track: ^Track,
-    path: string,
-    album_art_path: cstring,
-    tmp_album_map: ^map[Album_Title]Album_Idx
-) -> ^Album {
-    album_identifier := fmt.ctprintf("%s-%s", path, track.album_title)
-    idx, album_exists := tmp_album_map[album_identifier]
-    if !album_exists {
-        idx = i32(len(app_state.albums))
-
-        album := Album{
-            title = track.album_title,
-            artist = track.artist,
-            cover_art_path = album_art_path,
-            cover_art_cache_entry_idx = EMPTY_IDX
-        }
-
-        append(&app_state.albums, album)
-        tmp_album_map[album_identifier] = idx
-    }
-    track.album_idx = i32(idx)
-
-    track_idx := len(app_state.tracks)
-    append(&app_state.albums[idx].track_indices, i32(track_idx))
-
-    track_pos := len(app_state.albums[idx].track_indices) - 1
-    track.order_nr_in_album = i32(track_pos)
-
-    return &app_state.albums[len(app_state.albums) - 1]
-}
-
-scan_library :: proc(
-    app_state: ^App_State,
-    current_working_dir: string,
-    tmp_album_map: ^map[Album_Title]Album_Idx
-) {
+scan_library :: proc(app_state: ^App_State, current_working_dir: string) {
     data, err := os.read_directory_by_path(current_working_dir, 0, context.allocator)
     if err != nil {
         log.errorf("Could not read the dir: %v; Current working dir: %s", err, current_working_dir)
@@ -859,12 +822,9 @@ scan_library :: proc(
     }
     defer delete(data)
 
-    current_album : ^Album
-    found_album_art_path : cstring
-
     for d in data {
         if d.type == .Directory {
-            scan_library(app_state, d.fullpath, tmp_album_map)
+            scan_library(app_state, d.fullpath)
         } else if d.type == .Regular {
             if filepath.ext(d.fullpath) == ".mp3" || filepath.ext(d.fullpath) == ".flac" || filepath.ext(d.fullpath) == ".wav" {
                 track, err := create_track(d.name, d.fullpath)
@@ -872,21 +832,60 @@ scan_library :: proc(
                     log.errorf("Could not create a track; path: %s; Err: %v", d.fullpath, err)
                     continue
                 }
-                current_album = create_or_find_album(app_state, &track, current_working_dir, found_album_art_path, tmp_album_map)
                 append(&app_state.tracks, track)
-
-                if !slice.contains(app_state.artist_list[:], current_album.artist) {
-                    append(&app_state.artist_list, current_album.artist)
-                }
-
-            } else if filepath.ext(d.fullpath) == ".jpg" || filepath.ext(d.fullpath) == ".jpeg" || filepath.ext(d.fullpath) == ".png" {
-                found_album_art_path = strings.clone_to_cstring(d.fullpath)
-                if current_album != nil {
-                    current_album.cover_art_path = found_album_art_path
-                }
             }
         }
     }
+}
+
+create_albums :: proc(app_state: ^App_State) {
+    tmp_album_map : map[string]Album_Idx
+    defer delete(tmp_album_map)
+
+    for &it, it_idx in app_state.tracks {
+        dir := filepath.dir(string(it.file_path))
+        album_identifier := fmt.aprintf("%s_%s", dir, it.album_title, context.temp_allocator)
+
+        album_idx, album_exists := tmp_album_map[album_identifier]
+        if !album_exists {
+            album_idx = i32(len(app_state.albums))
+            // @note: assumes that albums are organized into folders 
+            album_cover := find_album_cover(dir)
+
+            album := Album{
+                title = it.album_title,
+                artist = it.artist,
+                cover_art_path = album_cover,
+                cover_art_cache_entry_idx = EMPTY_IDX
+            }
+            tmp_album_map[album_identifier] = album_idx
+            append(&app_state.albums, album)
+        }
+
+        album := &app_state.albums[album_idx]
+        append(&album.tracks, &it)
+
+        // build the artist list
+        if !slice.contains(app_state.artist_list[:], album.artist) {
+            append(&app_state.artist_list, album.artist)
+        }
+    }
+}
+
+find_album_cover :: proc(dir: string) -> cstring {
+    cover_path, err := filepath.join({dir, "cover.jpg"}, context.temp_allocator)
+    if err != nil do panic(fmt.tprintf("Failed to join filepath: ", err))
+    if os.exists(cover_path) do return strings.clone_to_cstring(cover_path)
+
+    cover_path, err = filepath.join({dir, "cover.jpeg"}, context.temp_allocator)
+    if err != nil do panic(fmt.tprintf("Failed to join filepath: ", err))
+    if os.exists(cover_path) do return strings.clone_to_cstring(cover_path)
+
+    cover_path, err = filepath.join({dir, "cover.png"}, context.temp_allocator)
+    if err != nil do panic(fmt.tprintf("Failed to join filepath: ", err))
+    if os.exists(cover_path) do return strings.clone_to_cstring(cover_path)
+
+    return nil
 }
 
 @private
@@ -905,20 +904,17 @@ build_rows :: proc(app_state: ^App_State) {
         album_title_row := new(Row)
         album_title_row.is_album_title_row = true
         album_title_row.album_idx = i32(album_idx)
-        album_title_row.track_idx = EMPTY_IDX
 
         append(&app_state.rows, album_title_row)
 
         content_height += ROW_HEIGHT
 
         album_content_height : i32 = 0
-        for track_idx in album.track_indices {
-            track := &app_state.tracks[track_idx]
+        for &track in album.tracks {
             assert(track != nil)
 
             track_row := new(Row)
             track_row.track = track
-            track_row.track_idx = track_idx
 
             append(&app_state.rows, track_row)
 
@@ -945,9 +941,8 @@ build_rows :: proc(app_state: ^App_State) {
 find_and_set_current_position_in_queue :: proc(app_state: ^App_State) {
     assert(len(app_state.queue) > 0)
 
-    for track_idx, i in app_state.queue {
-        track_in_queue := app_state.tracks[track_idx]
-        if app_state.currently_playing_track.file_path == track_in_queue.file_path {
+    for track, i in app_state.queue {
+        if app_state.currently_playing_track.file_path == track.file_path {
             app_state.current_position_in_queue = i32(i)
             break
         }
@@ -959,16 +954,14 @@ find_and_set_current_position_in_queue :: proc(app_state: ^App_State) {
 build_queue :: proc(app_state: ^App_State) {
     clear(&app_state.queue)
 
-    assert(app_state.currently_playing_track_idx != EMPTY_IDX)
-
     filtered_by_artist := app_state.current_selected_artist != nil
     for album, album_idx in app_state.albums {
         if filtered_by_artist {
             if album.artist == app_state.current_selected_artist {
-                append(&app_state.queue, ..album.track_indices[:])
+                append(&app_state.queue, ..album.tracks[:])
             }
         } else {
-            append(&app_state.queue, ..album.track_indices[:])
+            append(&app_state.queue, ..album.tracks[:])
         }
     }
 }
@@ -1272,3 +1265,14 @@ get_or_create_playlist_dir :: proc(path: string) -> os.Error {
     return nil
 }
 
+@(private = "file")
+update_layout :: proc(app_state: ^App_State) {
+    // -40 := 20px padding from left and right
+    app_state.main_panel_rect.width = f32(rl.GetScreenWidth() - 40)
+    app_state.main_panel_rect.height = f32(rl.GetScreenHeight()) - app_state.playback_controls_panel_rect.height
+    app_state.side_panel_rect.height = app_state.main_panel_rect.height + app_state.main_panel_rect.y // @explain
+    app_state.side_panel_option_content_rect.height = app_state.side_panel_rect.height - app_state.side_panel_options_rect.height
+
+    app_state.playback_controls_panel_rect.width = f32(rl.GetScreenWidth())
+    app_state.playback_controls_panel_rect.y = app_state.main_panel_rect.height
+}

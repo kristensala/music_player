@@ -206,8 +206,7 @@ handle_prev_song_pick :: proc(app_state: ^App_State) -> bool {
     if app_state.current_position_in_queue == 0 do return false
 
     app_state.current_position_in_queue -= 1
-    prev_track_idx := app_state.queue[app_state.current_position_in_queue]
-    prev_track := &app_state.tracks[prev_track_idx]
+    prev_track := app_state.queue[app_state.current_position_in_queue]
 
     reset_player(app_state)
 
@@ -222,7 +221,6 @@ handle_prev_song_pick :: proc(app_state: ^App_State) -> bool {
         if sound_start_result == .SUCCESS {
             app_state.audio_state = .Playing
             app_state.currently_playing_track = prev_track
-            app_state.currently_playing_track_idx = prev_track_idx
         }
     }
 
@@ -255,8 +253,7 @@ handle_next_track_pick :: proc(app_state: ^App_State) -> bool {
         app_state.current_position_in_queue += 1
     }
 
-    next_track_idx := app_state.queue[app_state.current_position_in_queue]
-    next_track := &app_state.tracks[next_track_idx]
+    next_track := app_state.queue[app_state.current_position_in_queue]
 
     reset_player(app_state)
 
@@ -271,7 +268,6 @@ handle_next_track_pick :: proc(app_state: ^App_State) -> bool {
         if sound_start_result == .SUCCESS {
             app_state.audio_state = .Playing
             app_state.currently_playing_track = next_track
-            app_state.currently_playing_track_idx = next_track_idx
         } else {
             return false
         }
@@ -588,7 +584,6 @@ draw_album_title_row :: proc(app_state: ^App_State, row: ^Row, pos_y: ^f32) {
 
 }
 
-
 @(private = "file")
 draw_track_list_item :: proc(app_state: ^App_State, pos_y: f32, row: ^Row) {
     list_item := rl.Rectangle{
@@ -608,7 +603,7 @@ draw_track_list_item :: proc(app_state: ^App_State, pos_y: f32, row: ^Row) {
         rl.DrawRectangleRec(list_item, rl.ORANGE)
 
         if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
-            handle_track_selection(app_state, row.track, row.track_idx)
+            handle_track_selection(app_state, row.track)
         }
     }
 
@@ -654,7 +649,7 @@ draw_track_list_item :: proc(app_state: ^App_State, pos_y: f32, row: ^Row) {
             txt_color)
     }
 
-    handle_track_selection :: proc(app_state: ^App_State, selected_track: ^Track, selected_track_idx: Track_Idx) {
+    handle_track_selection :: proc(app_state: ^App_State, selected_track: ^Track) {
         if app_state.ma_sound != nil {
             ma.sound_uninit(app_state.ma_sound)
             app_state.ma_sound = nil
@@ -673,8 +668,6 @@ draw_track_list_item :: proc(app_state: ^App_State, pos_y: f32, row: ^Row) {
             if sound_start_result == .SUCCESS {
                 app_state.audio_state = .Playing
                 app_state.currently_playing_track = selected_track
-                app_state.currently_playing_track_idx = selected_track_idx
-
                 app_state.rebuild_queue = true
             }
         }
@@ -820,14 +813,3 @@ draw_create_playlist_modal :: proc(app_state: ^App_State) {
     // @todo: draw the input text
 }
 
-@private
-update_layout :: proc(app_state: ^App_State) {
-    // -40 := 20px padding from left and right
-    app_state.main_panel_rect.width = f32(rl.GetScreenWidth() - 40)
-    app_state.main_panel_rect.height = f32(rl.GetScreenHeight()) - app_state.playback_controls_panel_rect.height
-    app_state.side_panel_rect.height = app_state.main_panel_rect.height + app_state.main_panel_rect.y // @explain
-    app_state.side_panel_option_content_rect.height = app_state.side_panel_rect.height - app_state.side_panel_options_rect.height
-
-    app_state.playback_controls_panel_rect.width = f32(rl.GetScreenWidth())
-    app_state.playback_controls_panel_rect.y = app_state.main_panel_rect.height
-}

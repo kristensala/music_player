@@ -3,6 +3,7 @@ package taglib
 import "core:unicode/utf16"
 import "core:strings"
 import "core:os"
+import "core:fmt"
 import "core:path/filepath"
 
 // MP3
@@ -28,7 +29,8 @@ Tag :: struct {
     title: string,
     artist: string,
     album: string,
-    album_artist: string
+    album_artist: string,
+    track_nr: string
 }
 
 Tag_Field :: enum {
@@ -245,6 +247,8 @@ mp3_parse_tag :: proc(tag_data: []byte, tag_size: u32, major_version: u8) -> Tag
             result.artist = decode_text(frame_data)
         case "TPE2": 
             result.album_artist = decode_text(frame_data)
+        case "TRCK": 
+            result.track_nr = decode_text(frame_data)
         }
 
         i = i + MP3_PADDING + int(frame_size)
@@ -337,6 +341,7 @@ tag_destroy :: proc(tag: ^Tag) {
     delete(tag.title)
     delete(tag.album)
     delete(tag.artist)
+    delete(tag.track_nr)
 }
 
 @private
