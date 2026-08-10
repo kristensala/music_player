@@ -27,6 +27,7 @@ NEXT_IMG_DATA :: #load("./assets/forward-white.png")
 PREVIOUS_IMG_DATA :: #load("./assets/backward-white.png")
 SHUFFLE_IMG_DATA :: #load("./assets/shuffle-solid.png")
 SHUFFLE_ON_IMG_DATA :: #load("./assets/shuffle-on.png")
+SEARCH_IMG_DATA :: #load("./assets/search.png")
 
 ALBUM_COVER_SIZE           :: 200
 SCROLL_INCREMENT           :: 5 // five rows
@@ -93,7 +94,8 @@ Playback_Controls_Panel :: struct {
     repeat_one_button_texture: rl.Texture2D,
     repeat_queue_button_texture: rl.Texture2D,
     shuffle_off_button_texture: rl.Texture2D,
-    shuffle_on_button_texture: rl.Texture2D
+    shuffle_on_button_texture: rl.Texture2D,
+    search_logo_texture: rl.Texture2D
 }
 
 Caret :: struct {
@@ -487,6 +489,7 @@ destroy_state :: proc(app_state: ^App_State) {
     rl.UnloadTexture(app_state.repeat_queue_button_texture)
     rl.UnloadTexture(app_state.shuffle_on_button_texture)
     rl.UnloadTexture(app_state.shuffle_off_button_texture)
+    rl.UnloadTexture(app_state.search_logo_texture)
 
     for key, value in app_state.fonts {
         rl.UnloadFont(value)
@@ -597,6 +600,13 @@ load_assets :: proc(app_state: ^App_State) {
         rl.ImageResize(&shuffle_queue, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
         app_state.shuffle_on_button_texture =  rl.LoadTextureFromImage(shuffle_queue)
         rl.UnloadImage(shuffle_queue)
+    }
+    // Search logo
+    {
+        search_logo := rl.LoadImageFromMemory(".png", raw_data(SEARCH_IMG_DATA), i32(len(SEARCH_IMG_DATA)))
+        rl.ImageResize(&search_logo, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
+        app_state.search_logo_texture =  rl.LoadTextureFromImage(search_logo)
+        rl.UnloadImage(search_logo)
     }
 }
 
