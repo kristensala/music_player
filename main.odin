@@ -202,6 +202,7 @@ AudioState :: enum i32 {
 Track :: struct {
     title: cstring,
     artist: cstring,
+    album_artist: cstring,
     album_title: cstring,
     album_idx: i32,
     file_path: cstring,
@@ -465,6 +466,7 @@ destroy_state :: proc(app_state: ^App_State) {
         delete(t.file_path)
         delete(t.title)
         delete(t.artist)
+        delete(t.album_artist)
         delete(t.album_title)
     }
     delete(app_state.tracks)
@@ -828,6 +830,7 @@ create_track :: proc(file_name: string, file_path: string) -> (Track, tl.Error) 
     track := Track{
         title = strings.clone_to_cstring(tag.title),
         artist = strings.clone_to_cstring(tag.artist),
+        album_artist = strings.clone_to_cstring(tag.album_artist),
         album_title = strings.clone_to_cstring(tag.album),
         file_name = strings.clone_to_cstring(file_name),
         file_path = strings.clone_to_cstring(file_path)
@@ -874,9 +877,10 @@ create_albums :: proc(app_state: ^App_State) {
             // @note: assumes that albums are organized into folders 
             album_cover := find_album_cover(dir)
 
+            artist := len(it.album_artist) > 0 ? it.album_artist : it.artist
             album := Album{
                 title = it.album_title,
-                artist = it.artist,
+                artist = artist,
                 cover_art_path = album_cover,
                 cover_art_cache_entry_idx = EMPTY_IDX
             }
@@ -887,7 +891,6 @@ create_albums :: proc(app_state: ^App_State) {
         album := &app_state.albums[album_idx]
         append(&album.tracks, &it)
 
-        // build the artist list
         if !slice.contains(app_state.artist_list[:], album.artist) {
             append(&app_state.artist_list, album.artist)
         }

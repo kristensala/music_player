@@ -193,6 +193,8 @@ flac_parse_vorbis_comment :: proc(vorbis_data: []u8) -> Tag {
             tag.title = strings.clone(comment[len("TITLE="):])
         } else if strings.has_prefix(comment, "ARTIST=") {
             tag.artist = strings.clone(comment[len("ARTIST="):])
+        } else if strings.has_prefix(comment, "ALBUMARTIST=") {
+            tag.album_artist = strings.clone(comment[len("ALBUMARTIST="):])
         } else if strings.has_prefix(comment, "ALBUM=") {
             tag.album = strings.clone(comment[len("ALBUM="):])
         }
@@ -341,6 +343,7 @@ tag_destroy :: proc(tag: ^Tag) {
     delete(tag.title)
     delete(tag.album)
     delete(tag.artist)
+    delete(tag.album_artist)
     delete(tag.track_nr)
 }
 

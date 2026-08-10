@@ -391,7 +391,7 @@ draw_artist_list :: proc(app_state: ^App_State) {
             if rl.CheckCollisionPointRec(rl.GetMousePosition(), artist_item_bounds) {
                 if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
                     // clicked on already active artist => Do nothing
-                    if artist == app_state.current_selected_artist do return
+                    if artist == app_state.current_selected_artist do continue
 
                     if artist == ALL_ARTISTS_OPTION {
                         app_state.current_selected_artist = nil
