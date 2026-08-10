@@ -24,13 +24,15 @@ draw_main :: proc(app_state: ^App_State) {
         // Display currently playing track
         {
             if app_state.currently_playing_track != nil {
-                cover_texture := get_album_cover_texture(app_state, app_state.currently_playing_track.album_idx)
-                rl.DrawTextureEx(
-                    cover_texture,
-                    {BOTTOM_BAR_PADDING, f32(rl.GetScreenHeight() - 125)},
-                    0,
-                    0.30,
-                    rl.WHITE)
+                cover_texture, found := get_album_cover_texture(app_state, app_state.currently_playing_track.album_idx)
+                if found {
+                    rl.DrawTextureEx(
+                        cover_texture,
+                        {BOTTOM_BAR_PADDING, f32(rl.GetScreenHeight() - 125)},
+                        0,
+                        0.30,
+                        rl.WHITE)
+                }
 
                 rl.DrawTextEx(
                     app_state.fonts[FONT_18],
@@ -609,8 +611,10 @@ draw_album_title_row :: proc(app_state: ^App_State, row: ^Row, pos_y: ^f32) {
 
     pos_y^ += ROW_HEIGHT
 
-    cover_texture := get_album_cover_texture(app_state, row.album_idx)
-    rl.DrawTexture(cover_texture, i32(app_state.main_panel_rect.x), i32(pos_y^), rl.WHITE)
+    cover_texture, found := get_album_cover_texture(app_state, row.album_idx)
+    if found {
+        rl.DrawTexture(cover_texture, i32(app_state.main_panel_rect.x), i32(pos_y^), rl.WHITE)
+    }
 }
 
 @(private = "file")
@@ -773,7 +777,10 @@ draw_debug_panel :: proc(app_state: ^App_State) {
 }
 
 draw_search_panel :: proc(app_state: ^App_State) {
-    rl.DrawRectangleRec(rl.Rectangle{0, 0, f32(rl.GetScreenWidth()), f32(rl.GetScreenHeight())}, rl.Fade(rl.GRAY, 0.5))
+    rl.DrawRectangleRounded(rl.Rectangle{
+        f32(rl.GetScreenWidth() / 2 - 500)- 2.5,
+        200 - 2.5,
+        1005, 1005}, 0.1, 0, rl.Fade(rl.GRAY, 0.5))
 
     app_state.search_panel_rect = rl.Rectangle{
         x = f32(rl.GetScreenWidth() / 2 - 500),
@@ -782,27 +789,35 @@ draw_search_panel :: proc(app_state: ^App_State) {
         width = 1000
     }
 
-    rl.DrawRectangleRec(app_state.search_panel_rect, rl.BLACK)
+    rl.DrawRectangleRounded(app_state.search_panel_rect, 0.1, 0, rl.BLACK)
 
     input := utf8.runes_to_string(app_state.search_input[:], context.temp_allocator)
     cinput := fmt.ctprintf("%s", app_state.search_input)
 
     rl.DrawTextEx(
-        app_state.fonts[FONT_18],
+        app_state.fonts[FONT_20],
         cinput,
-        {app_state.search_panel_rect.x, app_state.search_panel_rect.y},
-        FONT_18, 0, rl.WHITE)
+        {app_state.search_panel_rect.x + 20, app_state.search_panel_rect.y + 20},
+        FONT_20, 0, rl.WHITE)
 
-    y := app_state.search_panel_rect.y + 20
+    // input caret
+    // @todo: move the caret
+    {
+        app_state.search_panel.caret.caret_rect = rl.Rectangle{
+            x = app_state.search_panel_rect.x + 20, 
+            y = app_state.search_panel_rect.y + 20,
+            height = 20,
+            width = 2
+        }
+        rl.DrawRectangleRec(app_state.search_panel.caret.caret_rect, rl.WHITE)
+    }
+
+    y := app_state.search_panel_rect.y + 50
     for key, value in app_state.search_results {
-        bounds := rl.Rectangle{app_state.search_panel_rect.x, y, 100, 20}
-        rl.DrawTextEx(
-            app_state.fonts[FONT_18],
-            value.artist_name,
-            {app_state.search_panel_rect.x, y},
-            FONT_18, 0, rl.WHITE)
+        bounds := rl.Rectangle{app_state.search_panel_rect.x, y, app_state.search_panel_rect.width, 20}
 
         if rl.CheckCollisionPointRec(rl.GetMousePosition(), bounds) {
+            rl.DrawRectangleRec(bounds, rl.GRAY)
             if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
                 if value.artist_name == app_state.current_selected_artist do return
 
@@ -812,6 +827,12 @@ draw_search_panel :: proc(app_state: ^App_State) {
                 close_search_panel(app_state)
             }
         }
+
+        rl.DrawTextEx(
+            app_state.fonts[FONT_20],
+            value.artist_name,
+            {app_state.search_panel_rect.x + 20, y},
+            FONT_20, 0, rl.WHITE)
 
         y += 20
     }

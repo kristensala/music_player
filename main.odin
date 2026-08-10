@@ -96,7 +96,13 @@ Playback_Controls_Panel :: struct {
     shuffle_on_button_texture: rl.Texture2D
 }
 
+Caret :: struct {
+    caret_rect: rl.Rectangle,
+    caret_pos: [2]f32
+}
+
 Search_Panel :: struct {
+    caret: Caret,
     search_panel_rect: rl.Rectangle,
 
     search_input: [dynamic]rune,
@@ -705,6 +711,8 @@ handle_search_panel_keyboard_events :: proc(app_state: ^App_State) {
 
     input := rl.GetCharPressed()
     if input > 0 {
+        //glyph_info := rl.GetGlyphInfo(app_state.fonts[FONT_20], input)
+
         append(&app_state.search_input, input)
 
         input := utf8.runes_to_string(app_state.search_input[:], context.temp_allocator)
@@ -1147,19 +1155,21 @@ remove_entry_from_cache :: proc(cache: ^Album_Art_Cache, entry_idx: i32) {
     assert(cache.count >= 0)
 }
 
-get_album_cover_texture :: proc(app_state: ^App_State, album_idx: Album_Idx) -> rl.Texture2D {
+get_album_cover_texture :: proc(app_state: ^App_State, album_idx: Album_Idx) -> (txr: rl.Texture2D, found: bool)  {
     album := app_state.albums[album_idx]
     if album.cover_art_cache_entry_idx >= 0 {
         cache_entry := app_state.album_art_cache.entries[album.cover_art_cache_entry_idx]
         cache_entry.frame = app_state.current_frame_rendered
-        return cache_entry.texture
+        return cache_entry.texture, true
     } else {
         if len(album.cover_art_path) > 0 {
             request_cover_load(&app_state.album_art_load_queue, album_idx)
+            return {}, false
+        } else {
+            return app_state.default_album_cover_texture, true
         }
-        return app_state.default_album_cover_texture
     }
-    return app_state.default_album_cover_texture
+    return app_state.default_album_cover_texture, true
 }
 
 @(private = "file")
