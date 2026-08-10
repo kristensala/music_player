@@ -789,24 +789,6 @@ init_library :: proc(app_state: ^App_State) {
     scan_library(app_state, app_state.library_path)
     create_albums(app_state)
 
-    sort.quick_sort_proc(app_state.artist_list[1:], proc(a, b: cstring) -> int {
-        x, err_x := strings.to_lower(string(a), context.temp_allocator)
-        y, err_y := strings.to_lower(string(b), context.temp_allocator)
-
-        if x < y do return -1
-        if x > y do return 1
-        return 0
-    })
-
-    sort.quick_sort_proc(app_state.albums[:], proc(a, b: Album) -> int {
-        x, err_x := strings.to_lower(string(a.artist), context.temp_allocator)
-        y, err_y := strings.to_lower(string(b.artist), context.temp_allocator)
-
-        if x < y do return -1
-        if x > y do return 1
-        return 0
-    })
-
     for a in app_state.albums {
         sort.quick_sort_proc(a.tracks[:], proc(a, b: ^Track) -> int {
             x, err_x := strings.to_lower(string(a.file_name), context.temp_allocator)
@@ -847,6 +829,15 @@ scan_library :: proc(app_state: ^App_State, current_working_dir: string) {
     }
     defer delete(data)
 
+    sort.quick_sort_proc(data[:], proc(a, b: os.File_Info) -> int {
+        x, err_x := strings.to_lower(a.name, context.temp_allocator)
+        y, err_y := strings.to_lower(b.name, context.temp_allocator)
+
+        if x < y do return -1
+        if x > y do return 1
+        return 0
+    })
+
     for d in data {
         if d.type == .Directory {
             scan_library(app_state, d.fullpath)
@@ -874,7 +865,6 @@ create_albums :: proc(app_state: ^App_State) {
         album_idx, album_exists := tmp_album_map[album_identifier]
         if !album_exists {
             album_idx = i32(len(app_state.albums))
-            // @note: assumes that albums are organized into folders 
             album_cover := find_album_cover(dir)
 
             artist := len(it.album_artist) > 0 ? it.album_artist : it.artist
@@ -887,14 +877,16 @@ create_albums :: proc(app_state: ^App_State) {
             tmp_album_map[album_identifier] = album_idx
             append(&app_state.albums, album)
         }
-
+        
         album := &app_state.albums[album_idx]
         append(&album.tracks, &it)
+        it.album_idx = album_idx
 
         if !slice.contains(app_state.artist_list[:], album.artist) {
             append(&app_state.artist_list, album.artist)
         }
     }
+
 }
 
 find_album_cover :: proc(dir: string) -> cstring {
@@ -1037,7 +1029,7 @@ least_used_cover_art_cache_entry :: proc(app_state: ^App_State) -> (cache_entry_
 }
 
 @private
-request_cover_load :: proc(queue: ^[dynamic]i32, album_idx: i32) {
+request_cover_load :: proc(queue: ^[dynamic]Album_Idx, album_idx: i32) {
     if len(queue) == CACHE_MAX_CAPACITY do return
 
     is_in_queue := false
@@ -1153,6 +1145,21 @@ remove_entry_from_cache :: proc(cache: ^Album_Art_Cache, entry_idx: i32) {
     cache.count -= 1
 
     assert(cache.count >= 0)
+}
+
+get_album_cover_texture :: proc(app_state: ^App_State, album_idx: Album_Idx) -> rl.Texture2D {
+    album := app_state.albums[album_idx]
+    if album.cover_art_cache_entry_idx >= 0 {
+        cache_entry := app_state.album_art_cache.entries[album.cover_art_cache_entry_idx]
+        cache_entry.frame = app_state.current_frame_rendered
+        return cache_entry.texture
+    } else {
+        if len(album.cover_art_path) > 0 {
+            request_cover_load(&app_state.album_art_load_queue, album_idx)
+        }
+        return app_state.default_album_cover_texture
+    }
+    return app_state.default_album_cover_texture
 }
 
 @(private = "file")

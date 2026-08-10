@@ -23,32 +23,33 @@ draw_main :: proc(app_state: ^App_State) {
 
         // Display currently playing track
         {
-            currently_playing_track_title : cstring = ""
-            currently_playing_track_album : cstring = ""
-            currently_playing_artist : cstring = ""
             if app_state.currently_playing_track != nil {
-                currently_playing_track_title = app_state.currently_playing_track.title
-                currently_playing_track_album = app_state.currently_playing_track.album_title
-                currently_playing_artist = app_state.currently_playing_track.artist
+                cover_texture := get_album_cover_texture(app_state, app_state.currently_playing_track.album_idx)
+                rl.DrawTextureEx(
+                    cover_texture,
+                    {BOTTOM_BAR_PADDING, f32(rl.GetScreenHeight() - 125)},
+                    0,
+                    0.30,
+                    rl.WHITE)
+
+                rl.DrawTextEx(
+                    app_state.fonts[FONT_18],
+                    app_state.currently_playing_track.title,
+                    {BOTTOM_BAR_PADDING + 70, f32(rl.GetScreenHeight() - BOTTOM_BAR_PADDING - 75)},
+                    FONT_18, 0, rl.WHITE)
+
+                rl.DrawTextEx(
+                    app_state.fonts[FONT_18],
+                    app_state.currently_playing_track.artist,
+                    {BOTTOM_BAR_PADDING + 70, f32(rl.GetScreenHeight() - BOTTOM_BAR_PADDING - 55)},
+                    FONT_18, 0, rl.YELLOW)
+
+                rl.DrawTextEx(
+                    app_state.fonts[FONT_18],
+                    app_state.currently_playing_track.album_title,
+                    {BOTTOM_BAR_PADDING + 70, f32(rl.GetScreenHeight() - BOTTOM_BAR_PADDING - 35)},
+                    FONT_18, 0, rl.GRAY)
             }
-
-            rl.DrawTextEx(
-                app_state.fonts[FONT_18],
-                currently_playing_track_title,
-                {BOTTOM_BAR_PADDING, f32(rl.GetScreenHeight() - BOTTOM_BAR_PADDING - 70)},
-                FONT_18, 0, rl.WHITE)
-
-            rl.DrawTextEx(
-                app_state.fonts[FONT_18],
-                currently_playing_artist,
-                {BOTTOM_BAR_PADDING, f32(rl.GetScreenHeight() - BOTTOM_BAR_PADDING - 50)},
-                FONT_18, 0, rl.YELLOW)
-
-            rl.DrawTextEx(
-                app_state.fonts[FONT_18],
-                currently_playing_track_album,
-                {BOTTOM_BAR_PADDING, f32(rl.GetScreenHeight() - BOTTOM_BAR_PADDING - 30)},
-                FONT_18, 0, rl.GRAY)
         }
 
         // Progress bar
@@ -581,7 +582,7 @@ draw_insert_library_path_screen :: proc(app_state: ^App_State) {
 
 @(private = "file")
 draw_album_title_row :: proc(app_state: ^App_State, row: ^Row, pos_y: ^f32) {
-    album := &app_state.albums[row.album_idx]
+    album := app_state.albums[row.album_idx]
 
     list_item := rl.Rectangle{
         x = app_state.main_panel_rect.x,
@@ -608,18 +609,8 @@ draw_album_title_row :: proc(app_state: ^App_State, row: ^Row, pos_y: ^f32) {
 
     pos_y^ += ROW_HEIGHT
 
-    if album.cover_art_cache_entry_idx >= 0 {
-        cache_entry := app_state.album_art_cache.entries[album.cover_art_cache_entry_idx]
-        cache_entry.frame = app_state.current_frame_rendered
-        rl.DrawTexture(cache_entry.texture, i32(app_state.main_panel_rect.x), i32(pos_y^), rl.WHITE)
-    } else {
-        if len(album.cover_art_path) > 0 {
-            request_cover_load(&app_state.album_art_load_queue, row.album_idx)
-        } else { // no cover. Load default placeholder
-            rl.DrawTexture(app_state.default_album_cover_texture, i32(app_state.main_panel_rect.x), i32(pos_y^), rl.WHITE)
-        }
-    }
-
+    cover_texture := get_album_cover_texture(app_state, row.album_idx)
+    rl.DrawTexture(cover_texture, i32(app_state.main_panel_rect.x), i32(pos_y^), rl.WHITE)
 }
 
 @(private = "file")
