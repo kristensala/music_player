@@ -1,10 +1,9 @@
 # music_player
 
-![Demo](/images/demo.png)
-![Memory](/images/memory.png)
+![Demo](/images/demo.gif)
 
 # TODO
-- [ ] Show album art of the currently playing track
+- [x] Show album art of the currently playing track
 - [ ] Notification of currently playing track when track changes or player starts playing (DBUS or https://github.com/GNOME/libnotify)
 - [x] Fix the order of the tracks in an album (use metadata track nr if it is set, else use file name)
 - [x] Shuffle queue
