@@ -378,8 +378,7 @@ draw_artist_list :: proc(app_state: ^App_State) {
         }
 
         // center text
-        artist_txt_measurements := rl.MeasureTextEx(app_state.fonts[FONT_20], artist, FONT_20, 0)
-        txt_y := ((artist_item_bounds.height - artist_txt_measurements.y) / 2) + artist_item_bounds.y
+        txt_y := center_text_y(app_state.fonts[FONT_20], artist_item_bounds)
 
         txt_left_padding : f32 = 20
         rl.DrawTextEx(
@@ -444,8 +443,7 @@ draw_side_panel :: proc(app_state: ^App_State) {
             rl.DrawRectangleRec(artists_option_bounds, rl.ORANGE)
         }
 
-        text_measurement := rl.MeasureTextEx(app_state.fonts[FONT_20], "Artists", FONT_20, 0)
-        txt_y := ((artists_option_bounds.height - text_measurement.y) / 2) + artists_option_bounds.y
+        txt_y := center_text_y(app_state.fonts[FONT_20], artists_option_bounds)
 
         rl.DrawTextEx(
             app_state.fonts[FONT_20],
@@ -467,8 +465,8 @@ draw_side_panel :: proc(app_state: ^App_State) {
             rl.DrawRectangleRec(playlists_option_bounds, rl.ORANGE)
         }
 
-        text_measurement = rl.MeasureTextEx(app_state.fonts[FONT_20], "Playlists", FONT_20, 0)
-        txt_y = ((playlists_option_bounds.height - text_measurement.y) / 2) + playlists_option_bounds.y
+        txt_y = center_text_y(app_state.fonts[FONT_20], playlists_option_bounds)
+
         rl.DrawTextEx(
             app_state.fonts[FONT_20],
             "Playlists",
@@ -640,8 +638,7 @@ draw_track_list_item :: proc(app_state: ^App_State, pos_y: f32, row: ^Row) {
         }
     }
 
-    text_measurement := rl.MeasureTextEx(app_state.fonts[FONT_20], "placeholder", FONT_20, 0)
-    txt_y := ((list_item.height - text_measurement.y) / 2) + list_item.y
+    txt_y := center_text_y(app_state.fonts[FONT_20], list_item)
 
     txt_color := rl.LIGHTGRAY
     is_playing := app_state.currently_playing_track != nil && row.track.file_path == app_state.currently_playing_track.file_path
@@ -832,29 +829,63 @@ draw_search_panel :: proc(app_state: ^App_State) {
     {
         y := app_state.search_panel_rect.y + 70
         for key, value in app_state.search_results {
-            bounds := rl.Rectangle{app_state.search_panel_rect.x, y, app_state.search_panel_rect.width, 20}
+            bounds := rl.Rectangle{app_state.search_panel_rect.x, y, app_state.search_panel_rect.width, 30}
 
             if rl.CheckCollisionPointRec(rl.GetMousePosition(), bounds) {
-                rl.DrawRectangleRec(bounds, rl.GRAY)
+                rl.DrawRectangleRec(bounds, rl.ORANGE)
                 if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
-                    if value.artist_name == app_state.current_selected_artist do return
-
-                        app_state.current_selected_artist = value.artist_name
-                        app_state.main_panel_scroll_offset = 0
-                        app_state.rebuild_rows = true
-                        close_search_panel(app_state)
+                    if value.type == .Artist {
+                        if value.artist_name == app_state.current_selected_artist do continue
+                            app_state.current_selected_artist = value.artist_name
+                            app_state.main_panel_scroll_offset = 0
+                            app_state.rebuild_rows = true
+                    } else if value.type == .Album {
+                        if value.album.artist == app_state.current_selected_artist do continue
+                            app_state.current_selected_artist = value.album.artist
+                            app_state.main_panel_scroll_offset = 0
+                            app_state.rebuild_rows = true
+                    }
+                    close_search_panel(app_state)
                 }
             }
 
-            rl.DrawTextEx(
-                app_state.fonts[FONT_20],
-                value.artist_name,
-                {app_state.search_panel_rect.x + 20, y},
-                FONT_20, 0, rl.WHITE)
+            txt_y := center_text_y(app_state.fonts[FONT_20], bounds)
 
-            y += 20
+            if value.type == .Artist {
+                rl.DrawTextEx(
+                    app_state.fonts[FONT_20],
+                    "ARTIST",
+                    {app_state.search_panel_rect.x + 20, txt_y},
+                    FONT_20, 0, rl.GRAY)
+
+                rl.DrawTextEx(
+                    app_state.fonts[FONT_20],
+                    value.artist_name,
+                    {app_state.search_panel_rect.x + 100, txt_y},
+                    FONT_20, 0, rl.WHITE)
+            } else if value.type == .Album {
+                rl.DrawTextEx(
+                    app_state.fonts[FONT_20],
+                    "ALBUM",
+                    {app_state.search_panel_rect.x + 20, txt_y},
+                    FONT_20, 0, rl.GRAY)
+
+                rl.DrawTextEx(
+                    app_state.fonts[FONT_20],
+                    value.album.title,
+                    {app_state.search_panel_rect.x + 100, txt_y},
+                    FONT_20, 0, rl.WHITE)
+            }
+
+            y += 30
         }
     }
+}
+
+center_text_y :: proc(font: rl.Font, bounds: rl.Rectangle) -> f32 {
+    text_measurement := rl.MeasureTextEx(font, "test", FONT_20, 0)
+    txt_y := ((bounds.height - text_measurement.y) / 2) + bounds.y
+    return txt_y
 }
 
 // @todo: input field 

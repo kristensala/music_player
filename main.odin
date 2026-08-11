@@ -121,8 +121,8 @@ Search_Result_Row :: struct {
     type: Search_Result_Type,
 
     artist_name: cstring,
-    track_idx: Track_Idx,
-    album_idx: Album_Idx
+    track_idx: Track_Idx, // @note: should probably use a pointer ^Track
+    album: ^Album
 }
 
 Create_Playlist_Modal :: struct {
@@ -180,6 +180,10 @@ App_State :: struct {
     // filtering
     artist_list: [dynamic]cstring,
     current_selected_artist: cstring, // nil means show all the tracks
+
+    // @todo: not implemented
+    // ALSO: remove highlight after user interacts with the application in any way
+    highlighted_track_after_search: ^Track,
 
     album_art_cache: Album_Art_Cache,
     album_art_load_queue: [dynamic]Album_Idx, // ref album idx
@@ -715,42 +719,81 @@ handle_search_panel_keyboard_events :: proc(app_state: ^App_State) {
     }
 
     if rl.IsKeyPressed(rl.KeyboardKey.BACKSPACE) {
-        if len(app_state.search_input) > 0 do pop(&app_state.search_input)
-        // @todo: update search results
+        if len(app_state.search_input) > 0 {
+            pop(&app_state.search_input)
+        }
+        update_search_results(app_state)
     }
 
+    // @todo: ignore case and move cursor and insert at cursor position
+    // ability to navigate in results with arrow keys
     input := rl.GetCharPressed()
     if input > 0 {
         //glyph_info := rl.GetGlyphInfo(app_state.fonts[FONT_20], input)
 
         append(&app_state.search_input, input)
+        if len(app_state.search_input) < 2 do return
 
-        input := utf8.runes_to_string(app_state.search_input[:], context.temp_allocator)
-        for it in app_state.artist_list {
-            if strings.has_prefix(string(it), input) {
-                keys_to_remove: [dynamic]cstring
-                for key, value in app_state.search_results {
-                    if !strings.has_prefix(string(key), input) {
-                        append(&keys_to_remove, key)
-                    }
+        update_search_results(app_state)
+    }
+}
+
+update_search_results :: proc(app_state: ^App_State) {
+    input := utf8.runes_to_string(app_state.search_input[:], context.temp_allocator)
+
+    if len(input) < 2 {
+        clear(&app_state.search_results)
+        return
+    }
+
+    input_lower := strings.to_lower(input, context.temp_allocator)
+    keys_to_remove: [dynamic]cstring
+    for key, value in app_state.search_results {
+        if !strings.contains(strings.to_lower(string(key), context.temp_allocator), input_lower) {
+            append(&keys_to_remove, key)
+        }
+    }
+    for it in keys_to_remove {
+        delete_key(&app_state.search_results, it)
+    }
+    delete(keys_to_remove)
+
+    for it in app_state.artist_list {
+        it_lower := strings.to_lower(string(it), context.temp_allocator)
+
+        if strings.contains(it_lower, input_lower) {
+            _, exists := app_state.search_results[it]
+            if !exists {
+                result_row := Search_Result_Row{
+                    type = .Artist,
+                    artist_name = it
                 }
 
-                for it in keys_to_remove {
-                    delete_key(&app_state.search_results, it)
-                }
-                delete(keys_to_remove)
-
-                _, exists := app_state.search_results[it]
-                if !exists {
-                    result_row := Search_Result_Row{
-                        type = .Artist,
-                        artist_name = it
-                    }
-
-                    app_state.search_results[it] = result_row
-                }
+                app_state.search_results[it] = result_row
             }
         }
+    }
+
+    for &it in app_state.albums {
+        album_title_lower := strings.to_lower(string(it.title), context.temp_allocator)
+
+        if strings.contains(album_title_lower, input_lower) {
+            _, exists := app_state.search_results[it.title]
+            if !exists {
+                result_row := Search_Result_Row{
+                    type = .Album,
+                    album = &it
+                }
+
+                // if artist and album title match
+                // key should be artist_{value}
+                // key should be album_{album_title}_{artist}
+                // key should be track_{track_name}_{artist}
+                app_state.search_results[it.title] = result_row
+            }
+        }
+
+
     }
 }
 
@@ -766,7 +809,7 @@ handle_main_view_keyboard_events :: proc(app_state: ^App_State) {
     }
 
     if rl.IsKeyDown(rl.KeyboardKey.LEFT_CONTROL) {
-        if rl.IsKeyPressed(rl.KeyboardKey.F) {
+        if rl.IsKeyPressed(rl.KeyboardKey.P) {
             app_state.active_viewport = .Search
         }
     }
