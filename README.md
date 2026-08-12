@@ -11,8 +11,7 @@
 - [ ] Search
 - [ ] Unix domain socket (IPC) for playback control
 - [ ] Taglib text encoding bug (' is not properly encoded, returns ?)
-- [ ] Prompt enter library location when not found in config
-- [ ] File dialog lib: https://github.com/btzy/nativefiledialog-extended
+- [ ] Prompt enter library location when not found in config (https://github.com/btzy/nativefiledialog-extended)
 - [ ] Command Palette for settings etc
 - [x] Repeat song or queue button
 - [x] Logging and fix error handling

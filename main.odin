@@ -15,6 +15,7 @@ import "core:path/filepath"
 import "core:os"
 import "core:sync"
 import tl "taglib"
+//import "nfd"
 
 FONT_DATA :: #load("assets/Inter.ttf")
 ALBUM_ART_PLACEHOLDER :: #load("./assets/album_placeholder.png")
@@ -108,7 +109,9 @@ Search_Panel :: struct {
     search_panel_rect: rl.Rectangle,
 
     search_input: [dynamic]rune,
-    search_results: map[cstring]Search_Result_Row
+    search_results: [dynamic]Search_Result_Row,
+
+    search_panel_scroll_index: i32
 }
 
 Search_Result_Type :: enum {
@@ -709,6 +712,7 @@ handle_keyboard_events :: proc(app_state: ^App_State) {
 
 close_search_panel :: proc(app_state: ^App_State) {
     app_state.active_viewport = .Main
+    app_state.search_panel_scroll_index = 0
     clear(&app_state.search_input)
     clear(&app_state.search_results)
 }
@@ -746,31 +750,21 @@ update_search_results :: proc(app_state: ^App_State) {
         return
     }
 
+    results : [dynamic]Search_Result_Row
+    defer delete(results)
+
     input_lower := strings.to_lower(input, context.temp_allocator)
-    keys_to_remove: [dynamic]cstring
-    for key, value in app_state.search_results {
-        if !strings.contains(strings.to_lower(string(key), context.temp_allocator), input_lower) {
-            append(&keys_to_remove, key)
-        }
-    }
-    for it in keys_to_remove {
-        delete_key(&app_state.search_results, it)
-    }
-    delete(keys_to_remove)
 
     for it in app_state.artist_list {
         it_lower := strings.to_lower(string(it), context.temp_allocator)
 
         if strings.contains(it_lower, input_lower) {
-            _, exists := app_state.search_results[it]
-            if !exists {
-                result_row := Search_Result_Row{
-                    type = .Artist,
-                    artist_name = it
-                }
-
-                app_state.search_results[it] = result_row
+            result_row := Search_Result_Row{
+                type = .Artist,
+                artist_name = it
             }
+
+            append(&results, result_row)
         }
     }
 
@@ -778,23 +772,23 @@ update_search_results :: proc(app_state: ^App_State) {
         album_title_lower := strings.to_lower(string(it.title), context.temp_allocator)
 
         if strings.contains(album_title_lower, input_lower) {
-            _, exists := app_state.search_results[it.title]
-            if !exists {
-                result_row := Search_Result_Row{
-                    type = .Album,
-                    album = &it
-                }
-
-                // if artist and album title match
-                // key should be artist_{value}
-                // key should be album_{album_title}_{artist}
-                // key should be track_{track_name}_{artist}
-                app_state.search_results[it.title] = result_row
+            result_row := Search_Result_Row{
+                type = .Album,
+                album = &it
             }
+
+            // @todo
+            // if artist and album title match
+            // key should be artist_{value}
+            // key should be album_{album_title}_{artist}
+            // key should be track_{track_name}_{artist}
+            //app_state.search_results[it.title] = result_row
+            append(&results, result_row)
         }
-
-
     }
+
+    clear(&app_state.search_results)
+    append(&app_state.search_results, ..results[:])
 }
 
 handle_main_view_keyboard_events :: proc(app_state: ^App_State) {

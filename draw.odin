@@ -6,6 +6,8 @@ import "core:unicode/utf8"
 import rl "vendor:raylib"
 import ma "vendor:miniaudio"
 
+SEARCH_PANEL_ROW_HEIGHT :: 30
+
 @(private)
 draw_main :: proc(app_state: ^App_State) {
     draw_side_panel(app_state)
@@ -408,7 +410,7 @@ draw_artist_list :: proc(app_state: ^App_State) {
     }
 
     wheel := rl.GetMouseWheelMove()
-    if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_option_content_rect) {
+    if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_option_content_rect) && app_state.active_viewport == .Main {
         if wheel < 0 { // scroll down
             app_state.side_panel_scroll_offset = app_state.side_panel_scroll_offset + (SIDE_PANEL_ROW_HEIGHT * SCROLL_INCREMENT)
             if app_state.side_panel_scroll_offset >= (f32(len(app_state.artist_list) + 1) * SIDE_PANEL_ROW_HEIGHT) - app_state.side_panel_option_content_rect.height {
@@ -774,8 +776,10 @@ draw_debug_panel :: proc(app_state: ^App_State) {
 }
 
 draw_search_panel :: proc(app_state: ^App_State) {
+
     // panel body
     {
+
         rl.DrawRectangleRounded(rl.Rectangle{
             f32(rl.GetScreenWidth() / 2 - 500)- 2.5,
             200 - 2.5,
@@ -790,6 +794,12 @@ draw_search_panel :: proc(app_state: ^App_State) {
 
         rl.DrawRectangleRounded(app_state.search_panel_rect, 0.03, 0, rl.BLACK)
     }
+
+    rl.BeginScissorMode(
+        i32(app_state.search_panel_rect.x),
+        i32(app_state.search_panel_rect.y),
+        i32(app_state.search_panel_rect.width),
+        i32(app_state.search_panel_rect.height))
 
     // input
     {
@@ -827,8 +837,33 @@ draw_search_panel :: proc(app_state: ^App_State) {
 
     // search results
     {
-        y := app_state.search_panel_rect.y + 70
-        for key, value in app_state.search_results {
+        search_result_offset_y :: 70
+
+        search_content_height := app_state.search_panel_rect.height - search_result_offset_y
+        total_possible_rows_to_render := i32(search_content_height / SEARCH_PANEL_ROW_HEIGHT)
+        last_row_visible := i32(len(app_state.search_results)) < total_possible_rows_to_render ? i32(len(app_state.search_results)) : total_possible_rows_to_render
+
+        if last_row_visible < i32(len(app_state.search_results)) {
+            last_row_visible += app_state.search_panel_scroll_index
+        }
+
+        if len(app_state.search_results) > 0 {
+            wheel := rl.GetMouseWheelMove()
+            if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.search_panel_rect){
+                if wheel < 0 { // scroll down
+                    if i32(len(app_state.search_results)) > last_row_visible {
+                        app_state.search_panel_scroll_index += 1
+                    }
+                } else if wheel > 0 {
+                    if app_state.search_panel_scroll_index > 0 {
+                        app_state.search_panel_scroll_index -= 1
+                    }
+                }
+            }
+        }
+
+        y := app_state.search_panel_rect.y + search_result_offset_y
+        for value in app_state.search_results[app_state.search_panel_scroll_index:last_row_visible] {
             bounds := rl.Rectangle{app_state.search_panel_rect.x, y, app_state.search_panel_rect.width, 30}
 
             if rl.CheckCollisionPointRec(rl.GetMousePosition(), bounds) {
@@ -877,9 +912,11 @@ draw_search_panel :: proc(app_state: ^App_State) {
                     FONT_20, 0, rl.WHITE)
             }
 
-            y += 30
+            y += SEARCH_PANEL_ROW_HEIGHT
         }
     }
+
+    rl.EndScissorMode()
 }
 
 center_text_y :: proc(font: rl.Font, bounds: rl.Rectangle) -> f32 {
