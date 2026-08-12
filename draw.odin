@@ -776,7 +776,6 @@ draw_debug_panel :: proc(app_state: ^App_State) {
 }
 
 draw_search_panel :: proc(app_state: ^App_State) {
-
     // panel body
     {
 
@@ -867,11 +866,17 @@ draw_search_panel :: proc(app_state: ^App_State) {
             bounds := rl.Rectangle{app_state.search_panel_rect.x, y, app_state.search_panel_rect.width, 30}
 
             if rl.CheckCollisionPointRec(rl.GetMousePosition(), bounds) {
+                // highlight
                 rl.DrawRectangleRec(bounds, rl.ORANGE)
+
                 if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
                     if value.type == .Artist {
                         if value.artist_name == app_state.current_selected_artist do continue
-                            app_state.current_selected_artist = value.artist_name
+                            if value.artist_name == ALL_ARTISTS_OPTION {
+                                app_state.current_selected_artist = nil
+                            } else {
+                                app_state.current_selected_artist = value.artist_name
+                            }
                             app_state.main_panel_scroll_offset = 0
                             app_state.rebuild_rows = true
                     } else if value.type == .Album {
