@@ -75,6 +75,8 @@ Side_Panel :: struct {
 }
 
 Main_Panel :: struct {
+    main_panel_scroll_bar_rect: rl.Rectangle,
+
     main_panel_rect: rl.Rectangle,
     main_panel_scroll_offset: i32,
 

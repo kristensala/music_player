@@ -7,6 +7,7 @@ import rl "vendor:raylib"
 import ma "vendor:miniaudio"
 
 SEARCH_PANEL_ROW_HEIGHT :: 30
+CONTENT_MAX_HEIGHT_BUFFER :: 150 // 150 just a random buffer to fix minor calculation mistakes
 
 @(private)
 draw_main :: proc(app_state: ^App_State) {
@@ -562,8 +563,7 @@ draw_main_panel_content :: proc(app_state: ^App_State) {
     wheel := rl.GetMouseWheelMove()
     if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel_rect) && app_state.active_viewport == .Main {
         if wheel < 0 { // scroll down
-            //fmt.printfln("max height: %i; offset: %i; panel height: %f", app_state.content_max_height, app_state.main_panel_scroll_offset, app_state.main_panel.height)
-            if app_state.main_panel_scroll_offset + i32(app_state.main_panel_rect.height) < app_state.content_max_height + 150 { // 150 just a random buffer to fix minor calcualtion mistakes
+            if app_state.main_panel_scroll_offset + i32(app_state.main_panel_rect.height) < app_state.content_max_height + CONTENT_MAX_HEIGHT_BUFFER {
                 app_state.main_panel_scroll_offset += ROW_HEIGHT * 5
             }
         } else if wheel > 0 { // scroll up
@@ -575,6 +575,26 @@ draw_main_panel_content :: proc(app_state: ^App_State) {
             }
         }
     }
+
+    // @todo: main panel scroll bar
+    // have to redo the main panel scrolling and the list view drawing
+    /*{
+        if f32(app_state.content_max_height + 150) > app_state.main_panel_rect.height {
+            x := i32(app_state.main_panel_rect.height) * 100 / (app_state.content_max_height + CONTENT_MAX_HEIGHT_BUFFER)
+            scoll_bar_height := i32(app_state.main_panel_rect.height) * x / 100
+            scroll_bar_offset := f32(app_state.main_panel_scroll_offset) / f32(app_state.content_max_height + CONTENT_MAX_HEIGHT_BUFFER) * app_state.main_panel_rect.height
+
+            app_state.main_panel_scroll_bar_rect = rl.Rectangle{
+                x = f32(rl.GetScreenWidth() - 10),
+                y = scroll_bar_offset,
+                height = f32(scoll_bar_height),
+                width = 5
+            }
+
+            rl.DrawRectangleRec(app_state.main_panel_scroll_bar_rect, rl.GRAY)
+        }
+    }*/
+
 }
 
 @(private)
