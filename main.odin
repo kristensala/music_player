@@ -101,7 +101,9 @@ Playback_Controls_Panel :: struct {
 
 Caret :: struct {
     caret_rect: rl.Rectangle,
-    caret_pos: [2]f32
+    caret_pos: [2]f32,
+
+    caret_col_idx: i32 // position in input
 }
 
 Search_Panel :: struct {
@@ -723,6 +725,8 @@ handle_search_panel_keyboard_events :: proc(app_state: ^App_State) {
     }
 
     if rl.IsKeyPressed(rl.KeyboardKey.BACKSPACE) {
+        app_state.search_panel_scroll_index = 0
+
         if len(app_state.search_input) > 0 {
             pop(&app_state.search_input)
         }
@@ -733,6 +737,7 @@ handle_search_panel_keyboard_events :: proc(app_state: ^App_State) {
     // ability to navigate in results with arrow keys
     input := rl.GetCharPressed()
     if input > 0 {
+        app_state.search_panel_scroll_index = 0
         //glyph_info := rl.GetGlyphInfo(app_state.fonts[FONT_20], input)
 
         append(&app_state.search_input, input)
