@@ -1013,6 +1013,8 @@ build_rows :: proc(app_state: ^App_State) {
 find_and_set_current_position_in_queue :: proc(app_state: ^App_State) {
     assert(len(app_state.queue) > 0)
 
+    if app_state.currently_playing_track == nil do return
+
     for track, i in app_state.queue {
         if app_state.currently_playing_track.file_path == track.file_path {
             app_state.current_position_in_queue = i32(i)
@@ -1043,13 +1045,15 @@ build_queue :: proc(app_state: ^App_State) {
 }
 
 shuffle_queue :: proc(app_state: ^App_State) {
+    if len(app_state.queue) == 0 do return
+
     for i := len(app_state.queue) - 1; i >= 1; i -= 1 {
         j := rand.int31_max(i32(len(app_state.queue)))
 
         // currently playing track should be at the beginning of the queue when shuffled
-        if app_state.queue[i].file_path == app_state.currently_playing_track.file_path {
+        if app_state.currently_playing_track != nil && app_state.queue[i].file_path == app_state.currently_playing_track.file_path {
             app_state.queue[0], app_state.queue[i] = app_state.queue[i], app_state.queue[0] 
-        } else if app_state.queue[j].file_path == app_state.currently_playing_track.file_path {
+        } else if app_state.currently_playing_track != nil && app_state.queue[j].file_path == app_state.currently_playing_track.file_path {
             app_state.queue[0], app_state.queue[j] = app_state.queue[j], app_state.queue[0]
         } else {
             app_state.queue[i], app_state.queue[j] = app_state.queue[j], app_state.queue[i]
