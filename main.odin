@@ -100,10 +100,10 @@ Playback_Controls_Panel :: struct {
 }
 
 Caret :: struct {
-    caret_rect: rl.Rectangle,
-    caret_pos: [2]f32,
+    rect: rl.Rectangle,
+    pos: [2]f32,
 
-    caret_col_idx: i32 // position in input
+    col_idx: i32 // position in input
 }
 
 Search_Panel :: struct {
@@ -715,6 +715,9 @@ handle_keyboard_events :: proc(app_state: ^App_State) {
 close_search_panel :: proc(app_state: ^App_State) {
     app_state.active_viewport = .Main
     app_state.search_panel_scroll_index = 0
+    app_state.search_panel.caret.col_idx = 0
+    app_state.search_panel.caret.pos.x = 0
+
     clear(&app_state.search_input)
     clear(&app_state.search_results)
 }
@@ -729,6 +732,18 @@ handle_search_panel_keyboard_events :: proc(app_state: ^App_State) {
 
         if len(app_state.search_input) > 0 {
             pop(&app_state.search_input)
+
+            // update caret position
+            {
+                input := utf8.runes_to_string(app_state.search_input[:])
+                cinput := strings.clone_to_cstring(input)
+                text_measurement := rl.MeasureTextEx(app_state.fonts[FONT_20], cinput, FONT_20, 0)
+                delete(cinput)
+                delete(input)
+
+                app_state.search_panel.caret.pos.x = text_measurement.x
+                app_state.search_panel.caret.col_idx -= 1
+            }
         }
         update_search_results(app_state)
     }
@@ -738,7 +753,13 @@ handle_search_panel_keyboard_events :: proc(app_state: ^App_State) {
     input := rl.GetCharPressed()
     if input > 0 {
         app_state.search_panel_scroll_index = 0
-        //glyph_info := rl.GetGlyphInfo(app_state.fonts[FONT_20], input)
+
+        // update caret position
+        {
+            app_state.search_panel.caret.col_idx += 1
+            glyph_info := rl.GetGlyphInfo(app_state.fonts[FONT_20], input)
+            app_state.search_panel.caret.pos.x += f32(glyph_info.advanceX)
+        }
 
         append(&app_state.search_input, input)
         if len(app_state.search_input) < 2 do return

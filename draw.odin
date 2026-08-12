@@ -778,9 +778,8 @@ draw_debug_panel :: proc(app_state: ^App_State) {
 draw_search_panel :: proc(app_state: ^App_State) {
     // panel body
     {
-
         rl.DrawRectangleRounded(rl.Rectangle{
-            f32(rl.GetScreenWidth() / 2 - 500)- 2.5,
+            f32(rl.GetScreenWidth() / 2 - 500) - 2.5,
             200 - 2.5,
             1005, 1005}, 0.03, 0, rl.Fade(rl.GRAY, 0.5))
 
@@ -794,14 +793,11 @@ draw_search_panel :: proc(app_state: ^App_State) {
         rl.DrawRectangleRounded(app_state.search_panel_rect, 0.03, 0, rl.BLACK)
     }
 
-    rl.BeginScissorMode(
-        i32(app_state.search_panel_rect.x),
-        i32(app_state.search_panel_rect.y),
-        i32(app_state.search_panel_rect.width),
-        i32(app_state.search_panel_rect.height))
-
     // input
     {
+        INPUT_X_OFFSET :: 60
+        INPUT_Y_OFFSET :: 20
+
         rl.DrawTexture(
             app_state.search_logo_texture,
             i32(app_state.search_panel_rect.x + 20), i32(app_state.search_panel_rect.y + 15),
@@ -813,26 +809,33 @@ draw_search_panel :: proc(app_state: ^App_State) {
         rl.DrawTextEx(
             app_state.fonts[FONT_20],
             cinput,
-            {app_state.search_panel_rect.x + 60, app_state.search_panel_rect.y + 20},
+            {app_state.search_panel_rect.x + INPUT_X_OFFSET, app_state.search_panel_rect.y + INPUT_Y_OFFSET},
             FONT_20, 0, rl.WHITE)
 
         // input caret
-        // @todo: move the caret
         {
-            app_state.search_panel.caret.caret_rect = rl.Rectangle{
-                x = app_state.search_panel_rect.x + 60, 
-                y = app_state.search_panel_rect.y + 20,
+            app_state.search_panel.caret.rect = rl.Rectangle{
+                x = app_state.search_panel_rect.x + INPUT_X_OFFSET + app_state.search_panel.caret.pos.x, 
+                y = app_state.search_panel_rect.y + INPUT_Y_OFFSET,
                 height = 20,
                 width = 2
             }
-            rl.DrawRectangleRec(app_state.search_panel.caret.caret_rect, rl.WHITE)
+
+            rl.DrawRectangleRec(app_state.search_panel.caret.rect, rl.WHITE)
         }
+
         rl.DrawLineEx(
             {app_state.search_panel_rect.x, app_state.search_panel_rect.y + 60},
             {app_state.search_panel_rect.x + app_state.search_panel_rect.width, app_state.search_panel_rect.y + 60},
             1.0,
             rl.GRAY)
     }
+
+    rl.BeginScissorMode(
+        i32(app_state.search_panel_rect.x),
+        i32(app_state.search_panel_rect.y),
+        i32(app_state.search_panel_rect.width),
+        i32(app_state.search_panel_rect.height))
 
     // search results
     {
