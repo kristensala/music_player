@@ -1,3 +1,4 @@
+#+feature dynamic-literals
 package main
 
 import "core:fmt"
@@ -15,7 +16,7 @@ import "core:path/filepath"
 import "core:os"
 import "core:sync"
 import tl "taglib"
-//import "nfd"
+import "nfd"
 
 FONT_DATA :: #load("assets/Inter.ttf")
 ALBUM_ART_PLACEHOLDER :: #load("./assets/album_placeholder.png")
@@ -121,7 +122,8 @@ Search_Panel :: struct {
 Search_Result_Type :: enum {
     Album,
     Track,
-    Artist
+    Artist,
+    Command
 }
 
 Search_Result_Row :: struct {
@@ -129,7 +131,8 @@ Search_Result_Row :: struct {
 
     artist_name: cstring,
     track_idx: Track_Idx, // @note: should probably use a pointer ^Track
-    album: ^Album
+    album: ^Album,
+    cmd: Command
 }
 
 Create_Playlist_Modal :: struct {
@@ -151,6 +154,16 @@ Playback_Mode :: enum i32 {
     Repeat_Queue = 2,
 }
 
+Command :: enum {
+    Set_Library,
+    Create_Playlist
+}
+
+COMMANDS := map[Command]cstring{
+    .Set_Library = "Set library",
+    .Create_Playlist = "Create a new playlist"
+}
+
 App_State :: struct {
     mutex: sync.Mutex,
     active_viewport: Active_Viewport,
@@ -165,8 +178,11 @@ App_State :: struct {
 
     fonts: map[i32]rl.Font,
 
-    library_path        : string,
+    config_path         : cstring,
+
+    library_path        : cstring,
     is_library_path_set : bool,
+    rescan_library      : bool,
 
     tracks: [dynamic]Track,
     albums: [dynamic]Album,
@@ -331,6 +347,9 @@ main :: proc() {
     rl.SetTargetFPS(60)
     rl.SetExitKey(.KEY_NULL)
 
+    nfd.Init()
+    defer nfd.Quit()
+
     app_state := init_state()
 
     if app_state.is_library_path_set {
@@ -367,30 +386,24 @@ main :: proc() {
             was_focused = is_focused
         }
 
-        if app_state.is_library_path_set {
-            update_main(app_state)
-            update_layout(app_state)
-        }
+        update_main(app_state)
+        update_layout(app_state)
 
         rl.BeginDrawing()
         rl.ClearBackground(rl.BLACK)
 
-        if app_state.is_library_path_set {
-            draw_main(app_state)
+        draw_main(app_state)
 
-            if app_state.is_create_playlist_modal_open {
-                draw_create_playlist_modal(app_state)
-            }
+        if app_state.is_create_playlist_modal_open {
+            draw_create_playlist_modal(app_state)
+        }
 
-            if app_state.active_viewport == .Search {
-                draw_search_panel(app_state)
-            }
+        if app_state.active_viewport == .Search {
+            draw_search_panel(app_state)
+        }
 
-            if app_state.show_debug_panel {
-                draw_debug_panel(app_state)
-            }
-        } else {
-            draw_insert_library_path_screen(app_state)
+        if app_state.show_debug_panel {
+            draw_debug_panel(app_state)
         }
 
         rl.EndDrawing()
@@ -414,6 +427,21 @@ update_main :: proc(app_state: ^App_State) {
 
     if app_state.rebuild_rows {
         build_rows(app_state)
+    }
+
+    if app_state.rescan_library {
+        app_state.rescan_library = false
+
+        clear_cache(&app_state.album_art_cache)
+        reset_player(app_state)
+        reset_library(app_state)
+
+        append(&app_state.artist_list, ALL_ARTISTS_OPTION)
+        init_library(app_state)
+
+        app_state.rebuild_rows = true
+        build_rows(app_state) // for ui
+        build_queue(app_state)
     }
 
     if ma.sound_at_end(app_state.ma_sound) {
@@ -452,6 +480,34 @@ player_repeat_one :: proc(app_state: ^App_State) {
         reset_player(app_state)
         return
     }
+}
+
+reset_library :: proc(app_state: ^App_State) {
+    ma.sound_uninit(app_state.ma_sound)
+    clear(&app_state.rows)
+    clear(&app_state.artist_list)
+
+    for entry in app_state.album_art_cache.entries {
+        if entry == nil do continue
+        rl.UnloadTexture(entry.texture)
+    }
+
+    for a in app_state.albums {
+        delete(a.tracks)
+        delete(a.cover_art_path)
+    }
+    clear(&app_state.albums)
+
+    for t in app_state.tracks {
+        delete(t.file_name)
+        delete(t.file_path)
+        delete(t.title)
+        delete(t.artist)
+        delete(t.album_artist)
+        delete(t.album_title)
+    }
+    clear(&app_state.tracks)
+    clear(&app_state.queue)
 }
 
 // Sets the player into a Stopped state
@@ -507,13 +563,17 @@ destroy_state :: proc(app_state: ^App_State) {
     }
     delete(app_state.fonts)
 
+
+    // @note: if set through file dialog then no need to delete. If read from config file, I think I should delete
     delete(app_state.library_path)
+
     //delete(app_state.playlist_path)
     delete(app_state.create_playlist_modal_input)
     delete(app_state.queue)
 
     delete(app_state.search_input)
     delete(app_state.search_results)
+    delete(app_state.config_path)
 
     free(app_state)
 }
@@ -639,7 +699,6 @@ create_config_file :: proc(path: string) -> bool {
     return true
 }
 
-// @todo: windows
 @(private = "file")
 load_config :: proc(app_state: ^App_State) -> bool {
     home_dir, err := os.user_home_dir(context.allocator)
@@ -677,6 +736,8 @@ load_config :: proc(app_state: ^App_State) -> bool {
         if !create_result do return false
     }
 
+    app_state.config_path = strings.clone_to_cstring(config_file_path)
+
     file_data, read_err := os.read_entire_file_from_path(config_file_path, context.allocator)
     if read_err != nil {
         log.errorf("Could not read config file: %v", read_err)
@@ -693,7 +754,7 @@ load_config :: proc(app_state: ^App_State) -> bool {
             if !is_valid_library_path do continue
 
             if len(library_path) > 0 {
-                app_state.library_path = strings.clone(library_path)
+                app_state.library_path = strings.clone_to_cstring(library_path)
                 app_state.is_library_path_set = true
             }
         }
@@ -782,36 +843,46 @@ update_search_results :: proc(app_state: ^App_State) {
     defer delete(results)
 
     input_lower := strings.to_lower(input, context.temp_allocator)
-
-    for it in app_state.artist_list {
-        it_lower := strings.to_lower(string(it), context.temp_allocator)
-
-        if strings.contains(it_lower, input_lower) {
+    if strings.has_prefix(input_lower, "/cmd") {
+        for cmd in COMMANDS {
             result_row := Search_Result_Row{
-                type = .Artist,
-                artist_name = it
+                type = .Command,
+                cmd = cmd
             }
 
             append(&results, result_row)
         }
-    }
+    } else {
+        for it in app_state.artist_list {
+            it_lower := strings.to_lower(string(it), context.temp_allocator)
 
-    for &it in app_state.albums {
-        album_title_lower := strings.to_lower(string(it.title), context.temp_allocator)
+            if strings.contains(it_lower, input_lower) {
+                result_row := Search_Result_Row{
+                    type = .Artist,
+                    artist_name = it
+                }
 
-        if strings.contains(album_title_lower, input_lower) {
-            result_row := Search_Result_Row{
-                type = .Album,
-                album = &it
+                append(&results, result_row)
             }
+        }
 
-            // @todo
-            // if artist and album title match
-            // key should be artist_{value}
-            // key should be album_{album_title}_{artist}
-            // key should be track_{track_name}_{artist}
-            //app_state.search_results[it.title] = result_row
-            append(&results, result_row)
+        for &it in app_state.albums {
+            album_title_lower := strings.to_lower(string(it.title), context.temp_allocator)
+
+            if strings.contains(album_title_lower, input_lower) {
+                result_row := Search_Result_Row{
+                    type = .Album,
+                    album = &it
+                }
+
+                // @todo
+                // if artist and album title match
+                // key should be artist_{value}
+                // key should be album_{album_title}_{artist}
+                // key should be track_{track_name}_{artist}
+                //app_state.search_results[it.title] = result_row
+                append(&results, result_row)
+            }
         }
     }
 
@@ -869,7 +940,7 @@ handle_create_playlist_modal_keyboard_events :: proc(app_state: ^App_State) {
 
 }
 init_library :: proc(app_state: ^App_State) {
-    scan_library(app_state, app_state.library_path)
+    scan_library(app_state, string(app_state.library_path))
     create_albums(app_state)
 
     for a in app_state.albums {
@@ -1234,6 +1305,16 @@ remove_entry_from_cache :: proc(cache: ^Album_Art_Cache, entry_idx: i32) {
     assert(cache.count >= 0)
 }
 
+clear_cache :: proc(cache: ^Album_Art_Cache) {
+    for &e in cache.entries {
+        if e == nil do continue
+        rl.UnloadTexture(e.texture)
+        e = nil
+        free(e)
+    }
+    cache.count = 0
+}
+
 get_album_cover_texture :: proc(app_state: ^App_State, album_idx: Album_Idx) -> (txr: rl.Texture2D, found: bool)  {
     album := app_state.albums[album_idx]
     if album.cover_art_cache_entry_idx >= 0 {
@@ -1280,7 +1361,7 @@ init_playlists_from_playlist_files :: proc(app_state: ^App_State) {
             if line_idx == 0 {
                 current_playlist.title = line
             } else {
-                track_full_path, err := filepath.join({app_state.library_path, line}, context.allocator)
+                track_full_path, err := filepath.join({string(app_state.library_path), line}, context.allocator)
                 if err != nil {
                     fmt.eprintln(#procedure, "Failed to join library path with the path from playlist file: ", err)
                     line_idx += 1
@@ -1414,3 +1495,4 @@ update_layout :: proc(app_state: ^App_State) {
     app_state.playback_controls_panel_rect.width = f32(rl.GetScreenWidth())
     app_state.playback_controls_panel_rect.y = app_state.main_panel_rect.height
 }
+

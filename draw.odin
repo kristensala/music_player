@@ -1,10 +1,12 @@
 package main
 
 import "core:fmt"
+import "core:strings"
 import "core:log"
 import "core:unicode/utf8"
 import rl "vendor:raylib"
 import ma "vendor:miniaudio"
+import "nfd"
 
 SEARCH_PANEL_ROW_HEIGHT :: 30
 CONTENT_MAX_HEIGHT_BUFFER :: 150 // 150 just a random buffer to fix minor calculation mistakes
@@ -522,6 +524,8 @@ draw_side_panel :: proc(app_state: ^App_State) {
 
 @(private = "file")
 draw_main_panel_content :: proc(app_state: ^App_State) {
+    if len(app_state.rows) == 0 do return
+
     rl.BeginScissorMode(
         i32(app_state.main_panel_rect.x),
         i32(app_state.main_panel_rect.y),
@@ -530,7 +534,6 @@ draw_main_panel_content :: proc(app_state: ^App_State) {
 
     pos_y := app_state.main_panel_rect.y
 
-    if len(app_state.rows) == 0 do return
 
     start := i32(app_state.main_panel_scroll_offset / ROW_HEIGHT)
     assert(start >= 0)
@@ -595,11 +598,6 @@ draw_main_panel_content :: proc(app_state: ^App_State) {
         }
     }*/
 
-}
-
-@(private)
-draw_insert_library_path_screen :: proc(app_state: ^App_State) {
-    rl.DrawText("Set LIBRARY_PATH in ~/.config/music_player/config", 100, 100, FONT_30, rl.WHITE)
 }
 
 @(private = "file")
@@ -884,6 +882,7 @@ draw_search_panel :: proc(app_state: ^App_State) {
             }
         }
 
+        // @todo: draw commands
         y := app_state.search_panel_rect.y + search_result_offset_y
         for value in app_state.search_results[app_state.search_panel_scroll_index:last_row_visible] {
             bounds := rl.Rectangle{app_state.search_panel_rect.x, y, app_state.search_panel_rect.width, 30}
@@ -907,6 +906,16 @@ draw_search_panel :: proc(app_state: ^App_State) {
                             app_state.current_selected_artist = value.album.artist
                             app_state.main_panel_scroll_offset = 0
                             app_state.rebuild_rows = true
+                    } else if value.type == .Command {
+                        if value.cmd == .Set_Library {
+                            out_path : cstring
+                            res := nfd.PickFolderN(&out_path, "$HOME/Music")
+                            if res == .Okay {
+                                app_state.library_path = strings.clone_to_cstring(string(out_path))
+                                app_state.is_library_path_set = true
+                                app_state.rescan_library = true
+                            }
+                        }
                     }
                     close_search_panel(app_state)
                 }
@@ -938,6 +947,18 @@ draw_search_panel :: proc(app_state: ^App_State) {
                     value.album.title,
                     {app_state.search_panel_rect.x + 100, txt_y},
                     FONT_20, 0, rl.WHITE)
+            } else if value.type == .Command {
+                rl.DrawTextEx(
+                    app_state.fonts[FONT_20],
+                    "CMD",
+                    {app_state.search_panel_rect.x + 20, txt_y},
+                    FONT_20, 0, rl.GRAY)
+
+                rl.DrawTextEx(
+                    app_state.fonts[FONT_20],
+                    COMMANDS[value.cmd],
+                    {app_state.search_panel_rect.x + 100, txt_y},
+                    FONT_20, 0, rl.WHITE)
             }
 
             y += SEARCH_PANEL_ROW_HEIGHT
@@ -948,7 +969,7 @@ draw_search_panel :: proc(app_state: ^App_State) {
 }
 
 center_text_y :: proc(font: rl.Font, bounds: rl.Rectangle) -> f32 {
-    text_measurement := rl.MeasureTextEx(font, "test", FONT_20, 0)
+    text_measurement := rl.MeasureTextEx(font, "test", f32(font.baseSize), 0)
     txt_y := ((bounds.height - text_measurement.y) / 2) + bounds.y
     return txt_y
 }
