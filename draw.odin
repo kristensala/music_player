@@ -908,10 +908,13 @@ draw_search_panel :: proc(app_state: ^App_State) {
                             app_state.rebuild_rows = true
                     } else if value.type == .Command {
                         if value.cmd == .Set_Library {
+                            // library path change
                             out_path : cstring
                             res := nfd.PickFolderN(&out_path, "$HOME/Music")
                             if res == .Okay {
                                 app_state.library_path = strings.clone_to_cstring(string(out_path))
+                                nfd.FreePathN(out_path)
+
                                 app_state.is_library_path_set = true
                                 app_state.rescan_library = true
                             }
