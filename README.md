@@ -2,6 +2,9 @@
 
 ![Demo](/images/demo.gif)
 
+- File dialog from https://github.com/btzy/nativefiledialog-extended
+- Bindings for nativefiledialog-extended in odin from https://github.com/ivansouzamf/nativefiledialog-odin
+
 # TODO
 - [x] Show album art of the currently playing track
 - [ ] Notification of currently playing track when track changes or player starts playing (DBUS or https://github.com/GNOME/libnotify)
