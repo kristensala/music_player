@@ -57,9 +57,13 @@ foreign lib {
 
     bus_get        :: proc(type: DBusBusType, error: ^DBusError) -> ^DBusConnection ---
 
+    message_iter_init :: proc(message: ^DBusMessage, iter: ^DBusMessageIter) -> c.uint ---
     message_new_method_call :: proc(destination: cstring, path: cstring, iface: cstring, method: cstring) -> ^DBusMessage ---
     message_iter_init_append :: proc(message: ^DBusMessage, iter: ^DBusMessageIter) ---
     message_iter_append_basic :: proc(iter: ^DBusMessageIter, type: c.int, value: rawptr) -> c.uint ---
+
+    message_iter_get_arg_type :: proc(iter: ^DBusMessageIter) -> c.int ---
+    message_iter_get_basic :: proc(iter: ^DBusMessageIter, value: rawptr) ---
 
     message_iter_open_container :: proc(iter: ^DBusMessageIter, type: c.int, contained_signature: cstring, sub: ^DBusMessageIter) -> c.uint ---
     message_iter_close_container :: proc(iter: ^DBusMessageIter, sub: ^DBusMessageIter) -> c.uint ---
@@ -73,6 +77,8 @@ foreign lib {
     connection_unref :: proc(connection: ^DBusConnection) ---
 
     pending_call_block :: proc(pending: ^DBusPendingCall) ---
+    pending_call_steal_reply :: proc(pending: ^DBusPendingCall) -> ^DBusMessage ---
+    pending_call_unref :: proc(pending: ^DBusPendingCall) ---
 
     // request_bus_name
     //connection_register_object_path

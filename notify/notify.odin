@@ -82,6 +82,16 @@ init :: proc() {
     dbus.connection_flush(conn)
     dbus.pending_call_block(pending)
 
+    reply := dbus.pending_call_steal_reply(pending)
+    dbus.pending_call_unref(pending)
+    if reply != nil {
+        dbus.message_iter_init(reply, &args)
+        if dbus.DBUS_TYPE_UINT32 == dbus.message_iter_get_arg_type(&args) {
+            dbus.message_iter_get_basic(&args, &id)
+            fmt.println("notification ID: ", id)
+            dbus.message_unref(reply)
+        }
 
+    }
 }
 
