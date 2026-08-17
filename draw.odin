@@ -7,6 +7,7 @@ import "core:unicode/utf8"
 import rl "vendor:raylib"
 import ma "vendor:miniaudio"
 import "nfd"
+import "notify"
 
 SEARCH_PANEL_ROW_HEIGHT :: 30
 CONTENT_MAX_HEIGHT_BUFFER :: 150 // 150 just a random buffer to fix minor calculation mistakes
@@ -119,7 +120,7 @@ draw_playback_controls :: proc(app_state: ^App_State) {
 
         if rl.CheckCollisionPointRec(rl.GetMousePosition(), next_song_button_bounds) {
             if rl.IsMouseButtonPressed(.LEFT) {
-                handle_next_track_pick(app_state)
+                if handle_next_track_pick(app_state) do app_state.trigger_notification = true
             }
         }
     }
@@ -139,7 +140,7 @@ draw_playback_controls :: proc(app_state: ^App_State) {
 
         if rl.CheckCollisionPointRec(rl.GetMousePosition(), prev_song_button_bounds) {
             if rl.IsMouseButtonPressed(.LEFT) {
-                handle_prev_song_pick(app_state)
+                if handle_prev_song_pick(app_state) do app_state.trigger_notification = true
             }
         }
     }
@@ -719,8 +720,10 @@ draw_track_list_item :: proc(app_state: ^App_State, pos_y: f32, row: ^Row) {
                 app_state.audio_state = .Playing
                 app_state.currently_playing_track = selected_track
                 app_state.rebuild_queue = true
+                app_state.trigger_notification = true
             }
         }
+
     }
 }
 

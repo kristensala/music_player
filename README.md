@@ -6,16 +6,16 @@
 - Bindings for nativefiledialog-extended in odin from https://github.com/ivansouzamf/nativefiledialog-odin
 
 # TODO
-- [x] Show album art of the currently playing track
-- [ ] Notification of currently playing track when track changes or player starts playing (DBUS or https://github.com/GNOME/libnotify)
-- [x] Fix the order of the tracks in an album (use metadata track nr if it is set, else use file name)
-- [x] Shuffle queue
+- [ ] Notification of currently playing track when track changes or player starts playing (DBUS or https://github.com/GNOME/libnotify) (https://specifications.freedesktop.org/notification/latest/)
 - [ ] Support playlist creation ({LIBRARY_PATH}/mppl0 etc)
 - [ ] Search
-- [ ] Unix domain socket (IPC) for playback control
+- [ ] Unix domain socket (IPC) for playback control or dbus MPRIS
 - [ ] Taglib text encoding bug (' is not properly encoded, returns ?)
-- [ ] Prompt enter library location when not found in config (https://github.com/btzy/nativefiledialog-extended)
 - [ ] Command Palette for settings etc
+- [x] Fix the order of the tracks in an album (use metadata track nr if it is set, else use file name)
+- [x] Shuffle queue
+- [x] Show album art of the currently playing track
+- [x] Prompt enter library location when not found in config (https://github.com/btzy/nativefiledialog-extended)
 - [x] Repeat song or queue button
 - [x] Logging and fix error handling
 - [x] Debug cache invalidation (Something lives longer than it has to)

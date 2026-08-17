@@ -17,6 +17,8 @@ import "core:os"
 import "core:sync"
 import tl "taglib"
 import "nfd"
+import "dbus"
+import "notify"
 
 FONT_DATA :: #load("assets/Inter.ttf")
 ALBUM_ART_PLACEHOLDER :: #load("./assets/album_placeholder.png")
@@ -160,11 +162,15 @@ Command :: enum {
 }
 
 COMMANDS := map[Command]cstring{
-    .Set_Library = "Set library",
+    .Set_Library = "Change library path",
     .Create_Playlist = "Create a new playlist"
 }
 
 App_State :: struct {
+    dbus_connection: ^dbus.DBusConnection,
+    last_notification_id: u32,
+    trigger_notification: bool,
+
     mutex: sync.Mutex,
     active_viewport: Active_Viewport,
     playback_mode: Playback_Mode,
@@ -179,7 +185,6 @@ App_State :: struct {
     fonts: map[i32]rl.Font,
 
     config_path         : cstring,
-
     library_path        : cstring,
     is_library_path_set : bool,
     rescan_library      : bool,
@@ -298,6 +303,8 @@ init_state :: proc() -> ^App_State {
     app_state.main_panel_rect = rl.Rectangle{ x = app_state.side_panel_rect.width + 20, y = 20}
     app_state.playback_controls_panel_rect = rl.Rectangle{ x = 0, height = 170 }
 
+    app_state.dbus_connection = dbus_init()
+
     return app_state
 }
 
@@ -316,6 +323,7 @@ main :: proc() {
 			mem.tracking_allocator_destroy(&track)
 		}
 	}
+
 
     log_dir, err := os.user_log_dir(context.temp_allocator)
     assert(err == nil)
@@ -425,6 +433,10 @@ update_main :: proc(app_state: ^App_State) {
     process_album_art_queue(app_state)
     handle_keyboard_events(app_state)
 
+    if app_state.trigger_notification {
+        trigger_notification(app_state)
+    }
+
     if app_state.rebuild_rows {
         build_rows(app_state)
     }
@@ -449,6 +461,8 @@ update_main :: proc(app_state: ^App_State) {
             result := handle_next_track_pick(app_state)
             if !result {
                 reset_player(app_state)
+            } else {
+                app_state.trigger_notification = true
             }
         } else if app_state.playback_mode == .Repeat_One {
             player_repeat_one(app_state)
@@ -520,6 +534,10 @@ reset_player :: proc(app_state: ^App_State) {
 
 @private
 destroy_state :: proc(app_state: ^App_State) {
+    if app_state.dbus_connection != nil {
+        dbus.connection_unref(app_state.dbus_connection)
+    }
+
     ma.sound_uninit(app_state.ma_sound)
 
     delete(app_state.rows)
@@ -1494,5 +1512,34 @@ update_layout :: proc(app_state: ^App_State) {
 
     app_state.playback_controls_panel_rect.width = f32(rl.GetScreenWidth())
     app_state.playback_controls_panel_rect.y = app_state.main_panel_rect.height
+}
+
+trigger_notification :: proc(app_state: ^App_State) {
+    app_state.trigger_notification = false
+
+    if app_state.currently_playing_track == nil do return
+
+    app_state.last_notification_id = notify.send_notification(
+        app_state.dbus_connection,
+        app_state.currently_playing_track.title,
+        app_state.currently_playing_track.artist,
+        app_state.last_notification_id)
+
+}
+
+@(private = "file")
+dbus_init :: proc() -> ^dbus.DBusConnection {
+    dbus_err : dbus.DBusError
+    dbus.error_init(&dbus_err)
+
+    conn := dbus.bus_get(.DBUS_BUS_SESSION, &dbus_err)
+    if dbus.error_is_set(&dbus_err) == 1 {
+        fmt.println("DBUS Connection error")
+        dbus.error_free(&dbus_err)
+        return nil
+    }
+
+    fmt.println("DBus connection initialized")
+    return conn
 }
 
