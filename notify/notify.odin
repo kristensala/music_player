@@ -6,6 +6,8 @@ import "core:fmt"
 // Persist the last_notification_id
 // @todo: show album art and album name in the notification (can I use html in body?)
 send_notification :: proc(connection: ^dbus.DBusConnection, summary: cstring, body: cstring, last_notification_id: u32) -> u32 {
+    assert(connection != nil)
+
     args, array, dict, entry, variant : dbus.DBusMessageIter
     pending : ^dbus.DBusPendingCall
 
