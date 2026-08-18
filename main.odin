@@ -1522,11 +1522,18 @@ trigger_notification :: proc(app_state: ^App_State) {
     if app_state.currently_playing_track == nil do return
 
     when ODIN_OS == .Linux {
-        app_state.last_notification_id = notify.send_notification(
+        notification_id, err := notify.send_notification(
             app_state.dbus_connection,
             app_state.currently_playing_track.title,
             app_state.currently_playing_track.artist,
             app_state.last_notification_id)
+
+        if err != nil {
+            log.errorf("Dbus send notification error: %v; track title: %v", err, app_state.currently_playing_track.title)
+            return
+        }
+
+        app_state.last_notification_id = notification_id
     } else {
         log.warn("notifications not implemented for OS")
     }

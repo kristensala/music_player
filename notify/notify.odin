@@ -2,11 +2,29 @@ package notify
 
 import "../dbus"
 import "core:fmt"
+import "core:unicode/utf8"
+
+Notify_Error :: enum {
+    Not_Valid_Utf8_String,
+    Failed_To_Create_Message,
+    Failed_To_Send_Message
+}
+
+Error :: union {
+    dbus.DBusError,
+    Notify_Error
+}
 
 // Persist the last_notification_id
 // @todo: show album art and album name in the notification (can I use html in body?)
-send_notification :: proc(connection: ^dbus.DBusConnection, summary: cstring, body: cstring, last_notification_id: u32) -> u32 {
+send_notification :: proc(connection: ^dbus.DBusConnection, summary: cstring, body: cstring, last_notification_id: u32) -> (n: u32, err: Error) {
     assert(connection != nil)
+
+    is_summary_valid_utf8 := utf8.valid_string(string(summary))
+    is_body_valid_utf8 := utf8.valid_string(string(body))
+    if !is_summary_valid_utf8 || !is_body_valid_utf8 {
+        return last_notification_id, .Not_Valid_Utf8_String
+    }
 
     args, array, dict, entry, variant : dbus.DBusMessageIter
     pending : ^dbus.DBusPendingCall
@@ -20,7 +38,7 @@ send_notification :: proc(connection: ^dbus.DBusConnection, summary: cstring, bo
 
     if dbus_message == nil {
         fmt.println("Dbus message is nil")
-        return last_notification_id
+        return last_notification_id, .Failed_To_Create_Message
     }
     defer dbus.message_unref(dbus_message)
 
@@ -64,8 +82,7 @@ send_notification :: proc(connection: ^dbus.DBusConnection, summary: cstring, bo
     // because it forces the write to the transport now
     ret := dbus.connection_send_with_reply(connection, dbus_message, &pending, -1)
     if ret == 0 || pending == nil {
-        fmt.println("sending failed")
-        return last_notification_id
+        return last_notification_id, .Failed_To_Send_Message
     }
 
     dbus.connection_flush(connection) // in synchronous blocking code required to avoid deadlock
@@ -85,6 +102,6 @@ send_notification :: proc(connection: ^dbus.DBusConnection, summary: cstring, bo
 
     }
 
-    return notification_id
+    return notification_id, nil
 }
 
