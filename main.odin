@@ -330,7 +330,7 @@ main :: proc() {
     log_dir, err := os.user_log_dir(context.temp_allocator)
     assert(err == nil)
 
-    log_path, _ := filepath.join({log_dir, "music_player", "music_player_log.txt"}, context.temp_allocator)
+    log_path, _ := filepath.join({log_dir, "music_player_log.txt"}, context.temp_allocator)
     logh, logh_err := os.open(log_path, {.Create, .Trunc, .Read, .Write })
 
     if logh_err == os.ERROR_NONE {
