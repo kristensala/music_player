@@ -18,6 +18,7 @@ import "core:sync"
 import tl "taglib"
 import "nfd"
 import "dbus"
+import "sdbus"
 import "notify"
 
 FONT_DATA :: #load("assets/Inter.ttf")
@@ -167,6 +168,7 @@ COMMANDS := map[Command]cstring{
 }
 
 App_State :: struct {
+    bus: sdbus.Bus,
     dbus_connection: ^dbus.DBusConnection,
     last_notification_id: u32,
     trigger_notification: bool,
@@ -304,7 +306,7 @@ init_state :: proc() -> ^App_State {
     app_state.playback_controls_panel_rect = rl.Rectangle{ x = 0, height = 170 }
 
     when ODIN_OS == .Linux {
-        app_state.dbus_connection = dbus_init()
+        app_state.bus = dbus_init()
     }
 
     return app_state
@@ -325,7 +327,6 @@ main :: proc() {
 			mem.tracking_allocator_destroy(&track)
 		}
 	}
-
 
     log_dir, err := os.user_log_dir(context.temp_allocator)
     assert(err == nil)
@@ -539,6 +540,8 @@ destroy_state :: proc(app_state: ^App_State) {
     if app_state.dbus_connection != nil {
         dbus.connection_unref(app_state.dbus_connection)
     }
+
+    sdbus.flush_close_unref(app_state.bus)
 
     ma.sound_uninit(app_state.ma_sound)
 
@@ -1519,14 +1522,14 @@ update_layout :: proc(app_state: ^App_State) {
 trigger_notification :: proc(app_state: ^App_State) {
     app_state.trigger_notification = false
 
+    if app_state.bus == nil do return
     if app_state.currently_playing_track == nil do return
 
     when ODIN_OS == .Linux {
-        notification_id, err := notify.send_notification(
-            app_state.dbus_connection,
+        notification_id, err := notify.send_notification(app_state.bus, 
+            get_track_album_cover_path(app_state, app_state.currently_playing_track),
             app_state.currently_playing_track.title,
             app_state.currently_playing_track.artist,
-            get_track_album_cover_path(app_state, app_state.currently_playing_track),
             app_state.last_notification_id)
 
         if err != nil {
@@ -1542,19 +1545,15 @@ trigger_notification :: proc(app_state: ^App_State) {
 }
 
 @(private = "file")
-dbus_init :: proc() -> ^dbus.DBusConnection {
-    dbus_err : dbus.DBusError
-    dbus.error_init(&dbus_err)
-
-    conn := dbus.bus_get(.DBUS_BUS_SESSION, &dbus_err)
-    if dbus.error_is_set(&dbus_err) == 1 {
-        fmt.println("DBUS Connection error")
-        dbus.error_free(&dbus_err)
+dbus_init :: proc() -> sdbus.Bus {
+    bus: sdbus.Bus
+    res := sdbus.open_user(&bus)
+    if res < 0 {
+        log.errorf("Failed to connect to DBUS: ", res)
         return nil
     }
 
-    fmt.println("DBus connection initialized")
-    return conn
+    return bus
 }
 
 get_track_album_cover_path :: proc(app_state: ^App_State, track: ^Track) -> cstring {

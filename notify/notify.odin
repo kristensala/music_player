@@ -1,6 +1,6 @@
 package notify
 
-import "../dbus"
+import "../sdbus"
 import "core:fmt"
 import "core:unicode/utf8"
 
@@ -8,17 +8,60 @@ Notify_Error :: enum {
     Not_Valid_Utf8_String,
     Failed_To_Create_Message,
     Failed_To_Send_Message,
-    No_Content
+    No_Content,
+    Failed_To_Call_Method
 }
 
-Error :: union {
-    dbus.DBusError,
-    Notify_Error
+send_notification :: proc(bus: sdbus.Bus, icon, summary, body: cstring, last_notification_id: u32) -> (id: u32, err: Notify_Error) {
+    // nothing to show, so do not trigger the notification
+    if (summary == nil && body == nil) || (len(summary) == 0 && len(body) == 0) {
+        return last_notification_id, .No_Content
+    }
+
+    is_summary_valid_utf8 := utf8.valid_string(string(summary))
+    is_body_valid_utf8 := utf8.valid_string(string(body))
+    if !is_summary_valid_utf8 || !is_body_valid_utf8 {
+        return last_notification_id, .Not_Valid_Utf8_String
+    }
+    
+    message : sdbus.Message
+    defer sdbus.message_unref(message)
+
+
+    x := sdbus.call_method(
+        bus,
+        "org.freedesktop.Notifications",
+        "/org/freedesktop/Notifications",
+        "org.freedesktop.Notifications",
+        "Notify",
+        nil,
+        &message,
+        "susssasa{sv}i",
+        cstring("music_player"),
+        last_notification_id,
+        icon,
+        summary,
+        body,
+        i32(0),
+        i32(1),
+        cstring("urgency"), cstring("y"), u8(1),
+        i32(5000)
+    )
+
+    if x < 0 {
+        fmt.println("call method error", x)
+        return last_notification_id, .Failed_To_Call_Method
+    }
+
+    notification_id := last_notification_id
+    sdbus.message_read(message, "u", &notification_id)
+
+    return notification_id, nil
+
 }
 
-// Persist the last_notification_id
-// @todo: show album art and album name in the notification (can I use html in body?)
-send_notification :: proc(connection: ^dbus.DBusConnection, summary: cstring, body: cstring, icon: cstring, last_notification_id: u32) -> (n: u32, err: Error) {
+// libdbus-1 example
+/*send_notification :: proc(connection: ^dbus.DBusConnection, summary: cstring, body: cstring, icon: cstring, last_notification_id: u32) -> (n: u32, err: Error) {
     assert(connection != nil)
 
     // nothing to show, so do not trigger the notification
@@ -116,5 +159,5 @@ send_notification :: proc(connection: ^dbus.DBusConnection, summary: cstring, bo
     }
 
     return notification_id, nil
-}
+}*/
 

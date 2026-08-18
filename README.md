@@ -6,7 +6,8 @@
 - Bindings for nativefiledialog-extended in odin from https://github.com/ivansouzamf/nativefiledialog-odin
 
 # TODO
-- [ ] Notification of currently playing track when track changes or player starts playing (DBUS or https://github.com/GNOME/libnotify) (https://specifications.freedesktop.org/notification/latest/)
+- [ ] Add tracks as favourite (part of playlist support)
+- [ ] Use sdbus over libdbus-1. Way more concise
 - [ ] Support playlist creation ({LIBRARY_PATH}/mppl0 etc)
 - [ ] Search
 - [ ] Unix domain socket (IPC) for playback control or dbus MPRIS
