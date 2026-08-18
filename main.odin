@@ -1526,6 +1526,7 @@ trigger_notification :: proc(app_state: ^App_State) {
             app_state.dbus_connection,
             app_state.currently_playing_track.title,
             app_state.currently_playing_track.artist,
+            get_track_album_cover_path(app_state, app_state.currently_playing_track),
             app_state.last_notification_id)
 
         if err != nil {
@@ -1554,5 +1555,9 @@ dbus_init :: proc() -> ^dbus.DBusConnection {
 
     fmt.println("DBus connection initialized")
     return conn
+}
+
+get_track_album_cover_path :: proc(app_state: ^App_State, track: ^Track) -> cstring {
+    return app_state.albums[track.album_idx].cover_art_path
 }
 

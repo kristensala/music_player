@@ -7,7 +7,8 @@ import "core:unicode/utf8"
 Notify_Error :: enum {
     Not_Valid_Utf8_String,
     Failed_To_Create_Message,
-    Failed_To_Send_Message
+    Failed_To_Send_Message,
+    No_Content
 }
 
 Error :: union {
@@ -17,14 +18,20 @@ Error :: union {
 
 // Persist the last_notification_id
 // @todo: show album art and album name in the notification (can I use html in body?)
-send_notification :: proc(connection: ^dbus.DBusConnection, summary: cstring, body: cstring, last_notification_id: u32) -> (n: u32, err: Error) {
+send_notification :: proc(connection: ^dbus.DBusConnection, summary: cstring, body: cstring, icon: cstring, last_notification_id: u32) -> (n: u32, err: Error) {
     assert(connection != nil)
+
+    // nothing to show, so do not trigger the notification
+    if (summary == nil && body == nil) || (len(summary) == 0 && len(body) == 0) {
+        return last_notification_id, .No_Content
+    }
 
     is_summary_valid_utf8 := utf8.valid_string(string(summary))
     is_body_valid_utf8 := utf8.valid_string(string(body))
     if !is_summary_valid_utf8 || !is_body_valid_utf8 {
         return last_notification_id, .Not_Valid_Utf8_String
     }
+
 
     args, array, dict, entry, variant : dbus.DBusMessageIter
     pending : ^dbus.DBusPendingCall
@@ -46,13 +53,19 @@ send_notification :: proc(connection: ^dbus.DBusConnection, summary: cstring, bo
 
     app : cstring = "music_player"
     replace : u32 = last_notification_id
-    icon : cstring = "dialog-information"
+    _icon : cstring = "audio-headphones" // @fix: does nothing; needs some daemon running to get these icons
+
+    is_icon_valid_utf8 := utf8.valid_string(string(icon))
+    if is_icon_valid_utf8 && icon != nil {
+        _icon = icon
+    }
+
     _summary := summary
     _body := body
 
     dbus.message_iter_append_basic(&args, dbus.DBUS_TYPE_STRING, &app)
     dbus.message_iter_append_basic(&args, dbus.DBUS_TYPE_UINT32, &replace)
-    dbus.message_iter_append_basic(&args, dbus.DBUS_TYPE_STRING, &icon)
+    dbus.message_iter_append_basic(&args, dbus.DBUS_TYPE_STRING, &_icon)
     dbus.message_iter_append_basic(&args, dbus.DBUS_TYPE_STRING, &_summary)
     dbus.message_iter_append_basic(&args, dbus.DBUS_TYPE_STRING, &_body)
 
