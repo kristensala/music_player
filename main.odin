@@ -55,6 +55,7 @@ Album_Idx :: i32
 Album_Title :: cstring
 
 Row :: struct {
+    is_dummy_row        : bool,
     is_album_title_row  : bool, // if true then track is nil
     album_idx           : i32,
     track               : ^Track,
@@ -532,8 +533,6 @@ reset_player :: proc(app_state: ^App_State) {
     app_state.ma_sound = nil
     app_state.audio_state = .Stopped
     app_state.currently_playing_track = nil
-
-    clear(&app_state.queue)
 }
 
 @private
@@ -1085,10 +1084,9 @@ find_album_cover :: proc(dir: string) -> cstring {
 build_rows :: proc(app_state: ^App_State) {
     // @todo: do not clear until new rows are built
     clear(&app_state.rows)
-
     app_state.rebuild_rows = false
-    content_height : i32 = 0
 
+    pos_y : i32 = ROW_HEIGHT
     for &album, album_idx in app_state.albums {
         if app_state.current_selected_artist != nil {
             if album.artist != app_state.current_selected_artist do continue
@@ -1097,10 +1095,10 @@ build_rows :: proc(app_state: ^App_State) {
         album_title_row := new(Row)
         album_title_row.is_album_title_row = true
         album_title_row.album_idx = i32(album_idx)
+        album_title_row.pos_y = pos_y
+        pos_y += ROW_HEIGHT
 
         append(&app_state.rows, album_title_row)
-
-        content_height += ROW_HEIGHT
 
         album_content_height : i32 = 0
         for &track in album.tracks {
@@ -1108,6 +1106,9 @@ build_rows :: proc(app_state: ^App_State) {
 
             track_row := new(Row)
             track_row.track = track
+            track_row.pos_y = pos_y
+
+            pos_y += ROW_HEIGHT
 
             append(&app_state.rows, track_row)
 
@@ -1116,17 +1117,25 @@ build_rows :: proc(app_state: ^App_State) {
         }
 
         if album_content_height < ALBUM_COVER_SIZE {
-            diff := (ALBUM_COVER_SIZE - album_content_height) / ROW_HEIGHT
-            for i in 0..<diff {
-                append(&app_state.rows, nil)
+            for ;; {
+                dummy_row := new(Row)
+                dummy_row.is_dummy_row = true
+                dummy_row.album_idx = -1
+                dummy_row.pos_y = pos_y
+
                 album_content_height += ROW_HEIGHT
+                pos_y += ROW_HEIGHT
+
+                append(&app_state.rows, dummy_row)
+                if album_content_height >= ALBUM_COVER_SIZE do break
             }
+
+            //pos_y += ROW_HEIGHT
         }
 
-        content_height += album_content_height // padding after the album
     }
 
-    app_state.content_max_height = content_height
+    app_state.content_max_height = pos_y
 
     assert(app_state.rebuild_rows == false)
 }
