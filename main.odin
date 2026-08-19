@@ -17,7 +17,6 @@ import "core:os"
 import "core:sync"
 import tl "taglib"
 import "nfd"
-import "dbus"
 import "sdbus"
 import "notify"
 
@@ -58,11 +57,13 @@ Album_Title :: cstring
 Row :: struct {
     is_album_title_row  : bool, // if true then track is nil
     album_idx           : i32,
-    track               : ^Track
+    track               : ^Track,
+    pos_y               : i32 // @todo
 }
 
 Playlist :: struct {
     title: string,
+    file_name: string, // path is always library_path/.mppl/{file_name}
     playlist_file_path: string,
     tracks: [dynamic]^Track,
 }
@@ -169,7 +170,6 @@ COMMANDS := map[Command]cstring{
 
 App_State :: struct {
     bus: sdbus.Bus,
-    dbus_connection: ^dbus.DBusConnection,
     last_notification_id: u32,
     trigger_notification: bool,
 
@@ -204,7 +204,7 @@ App_State :: struct {
     ma_engine: ma.engine,
     ma_sound: ^ma.sound,
 
-    audio_state: AudioState,
+    audio_state: Audio_State,
     currently_playing_track: ^Track,
 
     // filtering
@@ -235,7 +235,7 @@ Album_Art_Cache_Entry :: struct {
     frame        : u64 // last frame it was rendered
 }
 
-AudioState :: enum i32 {
+Audio_State :: enum i32 {
     Stopped = 0,
     Playing = 1,
     Paused = 2
@@ -454,7 +454,6 @@ update_main :: proc(app_state: ^App_State) {
         append(&app_state.artist_list, ALL_ARTISTS_OPTION)
         init_library(app_state)
 
-        app_state.rebuild_rows = true
         build_rows(app_state) // for ui
         build_queue(app_state)
     }
@@ -533,14 +532,12 @@ reset_player :: proc(app_state: ^App_State) {
     app_state.ma_sound = nil
     app_state.audio_state = .Stopped
     app_state.currently_playing_track = nil
+
+    clear(&app_state.queue)
 }
 
 @private
 destroy_state :: proc(app_state: ^App_State) {
-    if app_state.dbus_connection != nil {
-        dbus.connection_unref(app_state.dbus_connection)
-    }
-
     sdbus.flush_close_unref(app_state.bus)
 
     ma.sound_uninit(app_state.ma_sound)
@@ -1082,14 +1079,16 @@ find_album_cover :: proc(dir: string) -> cstring {
     return nil
 }
 
+// @todo: set position y of each row here
+// so I can draw the rows based on the pre-calculated pos_y
 @private
 build_rows :: proc(app_state: ^App_State) {
-    assert(app_state.rebuild_rows == true)
-    app_state.rebuild_rows = false
+    // @todo: do not clear until new rows are built
+    clear(&app_state.rows)
 
+    app_state.rebuild_rows = false
     content_height : i32 = 0
 
-    clear(&app_state.rows)
     for &album, album_idx in app_state.albums {
         if app_state.current_selected_artist != nil {
             if album.artist != app_state.current_selected_artist do continue
@@ -1186,21 +1185,21 @@ shuffle_queue :: proc(app_state: ^App_State) {
 }
 
 @private
-least_used_cover_art_cache_entry :: proc(app_state: ^App_State) -> (cache_entry_idx: i32, cache_entry: ^Album_Art_Cache_Entry) {
-    smallest_usage : u64
+oldest_cover_art_cache_entry :: proc(app_state: ^App_State) -> (cache_entry_idx: i32, cache_entry: ^Album_Art_Cache_Entry) {
+    smallest_frame_count : u64
     entry_idx: i32
     e : ^Album_Art_Cache_Entry
 
     for entry, idx in app_state.album_art_cache.entries {
         if idx == 0 {
-            smallest_usage = entry.frame
+            smallest_frame_count = entry.frame
             entry_idx = i32(idx)
             e = entry
             continue
         }
 
-        if entry.frame < smallest_usage {
-            smallest_usage = entry.frame
+        if entry.frame < smallest_frame_count {
+            smallest_frame_count = entry.frame
             entry_idx = i32(idx)
             e = entry
         }
@@ -1209,6 +1208,7 @@ least_used_cover_art_cache_entry :: proc(app_state: ^App_State) -> (cache_entry_
     return entry_idx, e
 }
 
+// Add album cover art into queue
 @private
 request_cover_load :: proc(queue: ^[dynamic]Album_Idx, album_idx: i32) {
     if len(queue) == CACHE_MAX_CAPACITY do return
@@ -1224,6 +1224,8 @@ request_cover_load :: proc(queue: ^[dynamic]Album_Idx, album_idx: i32) {
     append(queue, album_idx)
 }
 
+// Consumes the album art queue
+// If cache is full, gets the oldest cache entry and replaces with the one in queue
 @private
 process_album_art_queue :: proc(app_state: ^App_State) {
     for album_idx, idx in app_state.album_art_load_queue {
@@ -1232,16 +1234,16 @@ process_album_art_queue :: proc(app_state: ^App_State) {
         if len(album.cover_art_path) > 0 {
             // cache is full
             if app_state.album_art_cache.count >= CACHE_MAX_CAPACITY {
-                cache_entry_idx, least_used_cache_entry := least_used_cover_art_cache_entry(app_state)
+                cache_entry_idx, oldest_cache_entry := oldest_cover_art_cache_entry(app_state)
 
-                cache_entry_album := &app_state.albums[least_used_cache_entry.album_idx]
+                cache_entry_album := &app_state.albums[oldest_cache_entry.album_idx]
                 cache_entry_album.cover_art_cache_entry_idx = EMPTY_IDX
 
-                rl.UnloadTexture(least_used_cache_entry.texture)
+                rl.UnloadTexture(oldest_cache_entry.texture)
 
                 app_state.album_art_cache.entries[cache_entry_idx] = nil
                 app_state.album_art_cache.count -= 1
-                free(least_used_cache_entry)
+                free(oldest_cache_entry)
 
                 img := rl.LoadImage(album.cover_art_path)
                 rl.ImageResize(&img, 200, 200)
@@ -1286,9 +1288,11 @@ process_album_art_queue :: proc(app_state: ^App_State) {
     clear(&app_state.album_art_load_queue)
 }
 
+// Remove stale cache entries
+// If entry has not been accessed in the last 1000 frame, remove it
 @private
 invalidate_cache :: proc(app_state: ^App_State) {
-    max_frame_diff : u64 = 1000
+    stale_frame_count : u64 = 1000
 
     entries_to_remove: [dynamic]i32
     defer delete(entries_to_remove)
@@ -1298,7 +1302,7 @@ invalidate_cache :: proc(app_state: ^App_State) {
 
         // entry has not been accessed for the last 1000 frames
         // remove from cache
-        if app_state.current_frame_rendered - entry.frame > max_frame_diff {
+        if app_state.current_frame_rendered - entry.frame > stale_frame_count {
             append(&entries_to_remove, i32(entry_idx))
         }
     }
@@ -1328,6 +1332,7 @@ remove_entry_from_cache :: proc(cache: ^Album_Art_Cache, entry_idx: i32) {
     assert(cache.count >= 0)
 }
 
+// Clears Album cover cache entirely
 clear_cache :: proc(cache: ^Album_Art_Cache) {
     for &e in cache.entries {
         if e == nil do continue
@@ -1338,6 +1343,7 @@ clear_cache :: proc(cache: ^Album_Art_Cache) {
     cache.count = 0
 }
 
+// Gets album cover from cache. If no cache hit adds cover to be loaded into a queue
 get_album_cover_texture :: proc(app_state: ^App_State, album_idx: Album_Idx) -> (txr: rl.Texture2D, found: bool)  {
     album := app_state.albums[album_idx]
     if album.cover_art_cache_entry_idx >= 0 {
@@ -1355,6 +1361,7 @@ get_album_cover_texture :: proc(app_state: ^App_State, album_idx: Album_Idx) -> 
     return app_state.default_album_cover_texture, true
 }
 
+// @todo: testing
 @(private = "file")
 init_playlists_from_playlist_files :: proc(app_state: ^App_State) {
     playlist_files, err := os.read_directory_by_path(app_state.playlist_path, 0, context.allocator)
@@ -1406,6 +1413,7 @@ init_playlists_from_playlist_files :: proc(app_state: ^App_State) {
     }
 }
 
+// @todo: testing
 create_playlist :: proc(app_state: ^App_State, playlist_name: string) {
     err := get_or_create_playlist_dir(app_state.playlist_path)
     if err != nil {
@@ -1464,6 +1472,7 @@ create_playlist :: proc(app_state: ^App_State, playlist_name: string) {
     append(&app_state.playlists, new_playlist)
 }
 
+// @todo: testing
 add_track_to_playlist :: proc(playlist: ^Playlist, track: ^Track, root_dir: string) {
     playlist_file, err := os.open(playlist.playlist_file_path, {.Append, .Write})
     if err != nil {
@@ -1507,6 +1516,7 @@ get_or_create_playlist_dir :: proc(path: string) -> os.Error {
     return nil
 }
 
+// Update layout after window has been drawn or resized
 @(private = "file")
 update_layout :: proc(app_state: ^App_State) {
     // -40 := 20px padding from left and right
@@ -1541,7 +1551,6 @@ trigger_notification :: proc(app_state: ^App_State) {
     } else {
         log.warn("notifications not implemented for OS")
     }
-
 }
 
 @(private = "file")

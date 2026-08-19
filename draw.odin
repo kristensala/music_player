@@ -7,7 +7,6 @@ import "core:unicode/utf8"
 import rl "vendor:raylib"
 import ma "vendor:miniaudio"
 import "nfd"
-import "notify"
 
 SEARCH_PANEL_ROW_HEIGHT :: 30
 CONTENT_MAX_HEIGHT_BUFFER :: 150 // 150 just a random buffer to fix minor calculation mistakes

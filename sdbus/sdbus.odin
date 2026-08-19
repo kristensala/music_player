@@ -1,4 +1,5 @@
-// [[DOC, https://www.freedesktop.org/software/systemd/man/latest/index.html]]
+// [[DOC: https://www.freedesktop.org/software/systemd/man/latest/index.html]]
+// [[git: https://github.com/systemd/systemd]]
 package sdbus
 
 foreign import lib "system:systemd"

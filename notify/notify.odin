@@ -23,10 +23,9 @@ send_notification :: proc(bus: sdbus.Bus, icon, summary, body: cstring, last_not
     if !is_summary_valid_utf8 || !is_body_valid_utf8 {
         return last_notification_id, .Not_Valid_Utf8_String
     }
-    
+
     message : sdbus.Message
     defer sdbus.message_unref(message)
-
 
     x := sdbus.call_method(
         bus,
@@ -45,7 +44,7 @@ send_notification :: proc(bus: sdbus.Bus, icon, summary, body: cstring, last_not
         i32(0),
         i32(1),
         cstring("urgency"), cstring("y"), u8(1),
-        i32(5000)
+        i32(5000) // timeout
     )
 
     if x < 0 {
