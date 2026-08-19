@@ -526,7 +526,6 @@ draw_side_panel :: proc(app_state: ^App_State) {
 draw_main_panel_content :: proc(app_state: ^App_State) {
     if len(app_state.rows) == 0 do return
 
-    //pos_y := app_state.main_panel_rect.y
     start := i32(app_state.main_panel_scroll_offset / ROW_HEIGHT)
     assert(start >= 0)
 
@@ -541,8 +540,6 @@ draw_main_panel_content :: proc(app_state: ^App_State) {
         i32(app_state.main_panel_rect.height))
 
     for row, row_idx in app_state.rows[start:] {
-        // 300: pre-fetch some rows
-        // then some of the covers are pre-fetched and there is no delay
         if f32(row.pos_y - app_state.main_panel_scroll_offset) >= app_state.main_panel_rect.height do break
 
         if row.is_album_title_row {
