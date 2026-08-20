@@ -406,7 +406,6 @@ draw_artist_list :: proc(app_state: ^App_State) {
                     } else {
                         app_state.current_selected_artist = artist
                     }
-                    app_state.main_panel_scroll_offset = 0
                     app_state.rebuild_rows = true
                 }
             }
@@ -535,7 +534,10 @@ draw_main_panel_content :: proc(app_state: ^App_State) {
     }
 
     // keep a max 5 row buffer at the top
-    // @note: this buffer allows album art drawing even if the art is not fully visible on the screen
+    // @note: Since we only draw lines which are visible to the user, the start pos_y for album cover is not on screen anymore,
+    //        but part of the cover should still be visible.
+    //        This buffer allows album cover drawing even if the cover pos_y "trigger" is not visible on the screen.
+    //        Meaning that album cover is drawn even if it is not fully on the screen
     if start >= SCROLL_INCREMENT {
         start -= SCROLL_INCREMENT
     } else {
@@ -561,6 +563,8 @@ draw_main_panel_content :: proc(app_state: ^App_State) {
 
     rl.EndScissorMode()
 
+    // @fix: the height of the scrollbar still seems a little off
+    // @bug: position of the scrollbar does not update during resize and leaves the main panel and overlaps with the bottom panel
     // Main panel scroll bar
     {
         main_panel_height := app_state.main_panel_rect.height - app_state.main_panel_rect.y
@@ -604,8 +608,6 @@ draw_main_panel_content :: proc(app_state: ^App_State) {
             }
         }
     }
-
-
 }
 
 @(private = "file")
@@ -840,7 +842,6 @@ draw_search_panel :: proc(app_state: ^App_State) {
                 "Search or type /cmd for commands",
                 {app_state.search_panel_rect.x + INPUT_X_OFFSET, app_state.search_panel_rect.y + INPUT_Y_OFFSET},
                 FONT_20, 0, rl.DARKGRAY)
-
         }
 
         rl.DrawTextEx(
@@ -901,7 +902,6 @@ draw_search_panel :: proc(app_state: ^App_State) {
             }
         }
 
-        // @todo: draw commands
         y := app_state.search_panel_rect.y + search_result_offset_y
         for value in app_state.search_results[app_state.search_panel_scroll_index:last_row_visible] {
             bounds := rl.Rectangle{app_state.search_panel_rect.x, y, app_state.search_panel_rect.width, 30}
@@ -918,12 +918,10 @@ draw_search_panel :: proc(app_state: ^App_State) {
                             } else {
                                 app_state.current_selected_artist = value.artist_name
                             }
-                            app_state.main_panel_scroll_offset = 0
                             app_state.rebuild_rows = true
                     } else if value.type == .Album {
                         if value.album.artist == app_state.current_selected_artist do continue
                             app_state.current_selected_artist = value.album.artist
-                            app_state.main_panel_scroll_offset = 0
                             app_state.rebuild_rows = true
                     } else if value.type == .Command {
                         if value.cmd == .Set_Library {
@@ -932,6 +930,7 @@ draw_search_panel :: proc(app_state: ^App_State) {
                             res := nfd.PickFolderN(&out_path, "$HOME/Music")
                             if res == .Okay {
                                 app_state.library_path = strings.clone_to_cstring(string(out_path))
+                                // @todo: this blocks drawing -> should not block
                                 nfd.FreePathN(out_path)
 
                                 app_state.is_library_path_set = true

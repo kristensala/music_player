@@ -1103,6 +1103,7 @@ build_rows :: proc(app_state: ^App_State) {
     // @todo: do not clear until new rows are built
     clear(&app_state.rows)
     app_state.rebuild_rows = false
+    app_state.main_panel_scroll_offset = 0
 
     pos_y : i32 = MAIN_PANEL_PADDING_TOP
     for &album, album_idx in app_state.albums {
