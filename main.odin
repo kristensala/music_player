@@ -817,6 +817,120 @@ close_search_panel :: proc(app_state: ^App_State) {
     clear(&app_state.search_results)
 }
 
+@private
+handle_repeat_pressed :: proc(app_state: ^App_State) {
+    current_mode := app_state.playback_mode
+
+    #partial switch current_mode {
+    case .Normal: app_state.playback_mode = .Repeat_Queue
+    case .Repeat_Queue: app_state.playback_mode = .Repeat_One
+    case .Repeat_One: app_state.playback_mode = .Normal
+    }
+}
+
+handle_shuffle_pressed :: proc(app_state: ^App_State) {
+    app_state.is_shuffle_play = !app_state.is_shuffle_play
+
+    if app_state.is_shuffle_play {
+        shuffle_queue(app_state)
+    } else {
+        app_state.rebuild_queue = true
+    }
+}
+
+@private
+handle_play_pause :: proc(app_state: ^App_State) {
+    if app_state.audio_state == .Playing {
+        stop_response := ma.sound_stop(app_state.ma_sound)
+        if stop_response == .SUCCESS {
+            app_state.audio_state = .Paused
+        } else {
+            log.errorf("ma.sound_stop failed: %v", stop_response)
+        }
+    } else if app_state.audio_state == .Paused && app_state.ma_sound != nil {
+        start_response := ma.sound_start(app_state.ma_sound)
+        if start_response == .SUCCESS {
+            app_state.audio_state = .Playing
+        } else {
+            log.errorf("ma.sound_start failed: %v", start_response)
+        }
+    }
+}
+
+handle_prev_song_pick :: proc(app_state: ^App_State) -> bool {
+    if app_state.current_position_in_queue == 0 do return false
+
+    app_state.current_position_in_queue -= 1
+    prev_track := app_state.queue[app_state.current_position_in_queue]
+
+    reset_player(app_state)
+
+    app_state.ma_sound = new(ma.sound)
+    res := ma.sound_init_from_file(&app_state.ma_engine, prev_track.file_path, {.STREAM}, nil, nil, app_state.ma_sound)
+    if res != .SUCCESS {
+        app_state.ma_sound = nil
+        log.errorf("ma.sound_init_from_file failed: %v", res)
+        return false
+    } else {
+        sound_start_result := ma.sound_start(app_state.ma_sound)
+        if sound_start_result == .SUCCESS {
+            app_state.audio_state = .Playing
+            app_state.currently_playing_track = prev_track
+        }
+    }
+
+    return true
+}
+
+@private
+handle_next_track_pick :: proc(app_state: ^App_State) -> bool {
+    // do not allow to pick a next track if there is no current track playing
+    // or if the player is in a Stopped state
+    if app_state.currently_playing_track == nil || app_state.audio_state == .Stopped {
+        return false
+    }
+
+    queue_len := i32(len(app_state.queue))
+    if queue_len == 0 {
+        return false
+    }
+
+    if app_state.current_position_in_queue == queue_len - 1 {
+        if app_state.playback_mode == .Repeat_Queue {
+            // move back to the start of the queue
+            app_state.current_position_in_queue = 0
+        } else {
+            // reached end of the queue
+            return false
+        }
+    } else {
+        // continue the queue
+        app_state.current_position_in_queue += 1
+    }
+
+    next_track := app_state.queue[app_state.current_position_in_queue]
+
+    reset_player(app_state)
+
+    app_state.ma_sound = new(ma.sound)
+    res := ma.sound_init_from_file(&app_state.ma_engine, next_track.file_path, {.STREAM}, nil, nil, app_state.ma_sound)
+    if res != .SUCCESS {
+        log.errorf("ma.sound_init_from_file failed: %v", res)
+        reset_player(app_state)
+        return false
+    } else {
+        sound_start_result := ma.sound_start(app_state.ma_sound)
+        if sound_start_result == .SUCCESS {
+            app_state.audio_state = .Playing
+            app_state.currently_playing_track = next_track
+        } else {
+            return false
+        }
+    }
+
+    return true
+}
+
 handle_search_panel_keyboard_events :: proc(app_state: ^App_State) {
     if rl.IsKeyPressed(rl.KeyboardKey.ESCAPE) {
         close_search_panel(app_state)
