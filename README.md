@@ -11,6 +11,7 @@
 - For audio control, `miniaudio` is used
 - Rendering the whole UI: `raylib`
 - Custom taglib implementation (no library) to read the metadata of .mp3 and .flac files. (No WAV at the moment, but will come)
+- Shuffle queue is a simple `Fisher-Yates shuffle` algorithm
 
 ## Extras
 - File dialog from https://github.com/btzy/nativefiledialog-extended
