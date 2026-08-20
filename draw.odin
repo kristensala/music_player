@@ -23,7 +23,7 @@ draw_main :: proc(app_state: ^App_State) {
             {0, app_state.main_panel_rect.y + app_state.main_panel_rect.height}, 
             {f32(rl.GetScreenWidth()), app_state.main_panel_rect.y + app_state.main_panel_rect.height},
             1.5,
-            rl.GRAY
+            STORMY_TEAL
         )
         draw_playback_controls(app_state)
 
@@ -44,13 +44,13 @@ draw_main :: proc(app_state: ^App_State) {
                     app_state.fonts[FONT_18],
                     app_state.currently_playing_track.title,
                     {BOTTOM_BAR_PADDING + 70, f32(rl.GetScreenHeight() - BOTTOM_BAR_PADDING - 75)},
-                    FONT_18, 0, rl.WHITE)
+                    FONT_18, 0, TEXT_COLOR)
 
                 rl.DrawTextEx(
                     app_state.fonts[FONT_18],
                     app_state.currently_playing_track.artist,
                     {BOTTOM_BAR_PADDING + 70, f32(rl.GetScreenHeight() - BOTTOM_BAR_PADDING - 55)},
-                    FONT_18, 0, rl.YELLOW)
+                    FONT_18, 0, HIGHLIGHT_COLOR)
 
                 rl.DrawTextEx(
                     app_state.fonts[FONT_18],
@@ -377,7 +377,7 @@ draw_artist_list :: proc(app_state: ^App_State) {
             height = SIDE_PANEL_ROW_HEIGHT
         }
 
-        artist_txt_color := rl.LIGHTGRAY
+        artist_txt_color := TEXT_COLOR
         if artist == app_state.current_selected_artist || (artist == ALL_ARTISTS_OPTION && app_state.current_selected_artist == nil) {
             rl.DrawRectangleRec(artist_item_bounds, rl.GRAY)
             artist_txt_color = rl.WHITE
@@ -446,7 +446,7 @@ draw_side_panel :: proc(app_state: ^App_State) {
 
         // highlight the option
         if app_state.selected_side_panel_option == .Artist_List {
-            rl.DrawRectangleRec(artists_option_bounds, rl.ORANGE)
+            rl.DrawRectangleRec(artists_option_bounds, HIGHLIGHT_COLOR)
         }
 
         txt_y := center_text_y(app_state.fonts[FONT_20], artists_option_bounds)
@@ -457,7 +457,7 @@ draw_side_panel :: proc(app_state: ^App_State) {
             {app_state.side_panel_rect.x + 20, txt_y},
             FONT_20,
             0,
-            rl.WHITE)
+            TEXT_COLOR)
 
         playlists_option_bounds := rl.Rectangle{
             x = app_state.side_panel_options_rect.x,
@@ -468,7 +468,7 @@ draw_side_panel :: proc(app_state: ^App_State) {
 
         // highlight the option
         if app_state.selected_side_panel_option == .Playlists {
-            rl.DrawRectangleRec(playlists_option_bounds, rl.ORANGE)
+            rl.DrawRectangleRec(playlists_option_bounds, HIGHLIGHT_COLOR)
         }
 
         txt_y = center_text_y(app_state.fonts[FONT_20], playlists_option_bounds)
@@ -479,7 +479,7 @@ draw_side_panel :: proc(app_state: ^App_State) {
             {app_state.side_panel_rect.x + 20, txt_y},
             FONT_20,
             0,
-            rl.WHITE)
+            TEXT_COLOR)
 
         // handle on options click
         if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_options_rect) {
@@ -498,7 +498,7 @@ draw_side_panel :: proc(app_state: ^App_State) {
         {0, app_state.side_panel_options_rect.y + app_state.side_panel_options_rect.height},
         {app_state.side_panel_options_rect.width, app_state.side_panel_options_rect.y + app_state.side_panel_options_rect.height},
         1.5,
-        rl.GRAY)
+        STORMY_TEAL)
 
 
     rl.BeginScissorMode(
@@ -519,7 +519,7 @@ draw_side_panel :: proc(app_state: ^App_State) {
         {app_state.side_panel_rect.x + app_state.side_panel_rect.width, 0},
         {app_state.side_panel_rect.x + app_state.side_panel_rect.width, app_state.main_panel_rect.y + app_state.main_panel_rect.height},
         1.5,
-        rl.GRAY
+        STORMY_TEAL
     )
 }
 
@@ -615,12 +615,12 @@ draw_album_title_row :: proc(app_state: ^App_State, row: ^Row) {
         { app_state.main_panel_rect.x, pos_y},
         FONT_30,
         0,
-        rl.WHITE)
+        TEXT_COLOR)
 
     rl.DrawLine(
         i32(text_measurement.x + app_state.main_panel_rect.x + 20), i32(pos_y + FONT_30 / 2),
         i32(app_state.main_panel_rect.width + app_state.main_panel_rect.x), i32(pos_y + FONT_30 / 2),
-        rl.GRAY)
+        STORMY_TEAL)
 
     pos_y += ROW_HEIGHT
     cover_texture, found := get_album_cover_texture(app_state, row.album_idx)
@@ -646,7 +646,7 @@ draw_track_list_item :: proc(app_state: ^App_State, row: ^Row) {
         rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel_rect)
     ) {
         // highlight
-        rl.DrawRectangleRec(list_item, rl.ORANGE)
+        rl.DrawRectangleRec(list_item, HIGHLIGHT_COLOR)
 
         if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
             handle_track_selection(app_state, row.track)
@@ -655,7 +655,7 @@ draw_track_list_item :: proc(app_state: ^App_State, row: ^Row) {
 
     txt_y := center_text_y(app_state.fonts[FONT_20], list_item)
 
-    txt_color := rl.LIGHTGRAY
+    txt_color := TEXT_COLOR
     is_playing := app_state.currently_playing_track != nil && row.track.file_path == app_state.currently_playing_track.file_path
     if is_playing {
         txt_color = rl.YELLOW
@@ -739,13 +739,13 @@ draw_progress_bar :: proc(value: f32, max_value: f32, pos: [2]f32, w, h: f32) {
             width = progress,
             height = h
         }
-        rl.DrawRectangleRec(progress_rect, rl.PURPLE)
+        rl.DrawRectangleRec(progress_rect, HIGHLIGHT_COLOR)
     }
 
     rl.DrawRectangleRoundedLinesEx(
         bounds,
         0.1,
-        0, 2, rl.RAYWHITE)
+        0, 2, STORMY_TEAL)
 }
 
 draw_debug_panel :: proc(app_state: ^App_State) {
@@ -796,7 +796,7 @@ draw_search_panel :: proc(app_state: ^App_State) {
         rl.DrawRectangleRounded(rl.Rectangle{
             f32(rl.GetScreenWidth() / 2 - 500) - 2.5,
             200 - 2.5,
-            1005, 1005}, 0.03, 0, rl.Fade(rl.GRAY, 0.5))
+            1005, 1005}, 0.03, 0, rl.Fade(STORMY_TEAL, 0.5))
 
         app_state.search_panel_rect = rl.Rectangle{
             x = f32(rl.GetScreenWidth() / 2 - 500),
@@ -805,7 +805,7 @@ draw_search_panel :: proc(app_state: ^App_State) {
             width = 1000
         }
 
-        rl.DrawRectangleRounded(app_state.search_panel_rect, 0.03, 0, rl.BLACK)
+        rl.DrawRectangleRounded(app_state.search_panel_rect, 0.03, 0, BACKGROUND_COLOR)
     }
 
     // input
@@ -853,7 +853,7 @@ draw_search_panel :: proc(app_state: ^App_State) {
             {app_state.search_panel_rect.x, app_state.search_panel_rect.y + 60},
             {app_state.search_panel_rect.x + app_state.search_panel_rect.width, app_state.search_panel_rect.y + 60},
             1.0,
-            rl.GRAY)
+            STORMY_TEAL)
     }
 
     rl.BeginScissorMode(
@@ -896,7 +896,7 @@ draw_search_panel :: proc(app_state: ^App_State) {
 
             if rl.CheckCollisionPointRec(rl.GetMousePosition(), bounds) {
                 // highlight
-                rl.DrawRectangleRec(bounds, rl.ORANGE)
+                rl.DrawRectangleRec(bounds, HIGHLIGHT_COLOR)
 
                 if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
                     if value.type == .Artist {
@@ -944,7 +944,7 @@ draw_search_panel :: proc(app_state: ^App_State) {
                     app_state.fonts[FONT_20],
                     value.artist_name,
                     {app_state.search_panel_rect.x + 100, txt_y},
-                    FONT_20, 0, rl.WHITE)
+                    FONT_20, 0, TEXT_COLOR)
             } else if value.type == .Album {
                 rl.DrawTextEx(
                     app_state.fonts[FONT_20],
@@ -956,7 +956,7 @@ draw_search_panel :: proc(app_state: ^App_State) {
                     app_state.fonts[FONT_20],
                     value.album.title,
                     {app_state.search_panel_rect.x + 100, txt_y},
-                    FONT_20, 0, rl.WHITE)
+                    FONT_20, 0, TEXT_COLOR)
             } else if value.type == .Command {
                 rl.DrawTextEx(
                     app_state.fonts[FONT_20],
@@ -968,7 +968,7 @@ draw_search_panel :: proc(app_state: ^App_State) {
                     app_state.fonts[FONT_20],
                     COMMANDS[value.cmd],
                     {app_state.search_panel_rect.x + 100, txt_y},
-                    FONT_20, 0, rl.WHITE)
+                    FONT_20, 0, TEXT_COLOR)
             }
 
             y += SEARCH_PANEL_ROW_HEIGHT

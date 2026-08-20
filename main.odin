@@ -48,6 +48,11 @@ MAIN_PANEL_PADDING_TOP :: 20
 MAIN_PANEL_PADDING_RIGHT :: 20
 MAIN_PANEL_PADDING_LEFT :: 20
 
+BACKGROUND_COLOR :: rl.Color{ 0, 21, 36, 255 } // Ink Black
+HIGHLIGHT_COLOR :: rl.Color{255, 125, 0, 255 } // Harvest Orange
+TEXT_COLOR :: rl.Color{255, 236, 209, 255 } //  Papaya Whip
+STORMY_TEAL :: rl.Color{21, 97, 109, 255} // Stormy Teal
+
 ALL_ARTISTS_OPTION         :: "All Artists"
 
 CONFIG_LIBRARY_PATH_PREFIX : string = "LIBRARY_PATH="
@@ -409,7 +414,8 @@ main :: proc() {
         update_layout(app_state)
 
         rl.BeginDrawing()
-        rl.ClearBackground(rl.BLACK)
+
+        rl.ClearBackground(BACKGROUND_COLOR)
 
         draw_main(app_state)
 
@@ -989,8 +995,13 @@ create_track :: proc(file_name: string, file_path: string) -> (Track, tl.Error) 
     }
     defer tl.tag_destroy(&tag)
 
+    title := tag.title
+    if len(title) == 0 {
+        title = file_name
+    }
+
     track := Track{
-        title = strings.clone_to_cstring(tag.title),
+        title = strings.clone_to_cstring(title),
         artist = strings.clone_to_cstring(tag.artist),
         album_artist = strings.clone_to_cstring(tag.album_artist),
         album_title = strings.clone_to_cstring(tag.album),
