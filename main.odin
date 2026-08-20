@@ -44,6 +44,7 @@ SIDE_PANEL_ROW_HEIGHT      :: 30
 ROW_HEIGHT                 :: 30
 TRACK_LIST_OFFSET_X        :: 250
 CACHE_MAX_CAPACITY         :: 15
+MAIN_PANEL_PADDING_TOP :: 20
 
 ALL_ARTISTS_OPTION         :: "All Artists"
 
@@ -303,7 +304,7 @@ init_state :: proc() -> ^App_State {
         width = app_state.side_panel_rect.width,
     }
 
-    app_state.main_panel_rect = rl.Rectangle{ x = app_state.side_panel_rect.width + 20, y = 20}
+    app_state.main_panel_rect = rl.Rectangle{ x = app_state.side_panel_rect.width + 20, y = MAIN_PANEL_PADDING_TOP }
     app_state.playback_controls_panel_rect = rl.Rectangle{ x = 0, height = 170 }
 
     when ODIN_OS == .Linux {

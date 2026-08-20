@@ -9,7 +9,8 @@ import ma "vendor:miniaudio"
 import "nfd"
 
 SEARCH_PANEL_ROW_HEIGHT :: 30
-CONTENT_MAX_HEIGHT_BUFFER :: 150 // 150 just a random buffer to fix minor calculation mistakes
+SCROLL_BAR_WIDTH :: 5
+SCROLL_BAR_OFFSET_X :: 10
 
 @(private)
 draw_main :: proc(app_state: ^App_State) {
@@ -549,6 +550,28 @@ draw_main_panel_content :: proc(app_state: ^App_State) {
         }
     }
 
+    // @testing: main panel scroll bar
+    // Calculate the size and the position of the scroll bar
+    {
+        main_panel_height := app_state.main_panel_rect.height - app_state.main_panel_rect.y
+        if f32(app_state.content_max_height) > main_panel_height {
+            x := i32(main_panel_height) * 100 / (app_state.content_max_height)
+
+            scoll_bar_height := i32(main_panel_height) * x / 100
+            scroll_bar_offset := f32(app_state.main_panel_scroll_offset) / f32(app_state.content_max_height) * main_panel_height
+            scroll_bar_offset += app_state.main_panel_rect.y // add the main panel padding
+
+            app_state.main_panel_scroll_bar_rect = rl.Rectangle{
+                x = f32(rl.GetScreenWidth() - SCROLL_BAR_OFFSET_X),
+                y = scroll_bar_offset,
+                height = f32(scoll_bar_height),
+                width = SCROLL_BAR_WIDTH
+            }
+
+            rl.DrawRectangleRec(app_state.main_panel_scroll_bar_rect, rl.LIGHTGRAY)
+        }
+    }
+
     rl.EndScissorMode()
 
     // Handle main panel scrolling
@@ -568,24 +591,6 @@ draw_main_panel_content :: proc(app_state: ^App_State) {
         }
     }
 
-    // @testing: main panel scroll bar
-    // some bugs when resizing the window
-    {
-        if f32(app_state.content_max_height) > app_state.main_panel_rect.height {
-            x := i32(app_state.main_panel_rect.height) * 100 / (app_state.content_max_height)
-            scoll_bar_height := i32(app_state.main_panel_rect.height) * x / 100
-            scroll_bar_offset := f32(app_state.main_panel_scroll_offset) / f32(app_state.content_max_height) * app_state.main_panel_rect.height
-
-            app_state.main_panel_scroll_bar_rect = rl.Rectangle{
-                x = f32(rl.GetScreenWidth() - 10),
-                y = scroll_bar_offset,
-                height = f32(scoll_bar_height),
-                width = 5
-            }
-
-            rl.DrawRectangleRec(app_state.main_panel_scroll_bar_rect, rl.GRAY)
-        }
-    }
 
 }
 
@@ -815,6 +820,16 @@ draw_search_panel :: proc(app_state: ^App_State) {
 
         input := utf8.runes_to_string(app_state.search_input[:], context.temp_allocator)
         cinput := fmt.ctprintf("%s", app_state.search_input)
+
+        // Input placeholder
+        if len(input) == 0 {
+            rl.DrawTextEx(
+                app_state.fonts[FONT_20],
+                "Search or type /cmd for commands",
+                {app_state.search_panel_rect.x + INPUT_X_OFFSET, app_state.search_panel_rect.y + INPUT_Y_OFFSET},
+                FONT_20, 0, rl.DARKGRAY)
+
+        }
 
         rl.DrawTextEx(
             app_state.fonts[FONT_20],
