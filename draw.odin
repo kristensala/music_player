@@ -618,10 +618,8 @@ draw_album_title_row :: proc(app_state: ^App_State, row: ^Row) {
         rl.WHITE)
 
     rl.DrawLine(
-        i32(text_measurement.x + app_state.main_panel_rect.x + 20), 
-        i32(pos_y + FONT_30 / 2),
-        i32(app_state.main_panel_rect.width),
-        i32(pos_y + FONT_30 / 2),
+        i32(text_measurement.x + app_state.main_panel_rect.x + 20), i32(pos_y + FONT_30 / 2),
+        i32(app_state.main_panel_rect.width + app_state.main_panel_rect.x), i32(pos_y + FONT_30 / 2),
         rl.GRAY)
 
     pos_y += ROW_HEIGHT
