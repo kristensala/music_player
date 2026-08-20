@@ -39,8 +39,8 @@ FONT_30                    :: 30
 CACHE_MAX_CAPACITY         :: 15
 ALL_ARTISTS_OPTION         :: "All Artists"
 CONFIG_LIBRARY_PATH_PREFIX : string = "LIBRARY_PATH="
-
 EMPTY_IDX :: -1
+
 Track_Idx :: i32
 Album_Idx :: i32
 Album_Title :: cstring
@@ -445,7 +445,7 @@ update_main :: proc(app_state: ^App_State) {
         app_state.rescan_library = false
 
         clear_cache(&app_state.album_art_cache)
-        reset_player(app_state)
+        reset_playback(app_state)
         reset_library(app_state)
 
         append(&app_state.artist_list, ALL_ARTISTS_OPTION)
@@ -459,7 +459,7 @@ update_main :: proc(app_state: ^App_State) {
         if app_state.playback_mode == .Normal || app_state.playback_mode == .Repeat_Queue {
             result := handle_next_track_pick(app_state)
             if !result {
-                reset_player(app_state)
+                reset_playback(app_state)
             } else {
                 app_state.trigger_notification = true
             }
@@ -483,14 +483,14 @@ player_repeat_one :: proc(app_state: ^App_State) {
     res := ma.sound_seek_to_pcm_frame(app_state.ma_sound, 0)
     if res != .SUCCESS {
         log.errorf("Could not seek sound to 0 pcm frame: %v", res)
-        reset_player(app_state)
+        reset_playback(app_state)
         return
     }
 
     sound_start_result := ma.sound_start(app_state.ma_sound)
     if sound_start_result != .SUCCESS {
         log.errorf("Failed to start the sound: %v", sound_start_result)
-        reset_player(app_state)
+        reset_playback(app_state)
         return
     }
 }
@@ -525,7 +525,7 @@ reset_library :: proc(app_state: ^App_State) {
 }
 
 // Sets the player into a Stopped state
-reset_player :: proc(app_state: ^App_State) {
+reset_playback :: proc(app_state: ^App_State) {
     ma.sound_uninit(app_state.ma_sound)
     app_state.ma_sound = nil
     app_state.audio_state = .Stopped
@@ -578,7 +578,6 @@ destroy_state :: proc(app_state: ^App_State) {
         rl.UnloadFont(value)
     }
     delete(app_state.fonts)
-
 
     // @note: if set through file dialog then no need to delete. If read from config file, I think I should delete
     delete(app_state.library_path)
@@ -843,7 +842,7 @@ handle_prev_song_pick :: proc(app_state: ^App_State) -> bool {
     app_state.current_position_in_queue -= 1
     prev_track := app_state.queue[app_state.current_position_in_queue]
 
-    reset_player(app_state)
+    reset_playback(app_state)
 
     app_state.ma_sound = new(ma.sound)
     res := ma.sound_init_from_file(&app_state.ma_engine, prev_track.file_path, {.STREAM}, nil, nil, app_state.ma_sound)
@@ -889,13 +888,13 @@ handle_next_track_pick :: proc(app_state: ^App_State) -> bool {
 
     next_track := app_state.queue[app_state.current_position_in_queue]
 
-    reset_player(app_state)
+    reset_playback(app_state)
 
     app_state.ma_sound = new(ma.sound)
     res := ma.sound_init_from_file(&app_state.ma_engine, next_track.file_path, {.STREAM}, nil, nil, app_state.ma_sound)
     if res != .SUCCESS {
         log.errorf("ma.sound_init_from_file failed: %v", res)
-        reset_player(app_state)
+        reset_playback(app_state)
         return false
     } else {
         sound_start_result := ma.sound_start(app_state.ma_sound)
