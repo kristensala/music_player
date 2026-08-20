@@ -45,6 +45,8 @@ ROW_HEIGHT                 :: 30
 TRACK_LIST_OFFSET_X        :: 250
 CACHE_MAX_CAPACITY         :: 15
 MAIN_PANEL_PADDING_TOP :: 20
+MAIN_PANEL_PADDING_RIGHT :: 20
+MAIN_PANEL_PADDING_LEFT :: 20
 
 ALL_ARTISTS_OPTION         :: "All Artists"
 
@@ -304,7 +306,11 @@ init_state :: proc() -> ^App_State {
         width = app_state.side_panel_rect.width,
     }
 
-    app_state.main_panel_rect = rl.Rectangle{ x = app_state.side_panel_rect.width + 20, y = MAIN_PANEL_PADDING_TOP }
+    app_state.main_panel_rect = rl.Rectangle{
+        x = app_state.side_panel_rect.width + MAIN_PANEL_PADDING_LEFT,
+        y = MAIN_PANEL_PADDING_TOP
+    }
+
     app_state.playback_controls_panel_rect = rl.Rectangle{ x = 0, height = 170 }
 
     when ODIN_OS == .Linux {
@@ -1530,10 +1536,11 @@ get_or_create_playlist_dir :: proc(path: string) -> os.Error {
 @(private = "file")
 update_layout :: proc(app_state: ^App_State) {
     // -40 := 20px padding from left and right
-    app_state.main_panel_rect.width = f32(rl.GetScreenWidth() - 40)
-    app_state.main_panel_rect.height = f32(rl.GetScreenHeight()) - app_state.playback_controls_panel_rect.height
     app_state.side_panel_rect.height = app_state.main_panel_rect.height + app_state.main_panel_rect.y // @explain
     app_state.side_panel_option_content_rect.height = app_state.side_panel_rect.height - app_state.side_panel_options_rect.height
+
+    app_state.main_panel_rect.height = f32(rl.GetScreenHeight()) - app_state.playback_controls_panel_rect.height
+    app_state.main_panel_rect.width = f32(rl.GetScreenWidth()) - app_state.side_panel_rect.width - MAIN_PANEL_PADDING_RIGHT - MAIN_PANEL_PADDING_LEFT
 
     app_state.playback_controls_panel_rect.width = f32(rl.GetScreenWidth())
     app_state.playback_controls_panel_rect.y = app_state.main_panel_rect.height

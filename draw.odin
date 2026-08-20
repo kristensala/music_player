@@ -540,6 +540,7 @@ draw_main_panel_content :: proc(app_state: ^App_State) {
         i32(app_state.main_panel_rect.width),
         i32(app_state.main_panel_rect.height))
 
+
     for row, row_idx in app_state.rows[start:] {
         if f32(row.pos_y - app_state.main_panel_scroll_offset) >= app_state.main_panel_rect.height do break
 
@@ -549,6 +550,9 @@ draw_main_panel_content :: proc(app_state: ^App_State) {
             draw_track_list_item(app_state, row)
         }
     }
+
+
+    rl.EndScissorMode()
 
     // @testing: main panel scroll bar
     // Calculate the size and the position of the scroll bar
@@ -571,8 +575,6 @@ draw_main_panel_content :: proc(app_state: ^App_State) {
             rl.DrawRectangleRec(app_state.main_panel_scroll_bar_rect, rl.LIGHTGRAY)
         }
     }
-
-    rl.EndScissorMode()
 
     // Handle main panel scrolling
     wheel := rl.GetMouseWheelMove()
