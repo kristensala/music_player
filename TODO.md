@@ -1,10 +1,12 @@
 # TODO
-- [ ] Add tracks as favourite (part of playlist support)
-- [ ] Support playlist creation ({LIBRARY_PATH}/mppl0 etc)
-- [ ] Search
+- [ ] What happens if user does not have libsystemd-dev installed on their machine
+- [ ] Taglib: WAV file support
+- [ ] Taglib: text encoding bugs
+- [ ] Add tracks as favorite (part of playlist support)
+- [ ] Support playlist creation ({LIBRARY_PATH}/.mppl/mppl0 etc)
 - [ ] Unix domain socket (IPC) for playback control or dbus MPRIS
-- [ ] Taglib text encoding bug (' is not properly encoded, returns ?)
-- [ ] Command Palette for settings etc
+- [x] Search (@note: simple search is done)
+- [x] Command Palette for settings etc
 - [x] Use sdbus over libdbus-1. Way more concise
 - [x] Fix the order of the tracks in an album (use metadata track nr if it is set, else use file name)
 - [x] Shuffle queue
