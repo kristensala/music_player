@@ -1,4 +1,5 @@
 # TODO
+- [ ] BUG: stop scroll earlier. Currently the calculated start value is too big and allows the scroll bar to go out of the main panel 
 - [ ] What happens if user does not have libsystemd-dev installed on their machine
 - [ ] Taglib: WAV file support
 - [ ] Taglib: text encoding bugs
