@@ -278,8 +278,8 @@ Side_Panel_Option :: enum i32 {
     All_Music = 2 // @todo: remove all artists option from artist list and add it to the side_panel options instead. As "All Music"
 }
 
-@private
 @require_results
+@(private = "file")
 init_state :: proc() -> ^App_State {
     app_state := new(App_State)
     app_state.active_viewport = .Main
@@ -514,6 +514,7 @@ player_repeat_one :: proc(app_state: ^App_State) {
     }
 }
 
+@(private = "file")
 reset_library :: proc(app_state: ^App_State) {
     ma.sound_uninit(app_state.ma_sound)
     clear(&app_state.rows)
@@ -550,7 +551,7 @@ reset_player :: proc(app_state: ^App_State) {
     app_state.currently_playing_track = nil
 }
 
-@private
+@(private = "file")
 destroy_state :: proc(app_state: ^App_State) {
     sdbus.flush_close_unref(app_state.bus)
 
@@ -795,7 +796,7 @@ load_config :: proc(app_state: ^App_State) -> bool {
     return true
 }
 
-@private
+@(private = "file")
 handle_keyboard_events :: proc(app_state: ^App_State) {
     switch app_state.active_viewport {
     case .Main:
@@ -817,7 +818,6 @@ close_search_panel :: proc(app_state: ^App_State) {
     clear(&app_state.search_results)
 }
 
-@private
 handle_repeat_pressed :: proc(app_state: ^App_State) {
     current_mode := app_state.playback_mode
 
@@ -838,7 +838,6 @@ handle_shuffle_pressed :: proc(app_state: ^App_State) {
     }
 }
 
-@private
 handle_play_pause :: proc(app_state: ^App_State) {
     if app_state.audio_state == .Playing {
         stop_response := ma.sound_stop(app_state.ma_sound)
@@ -882,7 +881,6 @@ handle_prev_song_pick :: proc(app_state: ^App_State) -> bool {
     return true
 }
 
-@private
 handle_next_track_pick :: proc(app_state: ^App_State) -> bool {
     // do not allow to pick a next track if there is no current track playing
     // or if the player is in a Stopped state
@@ -931,6 +929,32 @@ handle_next_track_pick :: proc(app_state: ^App_State) -> bool {
     return true
 }
 
+handle_on_track_click :: proc(app_state: ^App_State, selected_track: ^Track) {
+    if app_state.ma_sound != nil {
+        ma.sound_uninit(app_state.ma_sound)
+        app_state.ma_sound = nil
+    }
+
+    app_state.ma_sound = new(ma.sound)
+    res := ma.sound_init_from_file(&app_state.ma_engine, selected_track.file_path, {.STREAM}, nil, nil, app_state.ma_sound)
+    if res != .SUCCESS {
+        app_state.ma_sound = nil
+        log.errorf(
+            "ma.sound_init_from_file failed: %v. FilePath: %s", 
+            res, selected_track.file_path
+        )
+    } else {
+        sound_start_result := ma.sound_start(app_state.ma_sound)
+        if sound_start_result == .SUCCESS {
+            app_state.audio_state = .Playing
+            app_state.currently_playing_track = selected_track
+            app_state.rebuild_queue = true
+            app_state.trigger_notification = true
+        }
+    }
+}
+
+@(private = "file")
 handle_search_panel_keyboard_events :: proc(app_state: ^App_State) {
     if rl.IsKeyPressed(rl.KeyboardKey.ESCAPE) {
         close_search_panel(app_state)
@@ -977,6 +1001,7 @@ handle_search_panel_keyboard_events :: proc(app_state: ^App_State) {
     }
 }
 
+@(private = "file")
 update_search_results :: proc(app_state: ^App_State) {
     input := utf8.runes_to_string(app_state.search_input[:], context.temp_allocator)
 
@@ -1036,6 +1061,7 @@ update_search_results :: proc(app_state: ^App_State) {
     append(&app_state.search_results, ..results[:])
 }
 
+@(private = "file")
 handle_main_view_keyboard_events :: proc(app_state: ^App_State) {
     assert(app_state.active_viewport == .Main)
 
@@ -1059,6 +1085,7 @@ handle_main_view_keyboard_events :: proc(app_state: ^App_State) {
 }
 
 // @todo
+@(private = "file")
 handle_create_playlist_modal_keyboard_events :: proc(app_state: ^App_State) {
     assert(app_state.active_viewport == .Create_Playlist_Modal)
 
@@ -1085,6 +1112,8 @@ handle_create_playlist_modal_keyboard_events :: proc(app_state: ^App_State) {
     }
 
 }
+
+@(private = "file")
 init_library :: proc(app_state: ^App_State) {
     scan_library(app_state, string(app_state.library_path))
     create_albums(app_state)
@@ -1101,6 +1130,7 @@ init_library :: proc(app_state: ^App_State) {
     }
 }
 
+@(private = "file")
 create_track :: proc(file_name: string, file_path: string) -> (Track, tl.Error) {
     tag, tl_error := tl.get_tag(file_path)
     if tl_error != nil {
@@ -1126,6 +1156,7 @@ create_track :: proc(file_name: string, file_path: string) -> (Track, tl.Error) 
     return track, nil
 }
 
+@(private = "file")
 scan_library :: proc(app_state: ^App_State, current_working_dir: string) {
     data, err := os.read_directory_by_path(current_working_dir, 0, context.allocator)
     if err != nil {
@@ -1159,6 +1190,7 @@ scan_library :: proc(app_state: ^App_State, current_working_dir: string) {
     }
 }
 
+@(private = "file")
 create_albums :: proc(app_state: ^App_State) {
     tmp_album_map : map[string]Album_Idx
     defer delete(tmp_album_map)
@@ -1194,6 +1226,7 @@ create_albums :: proc(app_state: ^App_State) {
 
 }
 
+@(private = "file")
 find_album_cover :: proc(dir: string) -> cstring {
     cover_path, err := filepath.join({dir, "cover.jpg"}, context.temp_allocator)
     if err != nil do panic(fmt.tprintf("Failed to join filepath: ", err))
@@ -1212,7 +1245,7 @@ find_album_cover :: proc(dir: string) -> cstring {
 
 // @todo: set position y of each row here
 // so I can draw the rows based on the pre-calculated pos_y
-@private
+@(private = "file")
 build_rows :: proc(app_state: ^App_State) {
     // @todo: do not clear until new rows are built
     clear(&app_state.rows)
@@ -1271,6 +1304,7 @@ build_rows :: proc(app_state: ^App_State) {
     assert(app_state.rebuild_rows == false)
 }
 
+@(private = "file")
 find_and_set_current_position_in_queue :: proc(app_state: ^App_State) {
     assert(len(app_state.queue) > 0)
 
@@ -1286,6 +1320,7 @@ find_and_set_current_position_in_queue :: proc(app_state: ^App_State) {
 
 // Initial build has all the tracks in queue,
 // unless there is an artist filter, or playlist selected(playlists not done)
+@(private = "file")
 build_queue :: proc(app_state: ^App_State) {
     clear(&app_state.queue)
 
@@ -1324,7 +1359,7 @@ shuffle_queue :: proc(app_state: ^App_State) {
     find_and_set_current_position_in_queue(app_state)
 }
 
-@private
+@(private = "file")
 oldest_cover_art_cache_entry :: proc(app_state: ^App_State) -> (cache_entry_idx: i32, cache_entry: ^Album_Art_Cache_Entry) {
     smallest_frame_count : u64
     entry_idx: i32
@@ -1349,7 +1384,7 @@ oldest_cover_art_cache_entry :: proc(app_state: ^App_State) -> (cache_entry_idx:
 }
 
 // Add album cover art into queue
-@private
+@(private = "file")
 request_cover_load :: proc(queue: ^[dynamic]Album_Idx, album_idx: i32) {
     if len(queue) == CACHE_MAX_CAPACITY do return
 
@@ -1366,7 +1401,7 @@ request_cover_load :: proc(queue: ^[dynamic]Album_Idx, album_idx: i32) {
 
 // Consumes the album art queue
 // If cache is full, gets the oldest cache entry and replaces with the one in queue
-@private
+@(private = "file")
 process_album_art_queue :: proc(app_state: ^App_State) {
     for album_idx, idx in app_state.album_art_load_queue {
         album := &app_state.albums[album_idx]
@@ -1430,7 +1465,7 @@ process_album_art_queue :: proc(app_state: ^App_State) {
 
 // Remove stale cache entries
 // If entry has not been accessed in the last 1000 frame, remove it
-@private
+@(private = "file")
 invalidate_cache :: proc(app_state: ^App_State) {
     stale_frame_count : u64 = 1000
 
@@ -1473,6 +1508,7 @@ remove_entry_from_cache :: proc(cache: ^Album_Art_Cache, entry_idx: i32) {
 }
 
 // Clears Album cover cache entirely
+@(private = "file")
 clear_cache :: proc(cache: ^Album_Art_Cache) {
     for &e in cache.entries {
         if e == nil do continue
@@ -1670,6 +1706,7 @@ update_layout :: proc(app_state: ^App_State) {
     app_state.playback_controls_panel_rect.y = app_state.main_panel_rect.height
 }
 
+@(private = "file")
 trigger_notification :: proc(app_state: ^App_State) {
     app_state.trigger_notification = false
 

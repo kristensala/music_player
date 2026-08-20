@@ -2,7 +2,6 @@ package main
 
 import "core:fmt"
 import "core:strings"
-import "core:log"
 import "core:unicode/utf8"
 import rl "vendor:raylib"
 import ma "vendor:miniaudio"
@@ -548,7 +547,7 @@ draw_track_list_item :: proc(app_state: ^App_State, row: ^Row) {
         rl.DrawRectangleRec(list_item, HIGHLIGHT_COLOR)
 
         if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
-            handle_track_selection(app_state, row.track)
+            handle_on_track_click(app_state, row.track)
         }
     }
 
@@ -591,32 +590,6 @@ draw_track_list_item :: proc(app_state: ^App_State, row: ^Row) {
             f32(FONT_20),
             0,
             txt_color)
-    }
-
-    handle_track_selection :: proc(app_state: ^App_State, selected_track: ^Track) {
-        if app_state.ma_sound != nil {
-            ma.sound_uninit(app_state.ma_sound)
-            app_state.ma_sound = nil
-        }
-
-        app_state.ma_sound = new(ma.sound)
-        res := ma.sound_init_from_file(&app_state.ma_engine, selected_track.file_path, {.STREAM}, nil, nil, app_state.ma_sound)
-        if res != .SUCCESS {
-            app_state.ma_sound = nil
-            log.errorf(
-                "ma.sound_init_from_file failed: %v. FilePath: %s", 
-                res, selected_track.file_path
-            )
-        } else {
-            sound_start_result := ma.sound_start(app_state.ma_sound)
-            if sound_start_result == .SUCCESS {
-                app_state.audio_state = .Playing
-                app_state.currently_playing_track = selected_track
-                app_state.rebuild_queue = true
-                app_state.trigger_notification = true
-            }
-        }
-
     }
 }
 
