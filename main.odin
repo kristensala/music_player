@@ -36,17 +36,19 @@ SEARCH_IMG_DATA :: #load("./assets/search.png")
 ALBUM_COVER_SIZE           :: 200
 SCROLL_INCREMENT           :: 5 // five rows
 BOTTOM_BAR_PADDING         :: 50
-FONT_18                    :: 18
+
 FONT_20                    :: 20
 FONT_30                    :: 30
+
 PLAYBACK_BUTTON_SIZE       :: 30
 SIDE_PANEL_ROW_HEIGHT      :: 30
 ROW_HEIGHT                 :: 30
 TRACK_LIST_OFFSET_X        :: 250
 CACHE_MAX_CAPACITY         :: 15
-MAIN_PANEL_PADDING_TOP :: 20
-MAIN_PANEL_PADDING_RIGHT :: 20
-MAIN_PANEL_PADDING_LEFT :: 20
+
+MAIN_PANEL_PADDING_TOP     :: 20
+MAIN_PANEL_PADDING_RIGHT   :: 20
+MAIN_PANEL_PADDING_LEFT    :: 20
 
 BACKGROUND_COLOR :: rl.Color{ 0, 21, 36, 255 } // Ink Black
 HIGHLIGHT_COLOR :: rl.Color{255, 125, 0, 255 } // Harvest Orange
@@ -614,12 +616,10 @@ destroy_state :: proc(app_state: ^App_State) {
 load_assets :: proc(app_state: ^App_State) {
     // fonts
     {
-        font_18 := rl.LoadFontFromMemory(".ttf", raw_data(FONT_DATA), i32(len(FONT_DATA)), FONT_18, nil, 0)
         font_20 := rl.LoadFontFromMemory(".ttf", raw_data(FONT_DATA), i32(len(FONT_DATA)), FONT_20, nil, 0)
         font_30 := rl.LoadFontFromMemory(".ttf", raw_data(FONT_DATA), i32(len(FONT_DATA)), FONT_30, nil, 0)
 
         fonts := make(map[i32]rl.Font)
-        fonts[FONT_18] = font_18
         fonts[FONT_20] = font_20
         fonts[FONT_30] = font_30
 

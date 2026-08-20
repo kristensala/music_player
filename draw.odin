@@ -41,22 +41,22 @@ draw_main :: proc(app_state: ^App_State) {
                 }
 
                 rl.DrawTextEx(
-                    app_state.fonts[FONT_18],
+                    app_state.fonts[FONT_20],
                     app_state.currently_playing_track.title,
                     {BOTTOM_BAR_PADDING + 70, f32(rl.GetScreenHeight() - BOTTOM_BAR_PADDING - 75)},
-                    FONT_18, 0, TEXT_COLOR)
+                    FONT_20, 0, TEXT_COLOR)
 
                 rl.DrawTextEx(
-                    app_state.fonts[FONT_18],
+                    app_state.fonts[FONT_20],
                     app_state.currently_playing_track.artist,
                     {BOTTOM_BAR_PADDING + 70, f32(rl.GetScreenHeight() - BOTTOM_BAR_PADDING - 55)},
-                    FONT_18, 0, HIGHLIGHT_COLOR)
+                    FONT_20, 0, HIGHLIGHT_COLOR)
 
                 rl.DrawTextEx(
-                    app_state.fonts[FONT_18],
+                    app_state.fonts[FONT_20],
                     app_state.currently_playing_track.album_title,
                     {BOTTOM_BAR_PADDING + 70, f32(rl.GetScreenHeight() - BOTTOM_BAR_PADDING - 35)},
-                    FONT_18, 0, rl.GRAY)
+                    FONT_20, 0, rl.GRAY)
             }
         }
 
