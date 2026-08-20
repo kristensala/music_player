@@ -534,15 +534,22 @@ draw_main_panel_content :: proc(app_state: ^App_State) {
         start = i32(len(app_state.rows) - 1)
     }
 
+    // keep a max 5 row buffer at the top
+    // @note: this buffer allows album art drawing even if the art is not fully visible on the screen
+    if start >= SCROLL_INCREMENT {
+        start -= SCROLL_INCREMENT
+    } else {
+        start -= start
+    }
+
     rl.BeginScissorMode(
         i32(app_state.main_panel_rect.x),
         i32(app_state.main_panel_rect.y),
         i32(app_state.main_panel_rect.width),
         i32(app_state.main_panel_rect.height))
 
-
     for row, row_idx in app_state.rows[start:] {
-        if f32(row.pos_y - app_state.main_panel_scroll_offset) >= app_state.main_panel_rect.height do break
+        if f32(row.pos_y) - app_state.main_panel_scroll_offset >= app_state.main_panel_rect.height do break
 
         if row.is_album_title_row {
             draw_album_title_row(app_state, row)
@@ -554,21 +561,20 @@ draw_main_panel_content :: proc(app_state: ^App_State) {
 
     rl.EndScissorMode()
 
-    // @testing: main panel scroll bar
-    // Calculate the size and the position of the scroll bar
+    // Main panel scroll bar
     {
         main_panel_height := app_state.main_panel_rect.height - app_state.main_panel_rect.y
         if f32(app_state.content_max_height) > main_panel_height {
-            x := i32(main_panel_height) * 100 / (app_state.content_max_height)
+            x := main_panel_height * 100 / f32(app_state.content_max_height)
 
-            scoll_bar_height := i32(main_panel_height) * x / 100
-            scroll_bar_offset := f32(app_state.main_panel_scroll_offset) / f32(app_state.content_max_height) * main_panel_height
+            scoll_bar_height := main_panel_height * x / 100
+            scroll_bar_offset := app_state.main_panel_scroll_offset / f32(app_state.content_max_height) * main_panel_height
             scroll_bar_offset += app_state.main_panel_rect.y // add the main panel padding
 
             app_state.main_panel_scroll_bar_rect = rl.Rectangle{
                 x = f32(rl.GetScreenWidth() - SCROLL_BAR_OFFSET_X),
                 y = scroll_bar_offset,
-                height = f32(scoll_bar_height),
+                height = scoll_bar_height,
                 width = SCROLL_BAR_WIDTH
             }
 
@@ -580,15 +586,21 @@ draw_main_panel_content :: proc(app_state: ^App_State) {
     wheel := rl.GetMouseWheelMove()
     if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.main_panel_rect) && app_state.active_viewport == .Main {
         if wheel < 0 { // scroll down
-            if app_state.main_panel_scroll_offset + i32(app_state.main_panel_rect.height) < app_state.content_max_height {
-                app_state.main_panel_scroll_offset += ROW_HEIGHT * 5
+            if app_state.main_panel_scroll_offset + app_state.main_panel_rect.height < f32(app_state.content_max_height) {
+                diff := f32(app_state.content_max_height) - (app_state.main_panel_scroll_offset + app_state.main_panel_rect.height)
+                // When close to the end of content then do not scroll the default amount, instead scoll the remaining diff
+                if diff < ROW_HEIGHT * SCROLL_INCREMENT {
+                    app_state.main_panel_scroll_offset += diff
+                } else {
+                    app_state.main_panel_scroll_offset += ROW_HEIGHT * SCROLL_INCREMENT
+                }
             }
         } else if wheel > 0 { // scroll up
-            offset := app_state.main_panel_scroll_offset - (ROW_HEIGHT * 5)
+            offset := app_state.main_panel_scroll_offset - (ROW_HEIGHT * SCROLL_INCREMENT)
             if offset <= 0 {
                 app_state.main_panel_scroll_offset = 0
             } else {
-                app_state.main_panel_scroll_offset -= (ROW_HEIGHT * 5)
+                app_state.main_panel_scroll_offset -= (ROW_HEIGHT * SCROLL_INCREMENT)
             }
         }
     }
@@ -599,7 +611,7 @@ draw_main_panel_content :: proc(app_state: ^App_State) {
 @(private = "file")
 draw_album_title_row :: proc(app_state: ^App_State, row: ^Row) {
     album := app_state.albums[row.album_idx]
-    pos_y := f32(row.pos_y - app_state.main_panel_scroll_offset)
+    pos_y := f32(row.pos_y) - app_state.main_panel_scroll_offset
 
     list_item := rl.Rectangle{
         x = app_state.main_panel_rect.x,
@@ -631,7 +643,7 @@ draw_album_title_row :: proc(app_state: ^App_State, row: ^Row) {
 
 @(private = "file")
 draw_track_list_item :: proc(app_state: ^App_State, row: ^Row) {
-    pos_y := f32(row.pos_y - app_state.main_panel_scroll_offset)
+    pos_y := f32(row.pos_y) - app_state.main_panel_scroll_offset
     list_item := rl.Rectangle{
         x = app_state.main_panel_rect.x + TRACK_LIST_OFFSET_X,
         y = pos_y,

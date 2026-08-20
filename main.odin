@@ -94,7 +94,7 @@ Main_Panel :: struct {
     main_panel_scroll_bar_rect: rl.Rectangle,
 
     main_panel_rect: rl.Rectangle,
-    main_panel_scroll_offset: i32,
+    main_panel_scroll_offset: f32,
 
     rows: [dynamic]^Row,
     rebuild_rows: bool,
@@ -1104,7 +1104,7 @@ build_rows :: proc(app_state: ^App_State) {
     clear(&app_state.rows)
     app_state.rebuild_rows = false
 
-    pos_y : i32 = ROW_HEIGHT
+    pos_y : i32 = MAIN_PANEL_PADDING_TOP
     for &album, album_idx in app_state.albums {
         if app_state.current_selected_artist != nil {
             if album.artist != app_state.current_selected_artist do continue
@@ -1147,8 +1147,6 @@ build_rows :: proc(app_state: ^App_State) {
                 append(&app_state.rows, dummy_row)
                 if album_content_height >= ALBUM_COVER_SIZE do break
             }
-
-            //pos_y += ROW_HEIGHT
         }
 
     }
