@@ -7,9 +7,28 @@ import rl "vendor:raylib"
 import ma "vendor:miniaudio"
 import "nfd"
 
+ALBUM_COVER_SIZE           :: 200
+SCROLL_INCREMENT           :: 5 // five rows
+BOTTOM_BAR_PADDING         :: 50
+
 SEARCH_PANEL_ROW_HEIGHT :: 30
 SCROLL_BAR_WIDTH :: 5
 SCROLL_BAR_OFFSET_X :: 10
+
+PLAYBACK_BUTTON_SIZE       :: 30
+SIDE_PANEL_ROW_HEIGHT      :: 30
+ROW_HEIGHT                 :: 30
+
+MAIN_PANEL_PADDING_TOP     :: 20
+MAIN_PANEL_PADDING_RIGHT   :: 20
+MAIN_PANEL_PADDING_LEFT    :: 20
+
+TRACK_LIST_OFFSET_X        :: 250 // Add room for album cover by shifting the list items
+
+BACKGROUND_COLOR :: rl.Color{ 0, 21, 36, 255 } // Ink Black
+HIGHLIGHT_COLOR :: rl.Color{255, 125, 0, 255 } // Harvest Orange
+TEXT_COLOR :: rl.Color{255, 236, 209, 255 } //  Papaya Whip
+STORMY_TEAL :: rl.Color{21, 97, 109, 255} // Stormy Teal
 
 @(private)
 draw_main :: proc(app_state: ^App_State) {

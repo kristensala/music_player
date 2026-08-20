@@ -33,30 +33,11 @@ SHUFFLE_IMG_DATA :: #load("./assets/shuffle-solid.png")
 SHUFFLE_ON_IMG_DATA :: #load("./assets/shuffle-on.png")
 SEARCH_IMG_DATA :: #load("./assets/search.png")
 
-ALBUM_COVER_SIZE           :: 200
-SCROLL_INCREMENT           :: 5 // five rows
-BOTTOM_BAR_PADDING         :: 50
-
 FONT_20                    :: 20
 FONT_30                    :: 30
 
-PLAYBACK_BUTTON_SIZE       :: 30
-SIDE_PANEL_ROW_HEIGHT      :: 30
-ROW_HEIGHT                 :: 30
-TRACK_LIST_OFFSET_X        :: 250
 CACHE_MAX_CAPACITY         :: 15
-
-MAIN_PANEL_PADDING_TOP     :: 20
-MAIN_PANEL_PADDING_RIGHT   :: 20
-MAIN_PANEL_PADDING_LEFT    :: 20
-
-BACKGROUND_COLOR :: rl.Color{ 0, 21, 36, 255 } // Ink Black
-HIGHLIGHT_COLOR :: rl.Color{255, 125, 0, 255 } // Harvest Orange
-TEXT_COLOR :: rl.Color{255, 236, 209, 255 } //  Papaya Whip
-STORMY_TEAL :: rl.Color{21, 97, 109, 255} // Stormy Teal
-
 ALL_ARTISTS_OPTION         :: "All Artists"
-
 CONFIG_LIBRARY_PATH_PREFIX : string = "LIBRARY_PATH="
 
 EMPTY_IDX :: -1
