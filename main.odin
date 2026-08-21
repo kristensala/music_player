@@ -17,8 +17,8 @@ import "core:os"
 import "core:sync"
 import tl "taglib"
 import "nfd"
-import "sdbus"
 import "notify"
+import "sdbus"
 
 FONT_DATA :: #load("assets/Inter.ttf")
 ALBUM_ART_PLACEHOLDER :: #load("./assets/album_placeholder.png")
