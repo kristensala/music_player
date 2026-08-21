@@ -2,7 +2,7 @@
 package sdbus
 
 open_user :: proc(bus: ^Bus) -> i32 {
-    return nil
+    return -1
 }
 
 unref :: proc(bus: Bus) -> Bus {
@@ -19,13 +19,13 @@ call_method :: proc(
     ret_error: Error,
     reply: ^Message,
     types: cstring,
-    #c_vararg args: ..any
+    args: ..any
 ) -> i32 {
-    return nil
+    return -1
 }
 
-message_read :: proc(m: Message, types: cstring, #c_vararg args: ..any) -> i32 {
-    return nil
+message_read :: proc(m: Message, types: cstring, args: ..any) -> i32 {
+    return -1
 }
 
 message_unref :: proc(m: Message) -> Message {
