@@ -684,16 +684,31 @@ draw_debug_panel :: proc(app_state: ^App_State) {
 draw_command_palette :: proc(app_state: ^App_State) {
     // panel body
     {
-        rl.DrawRectangleRounded(rl.Rectangle{
-            f32(rl.GetScreenWidth() / 2 - 500) - 2.5,
-            200 - 2.5,
-            1005, 1005}, 0.03, 0, rl.Fade(STORMY_TEAL, 0.5))
+        width :: 1000
+        width2 :: 1005
+        max_height :: 1000
+        min_height :: 300
+
+        panel_height := f32(rl.GetScreenHeight()) / 2
+        if panel_height > max_height {
+            panel_height = max_height
+        } else if (panel_height < min_height) {
+            panel_height = min_height
+        }
+
+        rl.DrawRectangleRounded(
+            rl.Rectangle{
+                f32(rl.GetScreenWidth() / 2 - (width2 / 2)),
+                200 - 2.5,
+                width2, 
+                panel_height + 5
+            }, 0.03, 0, rl.Fade(STORMY_TEAL, 0.5))
 
         app_state.command_palette_rect = rl.Rectangle{
-            x = f32(rl.GetScreenWidth() / 2 - 500),
+            x = f32(rl.GetScreenWidth() / 2 - (width / 2)),
             y = 200,
-            height = 1000,
-            width = 1000
+            height = panel_height,
+            width = width
         }
 
         rl.DrawRectangleRounded(app_state.command_palette_rect, 0.03, 0, BACKGROUND_COLOR)

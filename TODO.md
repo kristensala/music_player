@@ -1,4 +1,5 @@
 # TODO
+- [ ] Speed up cold start on Windows (scanning the library path painfully slow atm. Linux seems fine)
 - [ ] What happens if user does not have libsystemd-dev installed on their machine
 - [ ] Taglib: WAV file support
 - [ ] Taglib: text encoding bugs
@@ -10,7 +11,6 @@
 - [ ] Keyboard arrow keys navigation
 - [ ] Delete command palette input while holding the backspace (Currently you have to tap it)
 - [ ] Overwrite libary path in config file
-- [ ] Speed up cold start on Windows (scanning the library path really slow atm. Linux seems fine)
 - [x] BUG: stop scroll earlier. Currently the calculated start value is too big and allows the scroll bar to go out of the main panel 
 - [x] Search (@note: simple search is done)
 - [x] Command Palette for settings etc
