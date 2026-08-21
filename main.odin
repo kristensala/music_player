@@ -105,14 +105,15 @@ Caret :: struct {
     col_idx: i32 // position in input
 }
 
-Search_Panel :: struct {
-    caret: Caret,
-    search_panel_rect: rl.Rectangle,
 
-    search_input: [dynamic]rune,
+Command_Palette :: struct {
+    caret: Caret,
+    command_palette_rect: rl.Rectangle,
+
+    command_palette_input: [dynamic]rune,
     search_results: [dynamic]Search_Result_Row,
 
-    search_panel_scroll_index: i32
+    command_palette_scroll_index: i32
 }
 
 Search_Result_Type :: enum {
@@ -174,7 +175,7 @@ App_State :: struct {
     using side_panel              : Side_Panel,
     using playback_controls_panel : Playback_Controls_Panel,
     using create_playlist_modal   : Create_Playlist_Modal,
-    using search_panel            : Search_Panel,
+    using command_palette            : Command_Palette,
 
     fonts: map[i32]rl.Font,
 
@@ -407,7 +408,7 @@ main :: proc() {
         }
 
         if app_state.active_viewport == .Search {
-            draw_search_panel(app_state)
+            draw_command_palette(app_state)
         }
 
         if app_state.show_debug_panel {
@@ -586,7 +587,7 @@ destroy_state :: proc(app_state: ^App_State) {
     delete(app_state.create_playlist_modal_input)
     delete(app_state.queue)
 
-    delete(app_state.search_input)
+    delete(app_state.command_palette_input)
     delete(app_state.search_results)
     delete(app_state.config_path)
 
@@ -784,17 +785,17 @@ handle_keyboard_events :: proc(app_state: ^App_State) {
     case .Create_Playlist_Modal:
         handle_create_playlist_modal_keyboard_events(app_state)
     case .Search:
-        handle_search_panel_keyboard_events(app_state)
+        handle_command_palette_keyboard_events(app_state)
     }
 }
 
-close_search_panel :: proc(app_state: ^App_State) {
+close_command_palette :: proc(app_state: ^App_State) {
     app_state.active_viewport = .Main
-    app_state.search_panel_scroll_index = 0
-    app_state.search_panel.caret.col_idx = 0
-    app_state.search_panel.caret.pos.x = 0
+    app_state.command_palette_scroll_index = 0
+    app_state.command_palette.caret.col_idx = 0
+    app_state.command_palette.caret.pos.x = 0
 
-    clear(&app_state.search_input)
+    clear(&app_state.command_palette_input)
     clear(&app_state.search_results)
 }
 
@@ -935,27 +936,27 @@ handle_on_track_click :: proc(app_state: ^App_State, selected_track: ^Track) {
 }
 
 @(private = "file")
-handle_search_panel_keyboard_events :: proc(app_state: ^App_State) {
+handle_command_palette_keyboard_events :: proc(app_state: ^App_State) {
     if rl.IsKeyPressed(rl.KeyboardKey.ESCAPE) {
-        close_search_panel(app_state)
+        close_command_palette(app_state)
     }
 
     if rl.IsKeyPressed(rl.KeyboardKey.BACKSPACE) {
-        app_state.search_panel_scroll_index = 0
+        app_state.command_palette_scroll_index = 0
 
-        if len(app_state.search_input) > 0 {
-            pop(&app_state.search_input)
+        if len(app_state.command_palette_input) > 0 {
+            pop(&app_state.command_palette_input)
 
             // update caret position
             {
-                input := utf8.runes_to_string(app_state.search_input[:])
+                input := utf8.runes_to_string(app_state.command_palette_input[:])
                 cinput := strings.clone_to_cstring(input)
                 text_measurement := rl.MeasureTextEx(app_state.fonts[FONT_20], cinput, FONT_20, 0)
                 delete(cinput)
                 delete(input)
 
-                app_state.search_panel.caret.pos.x = text_measurement.x
-                app_state.search_panel.caret.col_idx -= 1
+                app_state.command_palette.caret.pos.x = text_measurement.x
+                app_state.command_palette.caret.col_idx -= 1
             }
         }
         update_search_results(app_state)
@@ -965,17 +966,17 @@ handle_search_panel_keyboard_events :: proc(app_state: ^App_State) {
     // ability to navigate in results with arrow keys
     input := rl.GetCharPressed()
     if input > 0 {
-        app_state.search_panel_scroll_index = 0
+        app_state.command_palette_scroll_index = 0
 
         // update caret position
         {
-            app_state.search_panel.caret.col_idx += 1
+            app_state.command_palette.caret.col_idx += 1
             glyph_info := rl.GetGlyphInfo(app_state.fonts[FONT_20], input)
-            app_state.search_panel.caret.pos.x += f32(glyph_info.advanceX)
+            app_state.command_palette.caret.pos.x += f32(glyph_info.advanceX)
         }
 
-        append(&app_state.search_input, input)
-        if len(app_state.search_input) < 2 do return
+        append(&app_state.command_palette_input, input)
+        if len(app_state.command_palette_input) < 2 do return
 
         update_search_results(app_state)
     }
@@ -983,7 +984,7 @@ handle_search_panel_keyboard_events :: proc(app_state: ^App_State) {
 
 @(private = "file")
 update_search_results :: proc(app_state: ^App_State) {
-    input := utf8.runes_to_string(app_state.search_input[:], context.temp_allocator)
+    input := utf8.runes_to_string(app_state.command_palette_input[:], context.temp_allocator)
 
     if len(input) < 2 {
         clear(&app_state.search_results)

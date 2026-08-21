@@ -681,7 +681,7 @@ draw_debug_panel :: proc(app_state: ^App_State) {
     }
 }
 
-draw_search_panel :: proc(app_state: ^App_State) {
+draw_command_palette :: proc(app_state: ^App_State) {
     // panel body
     {
         rl.DrawRectangleRounded(rl.Rectangle{
@@ -689,14 +689,14 @@ draw_search_panel :: proc(app_state: ^App_State) {
             200 - 2.5,
             1005, 1005}, 0.03, 0, rl.Fade(STORMY_TEAL, 0.5))
 
-        app_state.search_panel_rect = rl.Rectangle{
+        app_state.command_palette_rect = rl.Rectangle{
             x = f32(rl.GetScreenWidth() / 2 - 500),
             y = 200,
             height = 1000,
             width = 1000
         }
 
-        rl.DrawRectangleRounded(app_state.search_panel_rect, 0.03, 0, BACKGROUND_COLOR)
+        rl.DrawRectangleRounded(app_state.command_palette_rect, 0.03, 0, BACKGROUND_COLOR)
     }
 
     // input
@@ -706,82 +706,82 @@ draw_search_panel :: proc(app_state: ^App_State) {
 
         rl.DrawTexture(
             app_state.search_logo_texture,
-            i32(app_state.search_panel_rect.x + 20), i32(app_state.search_panel_rect.y + 15),
+            i32(app_state.command_palette_rect.x + 20), i32(app_state.command_palette_rect.y + 15),
             rl.WHITE)
 
-        input := utf8.runes_to_string(app_state.search_input[:], context.temp_allocator)
-        cinput := fmt.ctprintf("%s", app_state.search_input)
+        input := utf8.runes_to_string(app_state.command_palette_input[:], context.temp_allocator)
+        cinput := fmt.ctprintf("%s", app_state.command_palette_input)
 
         // Input placeholder
         if len(input) == 0 {
             rl.DrawTextEx(
                 app_state.fonts[FONT_20],
                 "Search or type /cmd for commands",
-                {app_state.search_panel_rect.x + INPUT_X_OFFSET, app_state.search_panel_rect.y + INPUT_Y_OFFSET},
+                {app_state.command_palette_rect.x + INPUT_X_OFFSET, app_state.command_palette_rect.y + INPUT_Y_OFFSET},
                 FONT_20, 0, rl.DARKGRAY)
         }
 
         rl.DrawTextEx(
             app_state.fonts[FONT_20],
             cinput,
-            {app_state.search_panel_rect.x + INPUT_X_OFFSET, app_state.search_panel_rect.y + INPUT_Y_OFFSET},
+            {app_state.command_palette_rect.x + INPUT_X_OFFSET, app_state.command_palette_rect.y + INPUT_Y_OFFSET},
             FONT_20, 0, rl.WHITE)
 
         // input caret
         {
-            app_state.search_panel.caret.rect = rl.Rectangle{
-                x = app_state.search_panel_rect.x + INPUT_X_OFFSET + app_state.search_panel.caret.pos.x, 
-                y = app_state.search_panel_rect.y + INPUT_Y_OFFSET,
+            app_state.command_palette.caret.rect = rl.Rectangle{
+                x = app_state.command_palette_rect.x + INPUT_X_OFFSET + app_state.command_palette.caret.pos.x, 
+                y = app_state.command_palette_rect.y + INPUT_Y_OFFSET,
                 height = 20,
                 width = 2
             }
 
-            rl.DrawRectangleRec(app_state.search_panel.caret.rect, rl.WHITE)
+            rl.DrawRectangleRec(app_state.command_palette.caret.rect, rl.WHITE)
         }
 
         rl.DrawLineEx(
-            {app_state.search_panel_rect.x, app_state.search_panel_rect.y + 60},
-            {app_state.search_panel_rect.x + app_state.search_panel_rect.width, app_state.search_panel_rect.y + 60},
+            {app_state.command_palette_rect.x, app_state.command_palette_rect.y + 60},
+            {app_state.command_palette_rect.x + app_state.command_palette_rect.width, app_state.command_palette_rect.y + 60},
             1.0,
             STORMY_TEAL)
     }
 
     rl.BeginScissorMode(
-        i32(app_state.search_panel_rect.x),
-        i32(app_state.search_panel_rect.y),
-        i32(app_state.search_panel_rect.width),
-        i32(app_state.search_panel_rect.height))
+        i32(app_state.command_palette_rect.x),
+        i32(app_state.command_palette_rect.y),
+        i32(app_state.command_palette_rect.width),
+        i32(app_state.command_palette_rect.height))
 
     // search results
     {
         search_result_offset_y :: 70
 
-        search_content_height := app_state.search_panel_rect.height - search_result_offset_y
+        search_content_height := app_state.command_palette_rect.height - search_result_offset_y
         total_possible_rows_to_render := i32(search_content_height / SEARCH_PANEL_ROW_HEIGHT)
         last_row_visible := i32(len(app_state.search_results)) < total_possible_rows_to_render ? i32(len(app_state.search_results)) : total_possible_rows_to_render
 
         if last_row_visible < i32(len(app_state.search_results)) {
-            last_row_visible += app_state.search_panel_scroll_index
+            last_row_visible += app_state.command_palette_scroll_index
         }
 
         if len(app_state.search_results) > 0 {
             wheel := rl.GetMouseWheelMove()
-            if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.search_panel_rect){
+            if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.command_palette_rect){
                 if wheel < 0 { // scroll down
                     if i32(len(app_state.search_results)) > last_row_visible {
-                        app_state.search_panel_scroll_index += 1
+                        app_state.command_palette_scroll_index += 1
                     }
                 } else if wheel > 0 {
-                    if app_state.search_panel_scroll_index > 0 {
-                        app_state.search_panel_scroll_index -= 1
+                    if app_state.command_palette_scroll_index > 0 {
+                        app_state.command_palette_scroll_index -= 1
                     }
                 }
             }
         }
 
-        y := app_state.search_panel_rect.y + search_result_offset_y
-        for value in app_state.search_results[app_state.search_panel_scroll_index:last_row_visible] {
-            bounds := rl.Rectangle{app_state.search_panel_rect.x, y, app_state.search_panel_rect.width, 30}
+        y := app_state.command_palette_rect.y + search_result_offset_y
+        for value in app_state.search_results[app_state.command_palette_scroll_index:last_row_visible] {
+            bounds := rl.Rectangle{app_state.command_palette_rect.x, y, app_state.command_palette_rect.width, 30}
 
             if rl.CheckCollisionPointRec(rl.GetMousePosition(), bounds) {
                 // highlight
@@ -815,7 +815,7 @@ draw_search_panel :: proc(app_state: ^App_State) {
                             }
                         }
                     }
-                    close_search_panel(app_state)
+                    close_command_palette(app_state)
                 }
             }
 
@@ -825,37 +825,37 @@ draw_search_panel :: proc(app_state: ^App_State) {
                 rl.DrawTextEx(
                     app_state.fonts[FONT_20],
                     "ARTIST",
-                    {app_state.search_panel_rect.x + 20, txt_y},
+                    {app_state.command_palette_rect.x + 20, txt_y},
                     FONT_20, 0, rl.GRAY)
 
                 rl.DrawTextEx(
                     app_state.fonts[FONT_20],
                     value.artist_name,
-                    {app_state.search_panel_rect.x + 100, txt_y},
+                    {app_state.command_palette_rect.x + 100, txt_y},
                     FONT_20, 0, TEXT_COLOR)
             } else if value.type == .Album {
                 rl.DrawTextEx(
                     app_state.fonts[FONT_20],
                     "ALBUM",
-                    {app_state.search_panel_rect.x + 20, txt_y},
+                    {app_state.command_palette_rect.x + 20, txt_y},
                     FONT_20, 0, rl.GRAY)
 
                 rl.DrawTextEx(
                     app_state.fonts[FONT_20],
                     value.album.title,
-                    {app_state.search_panel_rect.x + 100, txt_y},
+                    {app_state.command_palette_rect.x + 100, txt_y},
                     FONT_20, 0, TEXT_COLOR)
             } else if value.type == .Command {
                 rl.DrawTextEx(
                     app_state.fonts[FONT_20],
                     "CMD",
-                    {app_state.search_panel_rect.x + 20, txt_y},
+                    {app_state.command_palette_rect.x + 20, txt_y},
                     FONT_20, 0, rl.GRAY)
 
                 rl.DrawTextEx(
                     app_state.fonts[FONT_20],
                     COMMANDS[value.cmd],
-                    {app_state.search_panel_rect.x + 100, txt_y},
+                    {app_state.command_palette_rect.x + 100, txt_y},
                     FONT_20, 0, TEXT_COLOR)
             }
 
