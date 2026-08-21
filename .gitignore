@@ -1,2 +1,5 @@
+build/
+
 *.exe
 music_player
+

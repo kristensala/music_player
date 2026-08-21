@@ -1,5 +1,6 @@
 # TODO
 - [ ] Speed up cold start on Windows (scanning the library path painfully slow atm. Linux seems fine)
+- [ ] Create a custom binary index file form scanned tracks
 - [ ] What happens if user does not have libsystemd-dev installed on their machine
 - [ ] Taglib: WAV file support
 - [ ] Taglib: text encoding bugs
