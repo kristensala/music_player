@@ -3,7 +3,6 @@ package taglib
 import "core:unicode/utf16"
 import "core:strings"
 import "core:os"
-import "core:fmt"
 import "core:path/filepath"
 
 // MP3

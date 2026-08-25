@@ -427,6 +427,17 @@ draw_side_panel :: proc(app_state: ^App_State) {
 
 @(private = "file")
 draw_main_panel_content :: proc(app_state: ^App_State) {
+    if app_state.scanning {
+        rl.DrawTextEx(
+            app_state.fonts[FONT_30],
+            "Scanning library...",
+            { app_state.main_panel_rect.x + 10, app_state.main_panel_rect.y + 10},
+            FONT_30,
+            0,
+            TEXT_COLOR)
+        return
+    }
+
     if len(app_state.rows) == 0 do return
 
     start := i32(app_state.main_panel_scroll_offset / ROW_HEIGHT)
@@ -819,7 +830,7 @@ draw_command_palette :: proc(app_state: ^App_State) {
                         if value.cmd == .Set_Library {
                             // library path change
                             out_path : cstring
-                            res := nfd.PickFolderN(&out_path, "$HOME/Music")
+                            res := nfd.PickFolderU8(&out_path, "")
                             if res == .Okay {
                                 app_state.library_path = strings.clone_to_cstring(string(out_path))
                                 // @todo: this blocks drawing -> should not block

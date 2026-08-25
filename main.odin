@@ -15,6 +15,7 @@ import "core:mem"
 import "core:path/filepath"
 import "core:os"
 import "core:sync"
+import "core:thread"
 import tl "taglib"
 import "nfd"
 import "notify"
@@ -167,6 +168,8 @@ App_State :: struct {
     trigger_notification: bool,
 
     mutex: sync.Mutex,
+    scanning: bool,
+
     active_viewport: Active_Viewport,
     playback_mode: Playback_Mode,
     is_shuffle_play: bool,
@@ -360,12 +363,13 @@ main :: proc() {
 
     app_state := init_state()
 
-    if app_state.is_library_path_set {
+    /*if app_state.is_library_path_set {
         append(&app_state.artist_list, ALL_ARTISTS_OPTION)
         init_library(app_state)
         build_rows(app_state) // for ui
         build_queue(app_state)
-    }
+    }*/
+    scanner := thread.create_and_start_with_poly_data(app_state, worker)
 
     // @nocheckin: testing
     {
@@ -384,6 +388,7 @@ main :: proc() {
         return
     }
     defer ma.engine_uninit(&app_state.ma_engine)
+
 
     was_focused := true
     for !rl.WindowShouldClose() {
@@ -420,10 +425,29 @@ main :: proc() {
         free_all(context.temp_allocator)
     }
 
+    thread.destroy(scanner)
+
     // cleanup
     {
         destroy_state(app_state)
     }
+}
+
+worker :: proc(app_state: ^App_State) {
+    sync.mutex_lock(&app_state.mutex)
+    app_state.scanning = true
+    sync.mutex_unlock(&app_state.mutex)
+
+    if app_state.is_library_path_set {
+        append(&app_state.artist_list, ALL_ARTISTS_OPTION)
+        init_library(app_state)
+        build_rows(app_state) // for ui
+        build_queue(app_state)
+    }
+
+    sync.mutex_lock(&app_state.mutex)
+    app_state.scanning = false
+    sync.mutex_unlock(&app_state.mutex)
 }
 
 @(private = "file")
@@ -888,7 +912,6 @@ handle_next_track_pick :: proc(app_state: ^App_State) -> bool {
     }
 
     next_track := app_state.queue[app_state.current_position_in_queue]
-
     reset_playback(app_state)
 
     app_state.ma_sound = new(ma.sound)
