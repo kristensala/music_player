@@ -999,7 +999,7 @@ handle_command_palette_keyboard_events :: proc(app_state: ^App_State) {
         }
 
         append(&app_state.command_palette_input, input)
-        if len(app_state.command_palette_input) < 2 do return
+        if len(app_state.command_palette_input) == 0 do return
 
         update_search_results(app_state)
     }
@@ -1009,7 +1009,7 @@ handle_command_palette_keyboard_events :: proc(app_state: ^App_State) {
 update_search_results :: proc(app_state: ^App_State) {
     input := utf8.runes_to_string(app_state.command_palette_input[:], context.temp_allocator)
 
-    if len(input) < 2 {
+    if len(input) == 0 {
         clear(&app_state.search_results)
         return
     }
@@ -1018,7 +1018,7 @@ update_search_results :: proc(app_state: ^App_State) {
     defer delete(results)
 
     input_lower := strings.to_lower(input, context.temp_allocator)
-    if strings.has_prefix(input_lower, "/cmd") {
+    if input[0] == '/' {
         for cmd in COMMANDS {
             result_row := Search_Result_Row{
                 type = .Command,

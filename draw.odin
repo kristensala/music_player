@@ -742,7 +742,7 @@ draw_command_palette :: proc(app_state: ^App_State) {
         if len(input) == 0 {
             rl.DrawTextEx(
                 app_state.fonts[FONT_20],
-                "Search or type /cmd for commands",
+                "Search or type '/' for commands",
                 {app_state.command_palette_rect.x + INPUT_X_OFFSET, app_state.command_palette_rect.y + INPUT_Y_OFFSET},
                 FONT_20, 0, rl.DARKGRAY)
         }
