@@ -2,6 +2,8 @@
 
 ![Demo](/images/demo.gif)
 
+*Development is done on a Linux machine*
+
 ## Info
 - `Ctrl-p` opens command palette
 - Notifications are triggered through dbus on Linux. No implementation on Windows at the moment

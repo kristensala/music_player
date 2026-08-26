@@ -1005,6 +1005,36 @@ handle_command_palette_keyboard_events :: proc(app_state: ^App_State) {
     }
 }
 
+// @testing: Damerau-Levenshtein distance
+@(private = "file")
+min_distance :: proc(s1: string, s2: string) -> int {
+    rows := len(s1) + 1
+    cols := len(s2) + 1
+
+    dp := make([]int, rows*cols)
+    defer delete(dp)
+
+    for i := 0; i <= len(s1); i+=1 {
+        dp[i * cols] = i
+    }
+
+    for j := 0; j <= len(s2); j+=1 {
+        dp[j] = j
+    }
+
+    for i := 1; i <= len(s1); i+=1 {
+        for j := 1; j <= len(s2); j+=1 {
+            if s1[i-1] == s2[j-1] {
+                dp[i * cols + j] = dp[(i - 1) * cols + (j - 1)]
+            } else {
+                dp[i * cols + j] = 1 + min(dp[(i - 1) * cols + j], dp[i * cols + (j - 1)], dp[(i - 1) * cols + (j - 1)])
+            }
+        }
+    }
+
+    return dp[(rows - 1) * cols + (cols - 1)]
+}
+
 @(private = "file")
 update_search_results :: proc(app_state: ^App_State) {
     input := utf8.runes_to_string(app_state.command_palette_input[:], context.temp_allocator)
