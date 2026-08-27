@@ -130,7 +130,9 @@ Search_Result_Row :: struct {
     artist_name: cstring,
     track_idx: Track_Idx, // @note: should probably use a pointer ^Track
     album: ^Album,
-    cmd: Command
+    cmd: Command,
+
+    weight: f64
 }
 
 Create_Playlist_Modal :: struct {
@@ -328,7 +330,7 @@ main :: proc() {
 		}
 	}
 
-    log_dir, err := os.user_log_dir(context.temp_allocator)
+    /*log_dir, err := os.user_log_dir(context.temp_allocator)
     assert(err == nil)
 
     log_path, _ := filepath.join({log_dir, "music_player_log.txt"}, context.temp_allocator)
@@ -348,7 +350,7 @@ main :: proc() {
         } else {
             log.destroy_console_logger(logger)
         }
-    }
+    }*/
 
     rl.SetConfigFlags({.WINDOW_RESIZABLE})
 
@@ -1008,6 +1010,8 @@ handle_command_palette_keyboard_events :: proc(app_state: ^App_State) {
 // @testing: Damerau-Levenshtein distance
 @(private = "file")
 min_distance :: proc(s1: string, s2: string) -> int {
+    if len(s2) < len(s1) do return -1
+
     rows := len(s1) + 1
     cols := len(s2) + 1
 
@@ -1035,6 +1039,13 @@ min_distance :: proc(s1: string, s2: string) -> int {
     return dp[(rows - 1) * cols + (cols - 1)]
 }
 
+similarity :: proc(s1: string, s2: string) -> f64 {
+    x := max(len(s1), len(s2))
+    if x == 0 do return 1.0
+    return 1.0 - f64(min_distance(s1, s2)) / f64(x)
+}
+
+
 @(private = "file")
 update_search_results :: proc(app_state: ^App_State) {
     input := utf8.runes_to_string(app_state.command_palette_input[:], context.temp_allocator)
@@ -1061,23 +1072,38 @@ update_search_results :: proc(app_state: ^App_State) {
         for it in app_state.artist_list {
             it_lower := strings.to_lower(string(it), context.temp_allocator)
 
-            if strings.contains(it_lower, input_lower) {
+            d := similarity(input_lower, it_lower)
+            contains := strings.contains(it_lower, input_lower)
+            if (d >= 0.4 && d <= 1) || contains {
+                if contains {
+                    d += 0.3
+                }
+
                 result_row := Search_Result_Row{
                     type = .Artist,
-                    artist_name = it
+                    artist_name = it,
+                    weight = d
                 }
 
                 append(&results, result_row)
             }
+
         }
 
         for &it in app_state.albums {
             album_title_lower := strings.to_lower(string(it.title), context.temp_allocator)
 
-            if strings.contains(album_title_lower, input_lower) {
+            d := similarity(input_lower, album_title_lower)
+            contains := strings.contains(album_title_lower, input_lower)
+            if (d >= 0.4 && d <= 1) || contains {
+                if contains {
+                    d += 0.3
+                }
+
                 result_row := Search_Result_Row{
                     type = .Album,
-                    album = &it
+                    album = &it,
+                    weight = d
                 }
 
                 // @todo
@@ -1090,6 +1116,12 @@ update_search_results :: proc(app_state: ^App_State) {
             }
         }
     }
+
+    sort.quick_sort_proc(results[:], proc(a, b: Search_Result_Row) -> int {
+        if a.weight < b.weight do return 1
+        if a.weight > b.weight do return -1
+        return 0
+    })
 
     clear(&app_state.search_results)
     append(&app_state.search_results, ..results[:])
