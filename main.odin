@@ -330,7 +330,7 @@ main :: proc() {
 		}
 	}
 
-    /*log_dir, err := os.user_log_dir(context.temp_allocator)
+    log_dir, err := os.user_log_dir(context.temp_allocator)
     assert(err == nil)
 
     log_path, _ := filepath.join({log_dir, "music_player_log.txt"}, context.temp_allocator)
@@ -350,7 +350,7 @@ main :: proc() {
         } else {
             log.destroy_console_logger(logger)
         }
-    }*/
+    }
 
     rl.SetConfigFlags({.WINDOW_RESIZABLE})
 
@@ -1044,7 +1044,6 @@ similarity :: proc(s1: string, s2: string) -> f64 {
     if x == 0 do return 1.0
     return 1.0 - f64(min_distance(s1, s2)) / f64(x)
 }
-
 
 @(private = "file")
 update_search_results :: proc(app_state: ^App_State) {
