@@ -1,6 +1,7 @@
 #+feature dynamic-literals
 package main
 
+import "core:unicode/utf16"
 import "core:fmt"
 import "core:math/rand"
 import "core:log"
@@ -913,11 +914,12 @@ handle_next_track_pick :: proc(app_state: ^App_State) -> bool {
         app_state.current_position_in_queue += 1
     }
 
+    // @todo: clean up this mess and set the trigger notification flag in here
     next_track := app_state.queue[app_state.current_position_in_queue]
     reset_playback(app_state)
 
     app_state.ma_sound = new(ma.sound)
-    res := ma.sound_init_from_file(&app_state.ma_engine, next_track.file_path, {.STREAM}, nil, nil, app_state.ma_sound)
+    res := init_sound(&app_state.ma_engine, app_state.ma_sound, next_track.file_path)
     if res != .SUCCESS {
         log.errorf("ma.sound_init_from_file failed: %v", res)
         reset_playback(app_state)
@@ -935,6 +937,20 @@ handle_next_track_pick :: proc(app_state: ^App_State) -> bool {
     return true
 }
 
+init_sound :: proc(ma_engine: ^ma.engine, ma_sound: ^ma.sound, file_path: cstring) -> ma.result {
+    // @note: windows can't handle special chars in file name
+    utf8_path := string(file_path)
+    wide := make([]u16, len(utf8_path) + 1)
+    defer delete(wide)
+
+    written := utf16.encode_string(wide, utf8_path)
+    wide[written] = 0
+    path_u16: [^]u16 = &wide[0]
+
+    res := ma.sound_init_from_file_w(ma_engine, path_u16, {.STREAM}, nil, nil, ma_sound)
+    return res
+}
+
 handle_on_track_click :: proc(app_state: ^App_State, selected_track: ^Track) {
     if app_state.ma_sound != nil {
         ma.sound_uninit(app_state.ma_sound)
@@ -942,7 +958,8 @@ handle_on_track_click :: proc(app_state: ^App_State, selected_track: ^Track) {
     }
 
     app_state.ma_sound = new(ma.sound)
-    res := ma.sound_init_from_file(&app_state.ma_engine, selected_track.file_path, {.STREAM}, nil, nil, app_state.ma_sound)
+
+    res := init_sound(&app_state.ma_engine, app_state.ma_sound, selected_track.file_path)
     if res != .SUCCESS {
         app_state.ma_sound = nil
         log.errorf(
