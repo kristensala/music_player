@@ -5,9 +5,7 @@ import "core:unicode/utf16"
 import "core:fmt"
 import "core:math/rand"
 import "core:log"
-import "core:unicode/utf8"
 import "core:strings"
-import "core:strconv"
 import "core:slice"
 import "core:sort"
 import rl "vendor:raylib"
@@ -55,13 +53,6 @@ Row :: struct {
     pos_y               : i32 // @todo
 }
 
-Playlist :: struct {
-    title: string,
-    file_name: string, // path is always library_path/.mppl/{file_name}
-    playlist_file_path: string,
-    tracks: [dynamic]^Track,
-}
-
 Side_Panel :: struct {
     side_panel_rect: rl.Rectangle,
     side_panel_scroll_offset: f32,
@@ -107,17 +98,6 @@ Caret :: struct {
     col_idx: i32 // position in input
 }
 
-
-Command_Palette :: struct {
-    caret: Caret,
-    command_palette_rect: rl.Rectangle,
-
-    command_palette_input: [dynamic]rune,
-    search_results: [dynamic]Search_Result_Row,
-
-    command_palette_scroll_index: i32
-}
-
 Search_Result_Type :: enum {
     Album,
     Track,
@@ -134,13 +114,6 @@ Search_Result_Row :: struct {
     cmd: Command,
 
     weight: f64
-}
-
-Create_Playlist_Modal :: struct {
-    create_playlist_modal_rect: rl.Rectangle,
-    create_playlist_modal_input: [dynamic]rune,
-
-    is_create_playlist_modal_open: bool
 }
 
 Active_Viewport :: enum i32 {
@@ -485,12 +458,7 @@ update_main :: proc(app_state: ^App_State) {
 
     if ma.sound_at_end(app_state.ma_sound) {
         if app_state.playback_mode == .Normal || app_state.playback_mode == .Repeat_Queue {
-            result := handle_next_track_pick(app_state)
-            if !result {
-                reset_playback(app_state)
-            } else {
-                app_state.trigger_notification = true
-            }
+            handle_next_track_pick(app_state)
         } else if app_state.playback_mode == .Repeat_One {
             player_repeat_one(app_state)
         }
@@ -554,7 +522,10 @@ reset_library :: proc(app_state: ^App_State) {
 
 // Sets the player into a Stopped state
 reset_playback :: proc(app_state: ^App_State) {
-    ma.sound_uninit(app_state.ma_sound)
+    if app_state.ma_sound != nil {
+        ma.sound_uninit(app_state.ma_sound)
+    }
+
     app_state.ma_sound = nil
     app_state.audio_state = .Stopped
     app_state.currently_playing_track = nil
@@ -804,154 +775,26 @@ load_config :: proc(app_state: ^App_State) -> bool {
     return true
 }
 
-@(private = "file")
-handle_keyboard_events :: proc(app_state: ^App_State) {
-    switch app_state.active_viewport {
-    case .Main:
-        handle_main_view_keyboard_events(app_state)
-    case .Create_Playlist_Modal:
-        handle_create_playlist_modal_keyboard_events(app_state)
-    case .Search:
-        handle_command_palette_keyboard_events(app_state)
-    }
-}
-
-close_command_palette :: proc(app_state: ^App_State) {
-    app_state.active_viewport = .Main
-    app_state.command_palette_scroll_index = 0
-    app_state.command_palette.caret.col_idx = 0
-    app_state.command_palette.caret.pos.x = 0
-
-    clear(&app_state.command_palette_input)
-    clear(&app_state.search_results)
-}
-
-handle_repeat_pressed :: proc(app_state: ^App_State) {
-    current_mode := app_state.playback_mode
-
-    #partial switch current_mode {
-    case .Normal: app_state.playback_mode = .Repeat_Queue
-    case .Repeat_Queue: app_state.playback_mode = .Repeat_One
-    case .Repeat_One: app_state.playback_mode = .Normal
-    }
-}
-
-handle_shuffle_pressed :: proc(app_state: ^App_State) {
-    app_state.is_shuffle_play = !app_state.is_shuffle_play
-
-    if app_state.is_shuffle_play {
-        shuffle_queue(app_state)
-    } else {
-        app_state.rebuild_queue = true
-    }
-}
-
-handle_play_pause :: proc(app_state: ^App_State) {
-    if app_state.audio_state == .Playing {
-        stop_response := ma.sound_stop(app_state.ma_sound)
-        if stop_response == .SUCCESS {
-            app_state.audio_state = .Paused
-        } else {
-            log.errorf("ma.sound_stop failed: %v", stop_response)
-        }
-    } else if app_state.audio_state == .Paused && app_state.ma_sound != nil {
-        start_response := ma.sound_start(app_state.ma_sound)
-        if start_response == .SUCCESS {
-            app_state.audio_state = .Playing
-        } else {
-            log.errorf("ma.sound_start failed: %v", start_response)
-        }
-    }
-}
-
-handle_prev_song_pick :: proc(app_state: ^App_State) -> bool {
-    if app_state.current_position_in_queue == 0 do return false
-
-    app_state.current_position_in_queue -= 1
-    prev_track := app_state.queue[app_state.current_position_in_queue]
-
-    reset_playback(app_state)
-
-    app_state.ma_sound = new(ma.sound)
-    res := ma.sound_init_from_file(&app_state.ma_engine, prev_track.file_path, {.STREAM}, nil, nil, app_state.ma_sound)
-    if res != .SUCCESS {
-        app_state.ma_sound = nil
-        log.errorf("ma.sound_init_from_file failed: %v", res)
-        return false
-    } else {
-        sound_start_result := ma.sound_start(app_state.ma_sound)
-        if sound_start_result == .SUCCESS {
-            app_state.audio_state = .Playing
-            app_state.currently_playing_track = prev_track
-        }
-    }
-
-    return true
-}
-
-handle_next_track_pick :: proc(app_state: ^App_State) -> bool {
-    // do not allow to pick a next track if there is no current track playing
-    // or if the player is in a Stopped state
-    if app_state.currently_playing_track == nil || app_state.audio_state == .Stopped {
-        return false
-    }
-
-    queue_len := i32(len(app_state.queue))
-    if queue_len == 0 {
-        return false
-    }
-
-    if app_state.current_position_in_queue == queue_len - 1 {
-        if app_state.playback_mode == .Repeat_Queue {
-            // move back to the start of the queue
-            app_state.current_position_in_queue = 0
-        } else {
-            // reached end of the queue
-            return false
-        }
-    } else {
-        // continue the queue
-        app_state.current_position_in_queue += 1
-    }
-
-    // @todo: clean up this mess and set the trigger notification flag in here
-    next_track := app_state.queue[app_state.current_position_in_queue]
-    reset_playback(app_state)
-
-    app_state.ma_sound = new(ma.sound)
-    res := init_sound(&app_state.ma_engine, app_state.ma_sound, next_track.file_path)
-    if res != .SUCCESS {
-        log.errorf("ma.sound_init_from_file failed: %v", res)
-        reset_playback(app_state)
-        return false
-    } else {
-        sound_start_result := ma.sound_start(app_state.ma_sound)
-        if sound_start_result == .SUCCESS {
-            app_state.audio_state = .Playing
-            app_state.currently_playing_track = next_track
-        } else {
-            return false
-        }
-    }
-
-    return true
-}
-
 init_sound :: proc(ma_engine: ^ma.engine, ma_sound: ^ma.sound, file_path: cstring) -> ma.result {
     // @note: windows can't handle special chars in file name
-    utf8_path := string(file_path)
-    wide := make([]u16, len(utf8_path) + 1)
-    defer delete(wide)
+    when ODIN_OS == .Windows {
+        utf8_path := string(file_path)
+        wide := make([]u16, len(utf8_path) + 1)
+        defer delete(wide)
 
-    written := utf16.encode_string(wide, utf8_path)
-    wide[written] = 0
-    path_u16: [^]u16 = &wide[0]
+        written := utf16.encode_string(wide, utf8_path)
+        wide[written] = 0
+        path_u16: [^]u16 = &wide[0]
 
-    res := ma.sound_init_from_file_w(ma_engine, path_u16, {.STREAM}, nil, nil, ma_sound)
-    return res
+        res := ma.sound_init_from_file_w(ma_engine, path_u16, {.STREAM}, nil, nil, ma_sound)
+        return res
+    } else {
+        res := ma.sound_init_from_file(ma_engine, file_path, {.STREAM}, nil, nil, ma_sound)
+        return res
+    }
 }
 
-handle_on_track_click :: proc(app_state: ^App_State, selected_track: ^Track) {
+play_selected_track :: proc(app_state: ^App_State, selected_track: ^Track) -> bool {
     if app_state.ma_sound != nil {
         ma.sound_uninit(app_state.ma_sound)
         app_state.ma_sound = nil
@@ -961,238 +804,31 @@ handle_on_track_click :: proc(app_state: ^App_State, selected_track: ^Track) {
 
     res := init_sound(&app_state.ma_engine, app_state.ma_sound, selected_track.file_path)
     if res != .SUCCESS {
-        app_state.ma_sound = nil
+        reset_playback(app_state)
+
         log.errorf(
             "ma.sound_init_from_file failed: %v. FilePath: %s", 
             res, selected_track.file_path
         )
+
+        return false
     } else {
         sound_start_result := ma.sound_start(app_state.ma_sound)
         if sound_start_result == .SUCCESS {
             app_state.audio_state = .Playing
             app_state.currently_playing_track = selected_track
-            app_state.rebuild_queue = true
             app_state.trigger_notification = true
+            return true
+        } else {
+            log.errorf(
+                "ma.sound_start failed: %v. FilePath: %s", 
+                sound_start_result, selected_track.file_path
+            )
+            reset_playback(app_state)
+            return false
         }
     }
-}
-
-@(private = "file")
-handle_command_palette_keyboard_events :: proc(app_state: ^App_State) {
-    if rl.IsKeyPressed(rl.KeyboardKey.ESCAPE) {
-        close_command_palette(app_state)
-    }
-
-    if rl.IsKeyPressed(rl.KeyboardKey.BACKSPACE) {
-        app_state.command_palette_scroll_index = 0
-
-        if len(app_state.command_palette_input) > 0 {
-            pop(&app_state.command_palette_input)
-
-            // update caret position
-            {
-                input := utf8.runes_to_string(app_state.command_palette_input[:])
-                cinput := strings.clone_to_cstring(input)
-                text_measurement := rl.MeasureTextEx(app_state.fonts[FONT_20], cinput, FONT_20, 0)
-                delete(cinput)
-                delete(input)
-
-                app_state.command_palette.caret.pos.x = text_measurement.x
-                app_state.command_palette.caret.col_idx -= 1
-            }
-        }
-        update_search_results(app_state)
-    }
-
-    // @todo: ignore case and move cursor and insert at cursor position
-    // ability to navigate in results with arrow keys
-    input := rl.GetCharPressed()
-    if input > 0 {
-        app_state.command_palette_scroll_index = 0
-
-        // update caret position
-        {
-            app_state.command_palette.caret.col_idx += 1
-            glyph_info := rl.GetGlyphInfo(app_state.fonts[FONT_20], input)
-            app_state.command_palette.caret.pos.x += f32(glyph_info.advanceX)
-        }
-
-        append(&app_state.command_palette_input, input)
-        if len(app_state.command_palette_input) == 0 do return
-
-        update_search_results(app_state)
-    }
-}
-
-// @testing: Damerau-Levenshtein distance
-@(private = "file")
-min_distance :: proc(s1: string, s2: string) -> int {
-    if len(s2) < len(s1) do return -1
-
-    rows := len(s1) + 1
-    cols := len(s2) + 1
-
-    dp := make([]int, rows*cols)
-    defer delete(dp)
-
-    for i := 0; i <= len(s1); i+=1 {
-        dp[i * cols] = i
-    }
-
-    for j := 0; j <= len(s2); j+=1 {
-        dp[j] = j
-    }
-
-    for i := 1; i <= len(s1); i+=1 {
-        for j := 1; j <= len(s2); j+=1 {
-            if s1[i-1] == s2[j-1] {
-                dp[i * cols + j] = dp[(i - 1) * cols + (j - 1)]
-            } else {
-                dp[i * cols + j] = 1 + min(dp[(i - 1) * cols + j], dp[i * cols + (j - 1)], dp[(i - 1) * cols + (j - 1)])
-            }
-        }
-    }
-
-    return dp[(rows - 1) * cols + (cols - 1)]
-}
-
-similarity :: proc(s1: string, s2: string) -> f64 {
-    x := max(len(s1), len(s2))
-    if x == 0 do return 1.0
-    return 1.0 - f64(min_distance(s1, s2)) / f64(x)
-}
-
-@(private = "file")
-update_search_results :: proc(app_state: ^App_State) {
-    input := utf8.runes_to_string(app_state.command_palette_input[:], context.temp_allocator)
-
-    if len(input) == 0 {
-        clear(&app_state.search_results)
-        return
-    }
-
-    results : [dynamic]Search_Result_Row
-    defer delete(results)
-
-    input_lower := strings.to_lower(input, context.temp_allocator)
-    if input[0] == '/' {
-        for cmd in COMMANDS {
-            result_row := Search_Result_Row{
-                type = .Command,
-                cmd = cmd
-            }
-
-            append(&results, result_row)
-        }
-    } else {
-        for it in app_state.artist_list {
-            it_lower := strings.to_lower(string(it), context.temp_allocator)
-
-            d := similarity(input_lower, it_lower)
-            contains := strings.contains(it_lower, input_lower)
-            if (d >= 0.4 && d <= 1) || contains {
-                if contains {
-                    d += 0.3
-                }
-
-                result_row := Search_Result_Row{
-                    type = .Artist,
-                    artist_name = it,
-                    weight = d
-                }
-
-                append(&results, result_row)
-            }
-
-        }
-
-        for &it in app_state.albums {
-            album_title_lower := strings.to_lower(string(it.title), context.temp_allocator)
-
-            d := similarity(input_lower, album_title_lower)
-            contains := strings.contains(album_title_lower, input_lower)
-            if (d >= 0.4 && d <= 1) || contains {
-                if contains {
-                    d += 0.3
-                }
-
-                result_row := Search_Result_Row{
-                    type = .Album,
-                    album = &it,
-                    weight = d
-                }
-
-                // @todo
-                // if artist and album title match
-                // key should be artist_{value}
-                // key should be album_{album_title}_{artist}
-                // key should be track_{track_name}_{artist}
-                //app_state.search_results[it.title] = result_row
-                append(&results, result_row)
-            }
-        }
-    }
-
-    sort.quick_sort_proc(results[:], proc(a, b: Search_Result_Row) -> int {
-        if a.weight < b.weight do return 1
-        if a.weight > b.weight do return -1
-        return 0
-    })
-
-    clear(&app_state.search_results)
-    append(&app_state.search_results, ..results[:])
-}
-
-@(private = "file")
-handle_main_view_keyboard_events :: proc(app_state: ^App_State) {
-    assert(app_state.active_viewport == .Main)
-
-    if rl.IsKeyPressed(rl.KeyboardKey.SPACE) {
-        if app_state.ma_sound == nil {
-            return
-        }
-
-        handle_play_pause(app_state)
-    }
-
-    if rl.IsKeyDown(rl.KeyboardKey.LEFT_CONTROL) {
-        if rl.IsKeyPressed(rl.KeyboardKey.P) {
-            app_state.active_viewport = .Search
-        }
-    }
-
-    if rl.IsKeyPressed(rl.KeyboardKey.D) {
-        app_state.show_debug_panel = !app_state.show_debug_panel
-    }
-}
-
-// @todo
-@(private = "file")
-handle_create_playlist_modal_keyboard_events :: proc(app_state: ^App_State) {
-    assert(app_state.active_viewport == .Create_Playlist_Modal)
-
-    input := rl.GetCharPressed()
-    if input > 0 {
-        append(&app_state.create_playlist_modal_input, input)
-    }
-
-    if rl.IsKeyPressed(rl.KeyboardKey.ESCAPE) {
-        clear(&app_state.create_playlist_modal_input)
-
-        app_state.is_create_playlist_modal_open = false
-        app_state.active_viewport = .Main
-
-    }
-
-    if rl.IsKeyPressed(rl.KeyboardKey.ENTER) {
-        // @todo: create the playlist
-        // do not allow empty input or duplicate playlist names
-
-        /*clear(&app_state.create_playlist_modal_input)
-        app_state.is_create_playlist_modal_open = false
-        app_state.active_viewport = .Main*/
-    }
-
+    return false
 }
 
 @(private = "file")
@@ -1619,165 +1255,9 @@ get_album_cover_texture :: proc(app_state: ^App_State, album_idx: Album_Idx) -> 
     return app_state.default_album_cover_texture, true
 }
 
-// @todo: testing
-@(private = "file")
-init_playlists_from_playlist_files :: proc(app_state: ^App_State) {
-    playlist_files, err := os.read_directory_by_path(app_state.playlist_path, 0, context.allocator)
-    if err != nil {
-        fmt.eprintln(#procedure, "Failed to read the playlist directory by path: ", err)
-        return
-    }
-    defer delete(playlist_files)
-
-    for f in playlist_files {
-        file_data, err := os.read_entire_file_from_path(f.fullpath, context.allocator)
-        if err != nil {
-            fmt.eprintln(#procedure, "Failed to read the playlist file: ", err)
-            continue
-        }
-        defer delete(file_data)
-
-        if len(file_data) == 0 do continue
-
-        current_playlist := Playlist{
-            playlist_file_path = f.fullpath
-        }
-
-        line_idx := 0
-        it := string(file_data)
-        for line in strings.split_lines_iterator(&it) {
-            if line_idx == 0 {
-                current_playlist.title = line
-            } else {
-                track_full_path, err := filepath.join({string(app_state.library_path), line}, context.allocator)
-                if err != nil {
-                    fmt.eprintln(#procedure, "Failed to join library path with the path from playlist file: ", err)
-                    line_idx += 1
-                    continue
-                }
-                defer delete(track_full_path)
-
-                for &track in app_state.tracks {
-                    if strings.compare(string(track.file_path), track_full_path) == 0 {
-                        append(&current_playlist.tracks, &track)
-                        break
-                    }
-                }
-            }
-            line_idx += 1
-        }
-
-        append(&app_state.playlists, current_playlist)
-    }
-}
-
-// @todo: testing
-create_playlist :: proc(app_state: ^App_State, playlist_name: string) {
-    err := get_or_create_playlist_dir(app_state.playlist_path)
-    if err != nil {
-        fmt.eprintln("Could not create or read playlist path: ", err)
-        return
-    }
-
-    files, dir_read_err := os.read_directory_by_path(app_state.playlist_path, 0, context.allocator)
-    if dir_read_err != nil {
-        fmt.eprintln(#procedure, "Could not create the playlist: ", dir_read_err)
-        return
-    }
-    defer delete(files)
-
-    next_file_name : string = "mppl0"
-    if len(files) > 0 {
-        sort.quick_sort_proc(files, proc(a, b: os.File_Info) -> int {
-            if a.name < b.name do return -1
-            if a.name > b.name do return 1
-            return 0
-        })
-
-        current_file_name := files[len(files) - 1].name
-        current_playlist_nr := current_file_name[len("mppl"):]
-
-        // @todo: if unable to parse, get the second last file and so on
-        current_playlist_nr_int, ok := strconv.parse_int(current_playlist_nr)
-        assert(ok == true)
-
-        next_file_name = fmt.tprintf("mppl%i", current_playlist_nr_int + 1)
-    }
-
-    // @todo: handle error
-    file_path, e := filepath.join({app_state.playlist_path, next_file_name}, context.allocator)
-    defer delete(file_path)
-
-    playlist_file, file_create_err := os.create(file_path)
-    if file_create_err != nil {
-        fmt.eprintln(#procedure, "Could not create a playlist file: ", file_create_err)
-        return
-    }
-    defer os.close(playlist_file)
-
-    formatted_playlist_name := fmt.tprintf("%s\n", playlist_name)
-    _, err = os.write(playlist_file, transmute([]byte)formatted_playlist_name)
-    if err != nil {
-        fmt.eprintln(#procedure, "Could not write to the playlist file: ", err)
-        return
-    }
-
-    new_playlist := Playlist{
-        title = playlist_name,
-        playlist_file_path = file_path
-    }
-
-    append(&app_state.playlists, new_playlist)
-}
-
-// @todo: testing
-add_track_to_playlist :: proc(playlist: ^Playlist, track: ^Track, root_dir: string) {
-    playlist_file, err := os.open(playlist.playlist_file_path, {.Append, .Write})
-    if err != nil {
-        fmt.eprintln(#procedure, "Could not open the playlist file: ", err)
-        return
-    }
-    defer os.close(playlist_file)
-
-    relative_track_file_path := fmt.tprintf("%s\n", string(track.file_path)[len(root_dir):])
-    _, err = os.write(playlist_file, transmute([]byte)relative_track_file_path)
-    if err != nil {
-        fmt.eprintln(#procedure, "Failed to write to playlist file", err)
-        return
-    }
-
-    append(&playlist.tracks, track)
-}
-
-delete_playlist :: proc(app_state: ^App_State, playlist: Playlist) {
-    // @todo
-}
-
-
-remove_track_from_playlist :: proc(playlist: ^Playlist, track_to_remove: Track) {
-    // @todo
-}
-
-@require_results
-get_or_create_playlist_dir :: proc(path: string) -> os.Error {
-    // @todo: should be able to use os.exists
-    file_info, file_info_err := os.stat(path, context.allocator)
-    if file_info_err != nil || file_info.type != .Directory {
-        err := os.mkdir(path)
-        if err != nil {
-            os.file_info_delete(file_info, context.allocator)
-            return err
-        }
-    }
-
-    os.file_info_delete(file_info, context.allocator)
-    return nil
-}
-
 // Update layout after window has been drawn or resized
 @(private = "file")
 update_layout :: proc(app_state: ^App_State) {
-    // -40 := 20px padding from left and right
     app_state.side_panel_rect.height = app_state.main_panel_rect.height + app_state.main_panel_rect.y // @explain
     app_state.side_panel_option_content_rect.height = app_state.side_panel_rect.height - app_state.side_panel_options_rect.height
 
@@ -1823,9 +1303,5 @@ dbus_init :: proc() -> sdbus.Bus {
     }
 
     return bus
-}
-
-get_track_album_cover_path :: proc(app_state: ^App_State, track: ^Track) -> cstring {
-    return app_state.albums[track.album_idx].cover_art_path
 }
 

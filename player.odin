@@ -1,11 +1,9 @@
 package main
 
 import "core:fmt"
-import "core:strings"
-import "core:unicode/utf8"
+import "core:log"
 import rl "vendor:raylib"
 import ma "vendor:miniaudio"
-import "nfd"
 
 ALBUM_COVER_SIZE           :: 200
 SCROLL_INCREMENT           :: 5 // five rows
@@ -138,7 +136,7 @@ draw_playback_controls :: proc(app_state: ^App_State) {
 
         if rl.CheckCollisionPointRec(rl.GetMousePosition(), next_song_button_bounds) {
             if rl.IsMouseButtonPressed(.LEFT) {
-                if handle_next_track_pick(app_state) do app_state.trigger_notification = true
+                handle_next_track_pick(app_state)
             }
         }
     }
@@ -158,7 +156,7 @@ draw_playback_controls :: proc(app_state: ^App_State) {
 
         if rl.CheckCollisionPointRec(rl.GetMousePosition(), prev_song_button_bounds) {
             if rl.IsMouseButtonPressed(.LEFT) {
-                if handle_prev_song_pick(app_state) do app_state.trigger_notification = true
+                handle_prev_song_pick(app_state)
             }
         }
     }
@@ -577,7 +575,7 @@ draw_track_list_item :: proc(app_state: ^App_State, row: ^Row) {
         rl.DrawRectangleRec(list_item, HIGHLIGHT_COLOR)
 
         if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
-            handle_on_track_click(app_state, row.track)
+            handle_track_selection(app_state, row.track)
         }
     }
 
@@ -692,233 +690,126 @@ draw_debug_panel :: proc(app_state: ^App_State) {
     }
 }
 
-draw_command_palette :: proc(app_state: ^App_State) {
-    // panel body
-    {
-        width :: 1000
-        width2 :: 1005
-        max_height :: 1000
-        min_height :: 300
+///////////////// HANDLE //////////////////////
 
-        panel_height := f32(rl.GetScreenHeight()) / 2
-        if panel_height > max_height {
-            panel_height = max_height
-        } else if (panel_height < min_height) {
-            panel_height = min_height
-        }
-
-        rl.DrawRectangleRounded(
-            rl.Rectangle{
-                f32(rl.GetScreenWidth() / 2 - (width2 / 2)),
-                200 - 2.5,
-                width2, 
-                panel_height + 5
-            }, 0.03, 0, rl.Fade(STORMY_TEAL, 0.5))
-
-        app_state.command_palette_rect = rl.Rectangle{
-            x = f32(rl.GetScreenWidth() / 2 - (width / 2)),
-            y = 200,
-            height = panel_height,
-            width = width
-        }
-
-        rl.DrawRectangleRounded(app_state.command_palette_rect, 0.03, 0, BACKGROUND_COLOR)
+handle_keyboard_events :: proc(app_state: ^App_State) {
+    switch app_state.active_viewport {
+    case .Main:
+        handle_main_keyboard_events(app_state)
+    case .Create_Playlist_Modal:
+        handle_create_playlist_modal_keyboard_events(app_state)
+    case .Search:
+        handle_command_palette_keyboard_events(app_state)
     }
-
-    // input
-    {
-        INPUT_X_OFFSET :: 60
-        INPUT_Y_OFFSET :: 20
-
-        rl.DrawTexture(
-            app_state.search_logo_texture,
-            i32(app_state.command_palette_rect.x + 20), i32(app_state.command_palette_rect.y + 15),
-            rl.WHITE)
-
-        input := utf8.runes_to_string(app_state.command_palette_input[:], context.temp_allocator)
-        cinput := fmt.ctprintf("%s", app_state.command_palette_input)
-
-        // Input placeholder
-        if len(input) == 0 {
-            rl.DrawTextEx(
-                app_state.fonts[FONT_20],
-                "Search or type '/' for commands",
-                {app_state.command_palette_rect.x + INPUT_X_OFFSET, app_state.command_palette_rect.y + INPUT_Y_OFFSET},
-                FONT_20, 0, rl.DARKGRAY)
-        }
-
-        rl.DrawTextEx(
-            app_state.fonts[FONT_20],
-            cinput,
-            {app_state.command_palette_rect.x + INPUT_X_OFFSET, app_state.command_palette_rect.y + INPUT_Y_OFFSET},
-            FONT_20, 0, rl.WHITE)
-
-        // input caret
-        {
-            app_state.command_palette.caret.rect = rl.Rectangle{
-                x = app_state.command_palette_rect.x + INPUT_X_OFFSET + app_state.command_palette.caret.pos.x, 
-                y = app_state.command_palette_rect.y + INPUT_Y_OFFSET,
-                height = 20,
-                width = 2
-            }
-
-            rl.DrawRectangleRec(app_state.command_palette.caret.rect, rl.WHITE)
-        }
-
-        rl.DrawLineEx(
-            {app_state.command_palette_rect.x, app_state.command_palette_rect.y + 60},
-            {app_state.command_palette_rect.x + app_state.command_palette_rect.width, app_state.command_palette_rect.y + 60},
-            1.0,
-            STORMY_TEAL)
-    }
-
-    rl.BeginScissorMode(
-        i32(app_state.command_palette_rect.x),
-        i32(app_state.command_palette_rect.y),
-        i32(app_state.command_palette_rect.width),
-        i32(app_state.command_palette_rect.height))
-
-    // search results
-    {
-        search_result_offset_y :: 70
-
-        search_content_height := app_state.command_palette_rect.height - search_result_offset_y
-        total_possible_rows_to_render := i32(search_content_height / SEARCH_PANEL_ROW_HEIGHT)
-        last_row_visible := i32(len(app_state.search_results)) < total_possible_rows_to_render ? i32(len(app_state.search_results)) : total_possible_rows_to_render
-
-        if last_row_visible < i32(len(app_state.search_results)) {
-            last_row_visible += app_state.command_palette_scroll_index
-        }
-
-        if len(app_state.search_results) > 0 {
-            wheel := rl.GetMouseWheelMove()
-            if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.command_palette_rect){
-                if wheel < 0 { // scroll down
-                    if i32(len(app_state.search_results)) > last_row_visible {
-                        app_state.command_palette_scroll_index += 1
-                    }
-                } else if wheel > 0 {
-                    if app_state.command_palette_scroll_index > 0 {
-                        app_state.command_palette_scroll_index -= 1
-                    }
-                }
-            }
-        }
-
-        y := app_state.command_palette_rect.y + search_result_offset_y
-        for value in app_state.search_results[app_state.command_palette_scroll_index:last_row_visible] {
-            bounds := rl.Rectangle{app_state.command_palette_rect.x, y, app_state.command_palette_rect.width, 30}
-
-            if rl.CheckCollisionPointRec(rl.GetMousePosition(), bounds) {
-                // highlight
-                rl.DrawRectangleRec(bounds, HIGHLIGHT_COLOR)
-
-                if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
-                    if value.type == .Artist {
-                        if value.artist_name == app_state.current_selected_artist do continue
-                            if value.artist_name == ALL_ARTISTS_OPTION {
-                                app_state.current_selected_artist = nil
-                            } else {
-                                app_state.current_selected_artist = value.artist_name
-                            }
-                            app_state.rebuild_rows = true
-                    } else if value.type == .Album {
-                        if value.album.artist == app_state.current_selected_artist do continue
-                            app_state.current_selected_artist = value.album.artist
-                            app_state.rebuild_rows = true
-                    } else if value.type == .Command {
-                        if value.cmd == .Set_Library {
-                            // library path change
-                            out_path : cstring
-                            res := nfd.PickFolderU8(&out_path, "")
-                            if res == .Okay {
-                                app_state.library_path = strings.clone_to_cstring(string(out_path))
-                                // @todo: this blocks drawing -> should not block
-                                nfd.FreePathN(out_path)
-
-                                app_state.is_library_path_set = true
-                                app_state.rescan_library = true
-                            }
-                        }
-                    }
-                    close_command_palette(app_state)
-                }
-            }
-
-            txt_y := center_text_y(app_state.fonts[FONT_20], bounds)
-
-            if value.type == .Artist {
-                rl.DrawTextEx(
-                    app_state.fonts[FONT_20],
-                    "ARTIST",
-                    {app_state.command_palette_rect.x + 20, txt_y},
-                    FONT_20, 0, rl.GRAY)
-
-                rl.DrawTextEx(
-                    app_state.fonts[FONT_20],
-                    value.artist_name,
-                    {app_state.command_palette_rect.x + 100, txt_y},
-                    FONT_20, 0, TEXT_COLOR)
-            } else if value.type == .Album {
-                rl.DrawTextEx(
-                    app_state.fonts[FONT_20],
-                    "ALBUM",
-                    {app_state.command_palette_rect.x + 20, txt_y},
-                    FONT_20, 0, rl.GRAY)
-
-                rl.DrawTextEx(
-                    app_state.fonts[FONT_20],
-                    value.album.title,
-                    {app_state.command_palette_rect.x + 100, txt_y},
-                    FONT_20, 0, TEXT_COLOR)
-            } else if value.type == .Command {
-                rl.DrawTextEx(
-                    app_state.fonts[FONT_20],
-                    "CMD",
-                    {app_state.command_palette_rect.x + 20, txt_y},
-                    FONT_20, 0, rl.GRAY)
-
-                rl.DrawTextEx(
-                    app_state.fonts[FONT_20],
-                    COMMANDS[value.cmd],
-                    {app_state.command_palette_rect.x + 100, txt_y},
-                    FONT_20, 0, TEXT_COLOR)
-            }
-
-            y += SEARCH_PANEL_ROW_HEIGHT
-        }
-    }
-
-    rl.EndScissorMode()
 }
 
-center_text_y :: proc(font: rl.Font, bounds: rl.Rectangle) -> f32 {
-    text_measurement := rl.MeasureTextEx(font, "test", f32(font.baseSize), 0)
-    txt_y := ((bounds.height - text_measurement.y) / 2) + bounds.y
-    return txt_y
+
+handle_repeat_pressed :: proc(app_state: ^App_State) {
+    current_mode := app_state.playback_mode
+
+    #partial switch current_mode {
+    case .Normal: app_state.playback_mode = .Repeat_Queue
+    case .Repeat_Queue: app_state.playback_mode = .Repeat_One
+    case .Repeat_One: app_state.playback_mode = .Normal
+    }
 }
 
-// @todo: input field 
-draw_create_playlist_modal :: proc(app_state: ^App_State) {
-    assert(app_state.active_viewport == .Create_Playlist_Modal)
+handle_shuffle_pressed :: proc(app_state: ^App_State) {
+    app_state.is_shuffle_play = !app_state.is_shuffle_play
 
-    rl.DrawRectangleRec(rl.Rectangle{0, 0, f32(rl.GetScreenWidth()), f32(rl.GetScreenHeight())}, rl.Fade(rl.LIGHTGRAY, 0.5))
-
-    app_state.create_playlist_modal_rect = rl.Rectangle{
-        x = f32(rl.GetScreenWidth() / 2 - 150),
-        y = 200,
-        height = 100,
-        width = 300
+    if app_state.is_shuffle_play {
+        shuffle_queue(app_state)
+    } else {
+        app_state.rebuild_queue = true
     }
-    rl.DrawRectangleRec(app_state.create_playlist_modal_rect, rl.WHITE)
-
-    input_bounds := rl.Rectangle{
-        x = app_state.create_playlist_modal_rect.x + (app_state.create_playlist_modal_rect.width / 2) - 100,
-        y = app_state.create_playlist_modal_rect.y + 10,
-        height = 30,
-        width = 200
-    }
-    rl.DrawRectangleLinesEx(input_bounds, 1, rl.GRAY)
-    // @todo: draw the input text
 }
 
+handle_play_pause :: proc(app_state: ^App_State) {
+    if app_state.audio_state == .Playing {
+        stop_response := ma.sound_stop(app_state.ma_sound)
+        if stop_response == .SUCCESS {
+            app_state.audio_state = .Paused
+        } else {
+            log.errorf("ma.sound_stop failed: %v", stop_response)
+        }
+    } else if app_state.audio_state == .Paused && app_state.ma_sound != nil {
+        start_response := ma.sound_start(app_state.ma_sound)
+        if start_response == .SUCCESS {
+            app_state.audio_state = .Playing
+        } else {
+            log.errorf("ma.sound_start failed: %v", start_response)
+        }
+    }
+}
+
+handle_prev_song_pick :: proc(app_state: ^App_State) {
+    if app_state.current_position_in_queue == 0 do return
+
+    app_state.current_position_in_queue -= 1
+    prev_track := app_state.queue[app_state.current_position_in_queue]
+
+    play_selected_track(app_state, prev_track)
+}
+
+handle_next_track_pick :: proc(app_state: ^App_State) {
+    // do not allow to pick a next track if there is no current track playing
+    // or if the player is in a Stopped state
+    if app_state.currently_playing_track == nil || app_state.audio_state == .Stopped {
+        reset_playback(app_state)
+        return
+    }
+
+    queue_len := i32(len(app_state.queue))
+    if queue_len == 0 {
+        reset_playback(app_state)
+        return
+    }
+
+    if app_state.current_position_in_queue == queue_len - 1 {
+        if app_state.playback_mode == .Repeat_Queue {
+            // move back to the start of the queue
+            app_state.current_position_in_queue = 0
+        } else {
+            // reached end of the queue
+            reset_playback(app_state)
+            return
+        }
+    } else {
+        // continue the queue
+        app_state.current_position_in_queue += 1
+    }
+
+    next_track := app_state.queue[app_state.current_position_in_queue]
+    play_selected_track(app_state, next_track)
+}
+
+handle_main_keyboard_events :: proc(app_state: ^App_State) {
+    assert(app_state.active_viewport == .Main)
+
+    if rl.IsKeyPressed(rl.KeyboardKey.SPACE) {
+        if app_state.ma_sound == nil {
+            return
+        }
+
+        handle_play_pause(app_state)
+    }
+
+    if rl.IsKeyDown(rl.KeyboardKey.LEFT_CONTROL) {
+        if rl.IsKeyPressed(rl.KeyboardKey.P) {
+            app_state.active_viewport = .Search
+        }
+    }
+
+    if rl.IsKeyPressed(rl.KeyboardKey.D) {
+        app_state.show_debug_panel = !app_state.show_debug_panel
+    }
+}
+
+// Manual track selection
+@(private = "file")
+handle_track_selection :: proc(app_state: ^App_State, selected_track: ^Track) {
+    ok := play_selected_track(app_state, selected_track)
+    if ok {
+        app_state.rebuild_queue = true
+    }
+}
