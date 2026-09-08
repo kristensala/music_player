@@ -73,6 +73,10 @@ Main_Panel :: struct {
     rows: [dynamic]^Row,
     rebuild_rows: bool,
     content_max_height: i32, // in pixels
+
+    artist_column_width: f32,
+    album_column_width: f32,
+    title_column_width: f32,
 }
 
 Playback_Controls_Panel :: struct {
@@ -279,7 +283,11 @@ init_state :: proc() -> ^App_State {
         y = MAIN_PANEL_PADDING_TOP
     }
 
-    app_state.playback_controls_panel_rect = rl.Rectangle{ x = 0, height = 170 }
+    app_state.playback_controls_panel_rect = rl.Rectangle{ x = 0, height = 185 }
+
+    app_state.artist_column_width = 500
+    app_state.album_column_width = 500
+    app_state.title_column_width = 500
 
     when ODIN_OS == .Linux {
         app_state.bus = dbus_init()
@@ -382,7 +390,7 @@ main :: proc() {
 
         rl.ClearBackground(BACKGROUND_COLOR)
 
-        draw_main(app_state)
+        draw_player(app_state)
 
         if app_state.is_create_playlist_modal_open {
             draw_create_playlist_modal(app_state)

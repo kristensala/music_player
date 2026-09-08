@@ -17,7 +17,7 @@ PLAYBACK_BUTTON_SIZE       :: 30
 SIDE_PANEL_ROW_HEIGHT      :: 30
 ROW_HEIGHT                 :: 30
 
-MAIN_PANEL_PADDING_TOP     :: 20
+MAIN_PANEL_PADDING_TOP     :: 40
 MAIN_PANEL_PADDING_RIGHT   :: 20
 MAIN_PANEL_PADDING_LEFT    :: 20
 
@@ -29,9 +29,9 @@ TEXT_COLOR :: rl.Color{255, 236, 209, 255 } //  Papaya Whip
 STORMY_TEAL :: rl.Color{21, 97, 109, 255} // Stormy Teal
 
 @(private)
-draw_main :: proc(app_state: ^App_State) {
+draw_player :: proc(app_state: ^App_State) {
     draw_side_panel(app_state)
-    draw_main_panel_content(app_state)
+    draw_player_content(app_state)
 
     // Bottom bar
     {
@@ -424,7 +424,7 @@ draw_side_panel :: proc(app_state: ^App_State) {
 }
 
 @(private = "file")
-draw_main_panel_content :: proc(app_state: ^App_State) {
+draw_player_content :: proc(app_state: ^App_State) {
     if app_state.scanning {
         rl.DrawTextEx(
             app_state.fonts[FONT_30],
@@ -454,6 +454,80 @@ draw_main_panel_content :: proc(app_state: ^App_State) {
         start -= SCROLL_INCREMENT
     } else {
         start -= start
+    }
+
+    // HEADER
+    {
+        header := rl.Rectangle{
+            x = app_state.side_panel_rect.width,
+            y = 0,
+            height = 20,
+            width = f32(rl.GetScreenWidth()) - app_state.side_panel_rect.width
+        }
+        rl.DrawRectangleRec(header, STORMY_TEAL)
+
+        txt_y := center_text_y(app_state.fonts[FONT_20], header)
+        txt_x := app_state.main_panel_rect.x + TRACK_LIST_OFFSET_X
+
+        rl.DrawTextEx(
+            app_state.fonts[FONT_20],
+            "Artist",
+            { txt_x + 10, txt_y},
+            f32(FONT_20),
+            0,
+            TEXT_COLOR)
+
+        resize_artist := rl.Rectangle{
+            x = txt_x + app_state.artist_column_width - 12, // @magic_nr
+            y = txt_y,
+            width = 10,
+            height = header.height
+        }
+        // @debug
+        //rl.DrawRectangleRec(resize_artist, rl.BLACK)
+
+        rl.DrawTextEx(
+            app_state.fonts[FONT_20],
+            "|",
+            { txt_x + app_state.artist_column_width - 10, txt_y},
+            f32(FONT_20),
+            0,
+            TEXT_COLOR)
+
+        rl.DrawTextEx(
+            app_state.fonts[FONT_20],
+            "Album",
+            { txt_x + app_state.artist_column_width, txt_y},
+            f32(FONT_20),
+            0,
+            TEXT_COLOR)
+
+        resize_album := rl.Rectangle{
+            x = txt_x + app_state.artist_column_width + app_state.album_column_width - 12, // @magic_nr
+            y = txt_y,
+            width = 10,
+            height = header.height
+        }
+        // @debug
+        //rl.DrawRectangleRec(resize_album, rl.BLACK)
+
+        rl.DrawTextEx(
+            app_state.fonts[FONT_20],
+            "|",
+            { txt_x + app_state.artist_column_width + app_state.album_column_width - 10, txt_y},
+            f32(FONT_20),
+            0,
+            TEXT_COLOR)
+
+        rl.DrawTextEx(
+            app_state.fonts[FONT_20],
+            "Title",
+            { txt_x + app_state.artist_column_width + app_state.album_column_width, txt_y},
+            f32(FONT_20),
+            0,
+            TEXT_COLOR)
+
+        // @todo: drag column widths
     }
 
     rl.BeginScissorMode(
@@ -600,7 +674,7 @@ draw_track_list_item :: proc(app_state: ^App_State, row: ^Row) {
         rl.DrawTextEx(
             app_state.fonts[FONT_20],
             row.track.album_title,
-            { list_item.x + 500, txt_y},
+            { list_item.x + app_state.artist_column_width, txt_y},
             f32(FONT_20),
             0,
             txt_color)
@@ -614,7 +688,7 @@ draw_track_list_item :: proc(app_state: ^App_State, row: ^Row) {
         rl.DrawTextEx(
             app_state.fonts[FONT_20],
             title,
-            { list_item.x + 1000, txt_y},
+            { list_item.x + app_state.artist_column_width + app_state.album_column_width, txt_y},
             f32(FONT_20),
             0,
             txt_color)
