@@ -277,10 +277,8 @@ draw_artist_list :: proc(app_state: ^App_State) {
             height = SIDE_PANEL_ROW_HEIGHT
         }
 
-        artist_txt_color := TEXT_COLOR
         if artist == app_state.current_selected_artist || (artist == ALL_ARTISTS_OPTION && app_state.current_selected_artist == nil) {
-            rl.DrawRectangleRec(artist_item_bounds, rl.GRAY)
-            artist_txt_color = rl.WHITE
+            rl.DrawRectangleRec(artist_item_bounds, rl.WHITE)
         }
 
         // center text
@@ -291,7 +289,7 @@ draw_artist_list :: proc(app_state: ^App_State) {
             app_state.fonts[FONT_20],
             artist,
             {artist_item_bounds.x + txt_left_padding, txt_y},
-            FONT_20, 0, artist_txt_color)
+            FONT_20, 0, TEXT_COLOR)
 
         pos_y += artist_item_bounds.height
 
