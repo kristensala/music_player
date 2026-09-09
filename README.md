@@ -1,6 +1,7 @@
 # music_player
 
-![Demo](/images/demo.gif)
+![Player](/images/demo.png)
+![Command palette](/images/command_palette.png)
 
 *Development is done on a Linux machine*
 
