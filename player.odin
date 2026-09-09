@@ -23,10 +23,9 @@ MAIN_PANEL_PADDING_LEFT    :: 20
 
 TRACK_LIST_OFFSET_X        :: 250 // Add room for album cover by shifting the list items
 
-BACKGROUND_COLOR :: rl.Color{ 0, 21, 36, 255 } // Ink Black
-HIGHLIGHT_COLOR :: rl.Color{255, 125, 0, 255 } // Harvest Orange
-TEXT_COLOR :: rl.Color{255, 236, 209, 255 } //  Papaya Whip
-STORMY_TEAL :: rl.Color{21, 97, 109, 255} // Stormy Teal
+BACKGROUND_COLOR :: rl.Color{ 192,192,192,0 }
+HIGHLIGHT_COLOR :: rl.Color{63, 131, 196, 255}
+TEXT_COLOR :: rl.BLACK
 
 @(private)
 draw_player :: proc(app_state: ^App_State) {
@@ -38,8 +37,8 @@ draw_player :: proc(app_state: ^App_State) {
         rl.DrawLineEx(
             {0, app_state.main_panel_rect.y + app_state.main_panel_rect.height}, 
             {f32(rl.GetScreenWidth()), app_state.main_panel_rect.y + app_state.main_panel_rect.height},
-            1.5,
-            STORMY_TEAL
+            2,
+            rl.BLACK
         )
         draw_playback_controls(app_state)
 
@@ -397,8 +396,8 @@ draw_side_panel :: proc(app_state: ^App_State) {
     rl.DrawLineEx(
         {0, app_state.side_panel_options_rect.y + app_state.side_panel_options_rect.height},
         {app_state.side_panel_options_rect.width, app_state.side_panel_options_rect.y + app_state.side_panel_options_rect.height},
-        1.5,
-        STORMY_TEAL)
+        2,
+        rl.BLACK)
 
 
     rl.BeginScissorMode(
@@ -416,10 +415,10 @@ draw_side_panel :: proc(app_state: ^App_State) {
     rl.EndScissorMode()
 
     rl.DrawLineEx(
-        {app_state.side_panel_rect.x + app_state.side_panel_rect.width, 0},
-        {app_state.side_panel_rect.x + app_state.side_panel_rect.width, app_state.main_panel_rect.y + app_state.main_panel_rect.height},
-        1.5,
-        STORMY_TEAL
+        {app_state.side_panel_rect.x + app_state.side_panel_rect.width - 1, 0},
+        {app_state.side_panel_rect.x + app_state.side_panel_rect.width - 1, app_state.main_panel_rect.y + app_state.main_panel_rect.height},
+        2,
+        rl.BLACK
     )
 }
 
@@ -435,6 +434,7 @@ draw_player_content :: proc(app_state: ^App_State) {
             TEXT_COLOR)
         return
     }
+    rl.DrawRectangleRec(app_state.main_panel_rect, rl.WHITE)
 
     if len(app_state.rows) == 0 do return
 
@@ -458,16 +458,24 @@ draw_player_content :: proc(app_state: ^App_State) {
 
     // HEADER
     {
-        header := rl.Rectangle{
-            x = app_state.side_panel_rect.width,
-            y = 0,
-            height = 20,
-            width = f32(rl.GetScreenWidth()) - app_state.side_panel_rect.width
-        }
-        rl.DrawRectangleRec(header, STORMY_TEAL)
+        header := app_state.main_panel_header_rect
+        rl.DrawRectangleRec(header, BACKGROUND_COLOR)
+        rl.DrawLineEx(
+            {header.x, header.y + header.height - 2},
+            {header.x + header.width, header.y + header.height - 2},
+            2,
+            rl.BLACK)
 
         txt_y := center_text_y(app_state.fonts[FONT_20], header)
         txt_x := app_state.main_panel_rect.x + TRACK_LIST_OFFSET_X
+
+        rl.DrawTextEx(
+            app_state.fonts[FONT_20],
+            "|",
+            { txt_x, txt_y},
+            f32(FONT_20),
+            0,
+            TEXT_COLOR)
 
         rl.DrawTextEx(
             app_state.fonts[FONT_20],
@@ -542,7 +550,8 @@ draw_player_content :: proc(app_state: ^App_State) {
         if row.is_album_title_row {
             draw_album_title_row(app_state, row)
         } else if row.track != nil {
-            draw_track_list_item(app_state, row)
+            row_color := row_idx % 2 == 0 ? rl.WHITE : rl.Color{83,83,83,50}
+            draw_track_list_item(app_state, row, row_color)
         }
     }
 
@@ -568,7 +577,7 @@ draw_player_content :: proc(app_state: ^App_State) {
                 width = SCROLL_BAR_WIDTH
             }
 
-            rl.DrawRectangleRec(app_state.main_panel_scroll_bar_rect, rl.LIGHTGRAY)
+            rl.DrawRectangleRec(app_state.main_panel_scroll_bar_rect, rl.GRAY)
         }
     }
 
@@ -598,6 +607,8 @@ draw_player_content :: proc(app_state: ^App_State) {
 
 @(private = "file")
 draw_album_title_row :: proc(app_state: ^App_State, row: ^Row) {
+    padding_left : f32 = 5
+
     album := app_state.albums[row.album_idx]
     pos_y := f32(row.pos_y) - app_state.main_panel_scroll_offset
 
@@ -612,7 +623,7 @@ draw_album_title_row :: proc(app_state: ^App_State, row: ^Row) {
     rl.DrawTextEx(
         app_state.fonts[FONT_30],
         album.title,
-        { app_state.main_panel_rect.x, pos_y},
+        { app_state.main_panel_rect.x + padding_left, pos_y},
         FONT_30,
         0,
         TEXT_COLOR)
@@ -620,17 +631,17 @@ draw_album_title_row :: proc(app_state: ^App_State, row: ^Row) {
     rl.DrawLine(
         i32(text_measurement.x + app_state.main_panel_rect.x + 20), i32(pos_y + FONT_30 / 2),
         i32(app_state.main_panel_rect.width + app_state.main_panel_rect.x), i32(pos_y + FONT_30 / 2),
-        STORMY_TEAL)
+        rl.BLACK)
 
     pos_y += ROW_HEIGHT
     cover_texture, found := get_album_cover_texture(app_state, row.album_idx)
     if found {
-        rl.DrawTexture(cover_texture, i32(app_state.main_panel_rect.x), i32(pos_y), rl.WHITE)
+        rl.DrawTexture(cover_texture, i32(app_state.main_panel_rect.x + padding_left), i32(pos_y), rl.WHITE)
     }
 }
 
 @(private = "file")
-draw_track_list_item :: proc(app_state: ^App_State, row: ^Row) {
+draw_track_list_item :: proc(app_state: ^App_State, row: ^Row, color: rl.Color) {
     pos_y := f32(row.pos_y) - app_state.main_panel_scroll_offset
     list_item := rl.Rectangle{
         x = app_state.main_panel_rect.x + TRACK_LIST_OFFSET_X,
@@ -638,6 +649,7 @@ draw_track_list_item :: proc(app_state: ^App_State, row: ^Row) {
         width = app_state.main_panel_rect.width,
         height = ROW_HEIGHT
     }
+    rl.DrawRectangleRec(list_item, color)
 
     // detect track clicked
     if (
@@ -658,7 +670,7 @@ draw_track_list_item :: proc(app_state: ^App_State, row: ^Row) {
     txt_color := TEXT_COLOR
     is_playing := app_state.currently_playing_track != nil && row.track.file_path == app_state.currently_playing_track.file_path
     if is_playing {
-        txt_color = rl.YELLOW
+        txt_color = rl.SKYBLUE
     }
 
     // artist - album - title
@@ -704,22 +716,20 @@ draw_progress_bar :: proc(value: f32, max_value: f32, pos: [2]f32, w, h: f32) {
         height = h
     }
 
-    roundness: f32 = 0.2
+
+    rl.DrawRectangleRec(bounds, rl.WHITE)
+    rl.DrawRectangleLinesEx(bounds, 2, rl.BLACK)
+
     {
         progress := value * bounds.width / max_value
         progress_rect := rl.Rectangle{
-            x = pos.x,
-            y = pos.y + 0.4,
+            x = pos.x + 2,
+            y = pos.y + 2,
             width = progress,
-            height = h
+            height = h - 4
         }
         rl.DrawRectangleRec(progress_rect, HIGHLIGHT_COLOR)
     }
-
-    rl.DrawRectangleRoundedLinesEx(
-        bounds,
-        0.1,
-        0, 2, STORMY_TEAL)
 }
 
 draw_debug_panel :: proc(app_state: ^App_State) {

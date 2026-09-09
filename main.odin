@@ -20,17 +20,17 @@ import "nfd"
 import "notify"
 import "sdbus"
 
-FONT_DATA :: #load("assets/Inter.ttf")
+FONT_DATA :: #load("assets/Tahoma.ttf")
 ALBUM_ART_PLACEHOLDER :: #load("./assets/album_placeholder.png")
-PLAY_IMG_DATA :: #load("./assets/play-white.png")
-PAUSE_IMG_DATA :: #load("./assets/pause-white.png")
-REPEAT_IMG_DATA :: #load("./assets/repeat-white.png")
-REPEAT_ONE_IMG_DATA :: #load("./assets/repeat-one.png")
-REPEAT_QUEUE_IMG_DATA :: #load("./assets/repeat-queue.png")
-NEXT_IMG_DATA :: #load("./assets/forward-white.png")
-PREVIOUS_IMG_DATA :: #load("./assets/backward-white.png")
-SHUFFLE_IMG_DATA :: #load("./assets/shuffle-solid.png")
-SHUFFLE_ON_IMG_DATA :: #load("./assets/shuffle-on.png")
+PLAY_IMG_DATA :: #load("./assets/play.png")
+PAUSE_IMG_DATA :: #load("./assets/pause.png")
+REPEAT_IMG_DATA :: #load("./assets/repeat.png")
+REPEAT_ONE_IMG_DATA :: #load("./assets/repeat.png")
+REPEAT_QUEUE_IMG_DATA :: #load("./assets/repeat-active.png")
+NEXT_IMG_DATA :: #load("./assets/next.png")
+PREVIOUS_IMG_DATA :: #load("./assets/previous.png")
+SHUFFLE_IMG_DATA :: #load("./assets/shuffle.png")
+SHUFFLE_ON_IMG_DATA :: #load("./assets/shuffle-active.png")
 SEARCH_IMG_DATA :: #load("./assets/search.png")
 
 FONT_20                    :: 20
@@ -69,6 +69,8 @@ Main_Panel :: struct {
 
     main_panel_rect: rl.Rectangle,
     main_panel_scroll_offset: f32,
+
+    main_panel_header_rect: rl.Rectangle,
 
     rows: [dynamic]^Row,
     rebuild_rows: bool,
@@ -278,9 +280,16 @@ init_state :: proc() -> ^App_State {
         width = app_state.side_panel_rect.width,
     }
 
+
+    app_state.main_panel_header_rect = rl.Rectangle{
+        x = app_state.side_panel_rect.width,
+        y = 0,
+        height = ROW_HEIGHT,
+    }
+
     app_state.main_panel_rect = rl.Rectangle{
-        x = app_state.side_panel_rect.width + MAIN_PANEL_PADDING_LEFT,
-        y = MAIN_PANEL_PADDING_TOP
+        x = app_state.side_panel_rect.width,
+        y = app_state.main_panel_header_rect.height
     }
 
     app_state.playback_controls_panel_rect = rl.Rectangle{ x = 0, height = 185 }
@@ -1270,7 +1279,9 @@ update_layout :: proc(app_state: ^App_State) {
     app_state.side_panel_option_content_rect.height = app_state.side_panel_rect.height - app_state.side_panel_options_rect.height
 
     app_state.main_panel_rect.height = f32(rl.GetScreenHeight()) - app_state.playback_controls_panel_rect.height
-    app_state.main_panel_rect.width = f32(rl.GetScreenWidth()) - app_state.side_panel_rect.width - MAIN_PANEL_PADDING_RIGHT - MAIN_PANEL_PADDING_LEFT
+    app_state.main_panel_rect.width = f32(rl.GetScreenWidth()) - app_state.side_panel_rect.width
+
+    app_state.main_panel_header_rect.width = f32(rl.GetScreenWidth()) - app_state.side_panel_rect.width
 
     app_state.playback_controls_panel_rect.width = f32(rl.GetScreenWidth())
     app_state.playback_controls_panel_rect.y = app_state.main_panel_rect.height

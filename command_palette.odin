@@ -206,13 +206,13 @@ draw_command_palette :: proc(app_state: ^App_State) {
             panel_height = min_height
         }
 
-        rl.DrawRectangleRounded(
+        rl.DrawRectangleRec(
             rl.Rectangle{
                 f32(rl.GetScreenWidth() / 2 - (width2 / 2)),
                 200 - 2.5,
                 width2, 
                 panel_height + 5
-            }, 0.03, 0, rl.Fade(STORMY_TEAL, 0.5))
+            }, rl.Fade(rl.BLACK, 0.5))
 
         app_state.command_palette_rect = rl.Rectangle{
             x = f32(rl.GetScreenWidth() / 2 - (width / 2)),
@@ -221,7 +221,7 @@ draw_command_palette :: proc(app_state: ^App_State) {
             width = width
         }
 
-        rl.DrawRectangleRounded(app_state.command_palette_rect, 0.03, 0, BACKGROUND_COLOR)
+        rl.DrawRectangleRec(app_state.command_palette_rect, rl.WHITE)
     }
 
     // input
@@ -250,7 +250,7 @@ draw_command_palette :: proc(app_state: ^App_State) {
             app_state.fonts[FONT_20],
             cinput,
             {app_state.command_palette_rect.x + INPUT_X_OFFSET, app_state.command_palette_rect.y + INPUT_Y_OFFSET},
-            FONT_20, 0, rl.WHITE)
+            FONT_20, 0, TEXT_COLOR)
 
         // input caret
         {
@@ -261,14 +261,14 @@ draw_command_palette :: proc(app_state: ^App_State) {
                 width = 2
             }
 
-            rl.DrawRectangleRec(app_state.command_palette.caret.rect, rl.WHITE)
+            rl.DrawRectangleRec(app_state.command_palette.caret.rect, rl.BLACK)
         }
 
         rl.DrawLineEx(
             {app_state.command_palette_rect.x, app_state.command_palette_rect.y + 60},
             {app_state.command_palette_rect.x + app_state.command_palette_rect.width, app_state.command_palette_rect.y + 60},
             1.0,
-            STORMY_TEAL)
+            rl.BLACK)
     }
 
     rl.BeginScissorMode(
