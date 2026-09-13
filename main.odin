@@ -160,7 +160,7 @@ App_State :: struct {
     using side_panel              : Side_Panel,
     using playback_controls_panel : Playback_Controls_Panel,
     using create_playlist_modal   : Create_Playlist_Modal,
-    using command_palette            : Command_Palette,
+    using command_palette         : Command_Palette,
 
     fonts: map[i32]rl.Font,
 
@@ -554,6 +554,18 @@ destroy_state :: proc(app_state: ^App_State) {
 
     ma.sound_uninit(app_state.ma_sound)
 
+    for key, value in app_state.artist_trigram_inverted_index {
+        delete(value)
+        delete(key)
+    }
+    delete(app_state.artist_trigram_inverted_index)
+
+    for key, value in app_state.album_trigram_inverted_index {
+        delete(value)
+        delete(key)
+    }
+    delete(app_state.album_trigram_inverted_index)
+
     delete(app_state.rows)
     delete(app_state.artist_list)
 
@@ -850,19 +862,11 @@ play_selected_track :: proc(app_state: ^App_State, selected_track: ^Track) -> bo
 
 @(private = "file")
 init_library :: proc(app_state: ^App_State) {
-    scan_library(app_state, string(app_state.library_path))
+    scan_library_and_create_tracks(app_state, string(app_state.library_path))
     create_albums(app_state)
 
-    for a in app_state.albums {
-        sort.quick_sort_proc(a.tracks[:], proc(a, b: ^Track) -> int {
-            x, err_x := strings.to_lower(string(a.file_name), context.temp_allocator)
-            y, err_y := strings.to_lower(string(b.file_name), context.temp_allocator)
-
-            if x < y do return -1
-            if x > y do return 1
-            return 0
-        })
-    }
+    app_state.artist_trigram_inverted_index = build_trigram_inverted_index(app_state.artist_list)
+    app_state.album_trigram_inverted_index = build_album_trigram_inverted_index(app_state.albums)
 }
 
 @(private = "file")
@@ -892,7 +896,7 @@ create_track :: proc(file_name: string, file_path: string) -> (Track, tl.Error) 
 }
 
 @(private = "file")
-scan_library :: proc(app_state: ^App_State, current_working_dir: string) {
+scan_library_and_create_tracks :: proc(app_state: ^App_State, current_working_dir: string) {
     data, err := os.read_directory_by_path(current_working_dir, 0, context.allocator)
     if err != nil {
         log.errorf("Could not read the dir: %v; Current working dir: %s", err, current_working_dir)
@@ -911,7 +915,7 @@ scan_library :: proc(app_state: ^App_State, current_working_dir: string) {
 
     for d in data {
         if d.type == .Directory {
-            scan_library(app_state, d.fullpath)
+            scan_library_and_create_tracks(app_state, d.fullpath)
         } else if d.type == .Regular {
             if filepath.ext(d.fullpath) == ".mp3" || filepath.ext(d.fullpath) == ".flac" || filepath.ext(d.fullpath) == ".wav" {
                 track, err := create_track(d.name, d.fullpath)
@@ -959,6 +963,16 @@ create_albums :: proc(app_state: ^App_State) {
         }
     }
 
+    for a in app_state.albums {
+        sort.quick_sort_proc(a.tracks[:], proc(a, b: ^Track) -> int {
+            x, err_x := strings.to_lower(string(a.file_name), context.temp_allocator)
+            y, err_y := strings.to_lower(string(b.file_name), context.temp_allocator)
+
+            if x < y do return -1
+            if x > y do return 1
+            return 0
+        })
+    }
 }
 
 @(private = "file")

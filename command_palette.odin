@@ -1,7 +1,7 @@
 package main
 
-import "core:sort"
 import "core:fmt"
+import "core:sort"
 import "core:strings"
 import "core:unicode/utf8"
 import rl "vendor:raylib"
@@ -14,13 +14,15 @@ Command_Palette :: struct {
     command_palette_input: [dynamic]rune,
     search_results: [dynamic]Search_Result_Row,
 
+    album_trigram_inverted_index: map[string][dynamic]i32,
+    artist_trigram_inverted_index: map[string][dynamic]i32,
+    //track_trigram_inverted_index: map[string][dynamic]i32,
+
     command_palette_scroll_index: i32
 }
 
-// @testing: Damerau-Levenshtein distance
-min_distance :: proc(s1: string, s2: string) -> int {
-    if len(s2) < len(s1) do return -1
-
+// Damerau-Levenshtein distance
+measure_string_distance :: proc(s1: string, s2: string) -> int {
     rows := len(s1) + 1
     cols := len(s2) + 1
 
@@ -46,13 +48,14 @@ min_distance :: proc(s1: string, s2: string) -> int {
         }
     }
 
-    return dp[(rows - 1) * cols + (cols - 1)]
+    distance := dp[(rows - 1) * cols + (cols - 1)]
+    return distance
 }
 
 similarity :: proc(s1: string, s2: string) -> f64 {
     x := max(len(s1), len(s2))
     if x == 0 do return 1.0
-    return 1.0 - f64(min_distance(s1, s2)) / f64(x)
+    return 1.0 - f64(measure_string_distance(s1, s2)) / f64(x)
 }
 
 update_search_results :: proc(app_state: ^App_State) {
@@ -67,6 +70,26 @@ update_search_results :: proc(app_state: ^App_State) {
     defer delete(results)
 
     input_lower := strings.to_lower(input, context.temp_allocator)
+
+    input_as_trigram : [dynamic]string
+    defer delete(input_as_trigram)
+
+    if len(input) == 3 {
+        append(&input_as_trigram, input_lower)
+    }
+
+    for i := 0; i < len(input_lower); i += 1 {
+        end := i + 3
+        if len(input_lower) <= 3 {
+            end = i + 2
+        }
+
+        if end > len(input_lower) {
+            break
+        }
+        append(&input_as_trigram, input_lower[i:end])
+    }
+
     if input[0] == '/' {
         for cmd in COMMANDS {
             result_row := Search_Result_Row{
@@ -77,50 +100,66 @@ update_search_results :: proc(app_state: ^App_State) {
             append(&results, result_row)
         }
     } else {
-        for it in app_state.artist_list {
-            it_lower := strings.to_lower(string(it), context.temp_allocator)
+        for it in input_as_trigram {
+            artist_indices, found := app_state.command_palette.artist_trigram_inverted_index[it]
+            if found {
+                for artist_idx in artist_indices {
+                    artist := app_state.artist_list[artist_idx]
 
-            d := similarity(input_lower, it_lower)
-            contains := strings.contains(it_lower, input_lower)
-            if (d >= 0.4 && d <= 1) || contains {
-                if contains {
-                    d += 0.3
+                    result_exists := false
+                    for row in results[:] {
+                        if row.type == .Artist && row.artist_name == artist {
+                            result_exists = true
+                            break
+                        }
+                    }
+
+                    if result_exists do continue
+
+                    artist_lower := strings.to_lower(string(artist))
+                    defer delete(artist_lower)
+
+                    score := similarity(input_lower, artist_lower)
+                    if score == 0 do continue
+
+                    result_row := Search_Result_Row{
+                        type = .Artist,
+                        artist_name = artist,
+                        weight = score
+                    }
+                    append(&results, result_row)
                 }
-
-                result_row := Search_Result_Row{
-                    type = .Artist,
-                    artist_name = it,
-                    weight = d
-                }
-
-                append(&results, result_row)
             }
 
-        }
+            album_indices, found_album := app_state.command_palette.album_trigram_inverted_index[it]
+            if found_album {
+                for album_idx in album_indices {
+                    album := &app_state.albums[album_idx]
+                    if album == nil do continue
 
-        for &it in app_state.albums {
-            album_title_lower := strings.to_lower(string(it.title), context.temp_allocator)
+                    result_exists := false
+                    for row in results[:] {
+                        if row.type == .Album && row.album.title == album.title {
+                            result_exists = true
+                            break
+                        }
+                    }
 
-            d := similarity(input_lower, album_title_lower)
-            contains := strings.contains(album_title_lower, input_lower)
-            if (d >= 0.4 && d <= 1) || contains {
-                if contains {
-                    d += 0.3
+                    if result_exists do continue
+
+                    album_title_lower := strings.to_lower(string(album.title))
+                    defer delete(album_title_lower)
+
+                    score := similarity(input_lower, album_title_lower)
+                    if score == 0 do continue
+
+                    result_row := Search_Result_Row{
+                        type = .Album,
+                        album = album,
+                        weight = score
+                    }
+                    append(&results, result_row)
                 }
-
-                result_row := Search_Result_Row{
-                    type = .Album,
-                    album = &it,
-                    weight = d
-                }
-
-                // @todo
-                // if artist and album title match
-                // key should be artist_{value}
-                // key should be album_{album_title}_{artist}
-                // key should be track_{track_name}_{artist}
-                //app_state.search_results[it.title] = result_row
-                append(&results, result_row)
             }
         }
     }
@@ -135,14 +174,75 @@ update_search_results :: proc(app_state: ^App_State) {
     append(&app_state.search_results, ..results[:])
 }
 
+build_album_trigram_inverted_index :: proc(data: [dynamic]Album) -> map[string][dynamic]i32 {
+    trigram_index : map[string][dynamic]i32
+
+    for album, idx in data {
+        x := album.title
+
+        build_trigram_from_string_and_add_to_index(&trigram_index, string(x), i32(idx))
+    }
+    return trigram_index
+}
+
+build_trigram_inverted_index :: proc(data: [dynamic]cstring) -> map[string][dynamic]i32 {
+    trigram_index : map[string][dynamic]i32
+
+    for x, idx in data {
+        build_trigram_from_string_and_add_to_index(&trigram_index, string(x), i32(idx))
+    }
+
+    return trigram_index
+}
+
+@(private = "file")
+build_trigram_from_string_and_add_to_index :: proc(trigram_index: ^map[string][dynamic]i32, input: string, input_idx: i32) {
+    for i := 0; i < len(input); i += 1 {
+        end := i + 3
+        if len(input) <= 3 {
+            end = i + 2
+        }
+
+        if end > len(input) {
+            break
+        }
+
+        trigram := strings.to_lower(input[i:end])
+
+        track_idx_array, trigram_exists := trigram_index[trigram]
+        if trigram_exists {
+            append(&track_idx_array, i32(input_idx))
+            trigram_index[trigram] = track_idx_array
+        } else {
+            array := make([dynamic]i32)
+            append(&array, i32(input_idx))
+            trigram_index[trigram] = array
+        }
+    }
+
+    // if word length is 3 add the whole word into index
+    if len(input) == 3 {
+        trigram := strings.to_lower(input)
+        track_idx_array, trigram_exists := trigram_index[trigram]
+        if trigram_exists {
+            append(&track_idx_array, i32(input_idx))
+            trigram_index[trigram] = track_idx_array
+        } else {
+            array := make([dynamic]i32)
+            append(&array, i32(input_idx))
+            trigram_index[trigram] = array
+        }
+    }
+}
+
 close_command_palette :: proc(app_state: ^App_State) {
     app_state.active_viewport = .Main
     app_state.command_palette_scroll_index = 0
     app_state.command_palette.caret.col_idx = 0
     app_state.command_palette.caret.pos.x = 0
 
-    clear(&app_state.command_palette_input)
-    clear(&app_state.search_results)
+    clear(&app_state.command_palette.command_palette_input)
+    clear(&app_state.command_palette.search_results)
 }
 
 handle_command_palette_keyboard_events :: proc(app_state: ^App_State) {
@@ -358,6 +458,13 @@ draw_command_palette :: proc(app_state: ^App_State) {
                     value.artist_name,
                     {app_state.command_palette_rect.x + 100, txt_y},
                     FONT_20, 0, TEXT_COLOR)
+
+                // @temp: remove later
+                rl.DrawTextEx(
+                    app_state.fonts[FONT_20],
+                    fmt.ctprintf("%f", value.weight),
+                    {app_state.command_palette_rect.x + 500, txt_y},
+                    FONT_20, 0, rl.GRAY)
             } else if value.type == .Album {
                 rl.DrawTextEx(
                     app_state.fonts[FONT_20],
@@ -370,6 +477,13 @@ draw_command_palette :: proc(app_state: ^App_State) {
                     value.album.title,
                     {app_state.command_palette_rect.x + 100, txt_y},
                     FONT_20, 0, TEXT_COLOR)
+
+                // @temp: remove later
+                rl.DrawTextEx(
+                    app_state.fonts[FONT_20],
+                    fmt.ctprintf("%f", value.weight),
+                    {app_state.command_palette_rect.x + 500, txt_y},
+                    FONT_20, 0, rl.GRAY)
             } else if value.type == .Command {
                 rl.DrawTextEx(
                     app_state.fonts[FONT_20],
