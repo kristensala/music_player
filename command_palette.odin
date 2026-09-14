@@ -414,17 +414,26 @@ draw_command_palette :: proc(app_state: ^App_State) {
 
                 if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
                     if value.type == .Artist {
-                        if value.artist_name == app_state.current_selected_artist do continue
-                            if value.artist_name == ALL_ARTISTS_OPTION {
-                                app_state.current_selected_artist = nil
-                            } else {
-                                app_state.current_selected_artist = value.artist_name
-                            }
-                            app_state.rebuild_rows = true
+                        if string(value.artist_name) == string(app_state.current_selected_artist) {
+                            close_command_palette(app_state)
+                            return
+                        }
+
+                        if value.artist_name == ALL_ARTISTS_OPTION {
+                            app_state.current_selected_artist = nil
+                        } else {
+                            app_state.current_selected_artist = value.artist_name
+                        }
+                        app_state.rebuild_rows = true
+
                     } else if value.type == .Album {
-                        if value.album.artist == app_state.current_selected_artist do continue
-                            app_state.current_selected_artist = value.album.artist
-                            app_state.rebuild_rows = true
+                        if value.album.artist == app_state.current_selected_artist {
+                            close_command_palette(app_state)
+                            return
+                        }
+
+                        app_state.current_selected_artist = value.album.artist
+                        app_state.rebuild_rows = true
                     } else if value.type == .Command {
                         if value.cmd == .Set_Library {
                             // library path change
