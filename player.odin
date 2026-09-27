@@ -542,17 +542,22 @@ draw_player_content :: proc(app_state: ^App_State) {
         i32(app_state.main_panel_rect.width),
         i32(app_state.main_panel_rect.height))
 
+    // to make sure that row colors do not change when scrolling
+    // and that the first row in album is always gray
+    album_row_count := 0
+
     for row, row_idx in app_state.rows[start:] {
         if f32(row.pos_y) - app_state.main_panel_scroll_offset >= app_state.main_panel_rect.height do break
 
         if row.is_album_title_row {
             draw_album_title_row(app_state, row)
+            album_row_count = 0
         } else if row.track != nil {
-            row_color := row_idx % 2 == 0 ? rl.WHITE : rl.Color{83,83,83,50}
+            album_row_count += 1
+            row_color := album_row_count % 2 == 0 ? rl.WHITE : rl.Color{83,83,83,50}
             draw_track_list_item(app_state, row, row_color)
         }
     }
-
 
     rl.EndScissorMode()
 
