@@ -261,7 +261,6 @@ init_state :: proc() -> ^App_State {
     load_assets(app_state)
     if !load_config(app_state) do panic("Failed to load config")
 
-
     /*playlist_path, err := filepath.join({app_state.library_path, ".mppl"}, context.allocator)
     assert(err == nil)
     app_state.playlist_path = playlist_path*/

@@ -1,7 +1,7 @@
 # TODO
 - [ ] playlist creation ({LIBRARY_PATH}/.mppl/mppl0 etc)
 - [ ] What happens if user does not have libsystemd-dev installed on their machine
-- [ ] Taglib: WAV file support
+- [x] Taglib: WAV file support
 - [ ] Taglib: text encoding bugs
 - [ ] Add tracks as favorite (part of playlist support)
 - [ ] Unix domain socket (IPC) for playback control or dbus MPRIS
