@@ -16,7 +16,8 @@ import "core:path/filepath"
 // @todo: custom and system errors
 Taglib_Error :: enum {
     ID3_Tag_Not_Found,
-    Invalid_Flac_Signature
+    Invalid_Flac_Signature,
+    Endian_Error
 }
 
 Error :: union {
@@ -48,6 +49,7 @@ get_tag :: proc(file_path: string) -> (tag: Tag, err: Error) {
     switch ext {
     case ".mp3": return parse_mp3(file_path)
     case ".flac": return parse_flac(file_path)
+    case ".wav": return parse_wav(file_path)
     }
 
     return {}, nil
@@ -104,7 +106,7 @@ parse_mp3 :: proc(filepath: string) -> (_tag: Tag, error: Error) {
         return {}, read_err
     }
 
-    md := mp3_parse_tag(tag_data[:tag_size], tag_size, major_version)
+    md := parse_id3_tag(tag_data[:tag_size], tag_size, major_version)
     return md, nil
 }
 
@@ -203,13 +205,77 @@ flac_parse_vorbis_comment :: proc(vorbis_data: []u8) -> Tag {
 }
 
 @private
-parse_wav :: proc(file_path: string) {
-    // @todo
+parse_wav :: proc(filepath: string) -> (_tag: Tag, error: Error) {
+    file, err := os.open(filepath)
+    if err != nil {
+        return {}, err
+    }
+    defer os.close(file)
+
+    offset : u32 = 12
+
+    riff_header := make([]byte, offset)
+    defer delete(riff_header)
+
+    _, read_err := os.read(file, riff_header)
+    if read_err != nil {
+        return {}, read_err
+    }
+
+    id := string(riff_header[:4]) // RIFF
+    file_size := read_u32_le(riff_header[4:8])
+    form_type := string(riff_header[8:]) // wave
+
+    for ;; {
+        header := make([]byte, 8)
+        defer delete(header)
+
+        _, read_err := os.read(file, header)
+        if read_err != nil {
+            return {}, read_err
+        }
+
+        id = string(header[:4])
+        chunk_size := read_u32_le(header[4:8])
+
+        // @todo: if id3 missing then look into "LIST"
+        if id == "id3 " {
+            block_data := make([]byte, chunk_size)
+            defer delete(block_data)
+
+            _, read_err = os.read(file, block_data)
+            if read_err != nil {
+                return {}, read_err
+            }
+
+            file_identifier := block_data[:3]
+
+            major_version := header[3]
+            revision_number := header[4]
+
+            tag := block_data[6:10]
+            assert(len(tag) == 4, "Tag length has to be 4")
+
+            tag_size := synchsafe_to_u32(tag)
+            md := parse_id3_tag(block_data[10:tag_size], tag_size, major_version)
+            return md, {}
+
+        }
+
+        os.seek(file, i64(chunk_size), .Current)
+
+        // is there 8 bytes left of not.
+        // if not then end of file and break
+        offset += 8 + chunk_size + (chunk_size & 1)
+        if offset >= file_size do break
+    }
+
+    return {}, nil
 }
 
 @private
 @require_results
-mp3_parse_tag :: proc(tag_data: []byte, tag_size: u32, major_version: u8) -> Tag {
+parse_id3_tag :: proc(tag_data: []byte, tag_size: u32, major_version: u8) -> Tag {
     frame_length := 4
     result := Tag{}
 
@@ -352,11 +418,20 @@ synchsafe_to_u32 :: proc(data: []byte) -> u32 {
     return ((u32(data[0]) << 21) | (u32(data[1]) << 14) | (u32(data[2]) << 7) | u32(data[3]))
 }
 
-// Little endian
-// Vorbis comment field lengths are little-endian coded
+/*
+   @note:
+   The zero byte always ends up inside the 24-bit field. No placement fixes it — byte_swap only works for 16/32/64-bit
+   fields where all bytes are significant.
+
+   Thats why I can't use endian.get_* which is part of odin core library.
+
+   Little endian
+   Vorbis comment field lengths are little-endian coded
+   Capable of doing byte swap on 24 bit
+*/
 @private
 @require_results
-read_u32_le :: proc(data: []u8, pos: int) -> u32 {
+read_u32_le :: proc(data: []u8, pos: int = 0) -> u32 {
     return u32(data[pos]) | (u32(data[pos + 1]) << 8) | (u32(data[pos + 2]) << 16) | (u32(data[pos + 3]) << 24)
 }
 
