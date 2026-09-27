@@ -209,9 +209,15 @@ draw_playback_controls :: proc(app_state: ^App_State) {
                 rl.WHITE)
         } else if app_state.playback_mode == .Repeat_One {
             rl.DrawTexture(
-                app_state.repeat_one_button_texture,
+                app_state.repeat_queue_button_texture,
                 i32(button_bounds.x), i32(button_bounds.y),
                 rl.WHITE)
+
+            rl.DrawTextEx(
+                app_state.fonts[FONT_20],
+                "1",
+                {button_bounds.x + (button_bounds.width / 2), button_bounds.y - 5},
+                FONT_20, 0, rl.BLACK)
         }
 
 
