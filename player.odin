@@ -319,6 +319,9 @@ draw_artist_list :: proc(app_state: ^App_State) {
     wheel := rl.GetMouseWheelMove()
     if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_option_content_rect) && app_state.active_viewport == .Main {
         if wheel < 0 { // scroll down
+            content_height := len(app_state.artist_list) * SIDE_PANEL_ROW_HEIGHT
+            if f32(content_height) <= app_state.side_panel_option_content_rect.height do return
+            
             app_state.side_panel_scroll_offset = app_state.side_panel_scroll_offset + (SIDE_PANEL_ROW_HEIGHT * SCROLL_INCREMENT)
             if app_state.side_panel_scroll_offset >= (f32(len(app_state.artist_list) + 1) * SIDE_PANEL_ROW_HEIGHT) - app_state.side_panel_option_content_rect.height {
                 app_state.side_panel_scroll_offset = (f32(len(app_state.artist_list) + 1) * SIDE_PANEL_ROW_HEIGHT) - app_state.side_panel_option_content_rect.height
