@@ -16,6 +16,9 @@
 - Custom taglib implementation (no library) to read the metadata of .mp3 and .flac files. (No WAV at the moment, but will come)
 - Shuffle queue is a simple `Fisher-Yates shuffle` algorithm
 
-## Extras
+### Search
+- Trigram index & Damerau-Levenshtein distance
+
+## Libraries
 - File dialog from https://github.com/btzy/nativefiledialog-extended
 - Bindings for nativefiledialog-extended in odin from https://github.com/ivansouzamf/nativefiledialog-odin
