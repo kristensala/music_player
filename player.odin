@@ -340,6 +340,11 @@ draw_artist_list :: proc(app_state: ^App_State) {
                     height = SIDE_PANEL_ROW_HEIGHT
                 }
 
+                // highlight
+                if artist_album == app_state.selected_album {
+                    rl.DrawRectangleRec(artist_album_bounds, rl.WHITE)
+                }
+
                 txt_y = center_text_y(app_state.fonts[FONT_20], artist_album_bounds)
                 rl.DrawTextEx(
                     app_state.fonts[FONT_20],
@@ -347,11 +352,13 @@ draw_artist_list :: proc(app_state: ^App_State) {
                     {artist_album_bounds.x + txt_left_padding, txt_y},
                     FONT_20, 0, TEXT_COLOR)
 
+
                 pos_y += artist_item_bounds.height
 
                 if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_option_content_rect) && app_state.active_viewport == .Main {
                     if rl.CheckCollisionPointRec(rl.GetMousePosition(), artist_album_bounds) {
                         if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
+                            app_state.current_selected_artist = nil
                             app_state.selected_album = artist_album
                             fmt.println("====> clicked on album: ", artist_album.title)
                             app_state.rebuild_rows = true

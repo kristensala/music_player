@@ -1101,29 +1101,32 @@ find_and_set_current_position_in_queue :: proc(app_state: ^App_State) {
 }
 
 // Initial build has all the tracks in queue,
-// unless there is an artist filter, or playlist selected(playlists not done)
+// unless there is an artist filter, or album selected
 @(private = "file")
 build_queue :: proc(app_state: ^App_State) {
     clear(&app_state.queue)
 
     filtered_by_artist := app_state.current_selected_artist != nil
-    filtered_by_album := app_state.selected_album != nil
+    filtered_by_album := app_state.selected_album != nil // filtered by album takes priority
 
     for &album, album_idx in app_state.albums {
         if filtered_by_album {
             if &album == app_state.selected_album {
                 append(&app_state.queue, ..album.tracks[:])
+                break
             }
 
             continue
         }
+
         if filtered_by_artist {
             if album.artist == app_state.current_selected_artist {
                 append(&app_state.queue, ..album.tracks[:])
             }
-        } else {
-            append(&app_state.queue, ..album.tracks[:])
+            continue
         }
+
+        append(&app_state.queue, ..album.tracks[:])
     }
 
     if app_state.is_shuffle_play {
