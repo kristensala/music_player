@@ -360,7 +360,6 @@ draw_artist_list :: proc(app_state: ^App_State) {
                         if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
                             app_state.current_selected_artist = nil
                             app_state.selected_album = artist_album
-                            fmt.println("====> clicked on album: ", artist_album.title)
                             app_state.rebuild_rows = true
                         }
                     }
@@ -368,51 +367,6 @@ draw_artist_list :: proc(app_state: ^App_State) {
             }
         }
     }
-
-    /*for artist in app_state.artist_list[start:] {
-        if pos_y >= end_y {
-            break
-        }
-
-        artist_item_bounds := rl.Rectangle{
-            x = 0,
-            y = pos_y,
-            width = app_state.side_panel_option_content_rect.width,
-            height = SIDE_PANEL_ROW_HEIGHT
-        }
-
-        if artist == app_state.current_selected_artist || (artist == ALL_ARTISTS_OPTION && app_state.current_selected_artist == nil) {
-            rl.DrawRectangleRec(artist_item_bounds, rl.WHITE)
-        }
-
-        // center text
-        txt_y := center_text_y(app_state.fonts[FONT_20], artist_item_bounds)
-
-        txt_left_padding : f32 = 20
-        rl.DrawTextEx(
-            app_state.fonts[FONT_20],
-            artist,
-            {artist_item_bounds.x + txt_left_padding, txt_y},
-            FONT_20, 0, TEXT_COLOR)
-
-        pos_y += artist_item_bounds.height
-
-        if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_option_content_rect) && app_state.active_viewport == .Main {
-            if rl.CheckCollisionPointRec(rl.GetMousePosition(), artist_item_bounds) {
-                if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
-                    // clicked on already active artist => Do nothing
-                    if artist == app_state.current_selected_artist do continue
-
-                    if artist == ALL_ARTISTS_OPTION {
-                        app_state.current_selected_artist = nil
-                    } else {
-                        app_state.current_selected_artist = artist
-                    }
-                    app_state.rebuild_rows = true
-                }
-            }
-        }
-    }*/
 
     wheel := rl.GetMouseWheelMove()
     if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_option_content_rect) && app_state.active_viewport == .Main {
