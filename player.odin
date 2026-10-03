@@ -27,6 +27,12 @@ BACKGROUND_COLOR :: rl.Color{ 192,192,192,0 }
 HIGHLIGHT_COLOR :: rl.Color{63, 131, 196, 255}
 TEXT_COLOR :: rl.BLACK
 
+Artist_List_Item :: struct {
+    artist_name: cstring,
+    artist_albums: [dynamic]^Album,
+    is_expanded: bool
+}
+
 @(private)
 draw_player :: proc(app_state: ^App_State) {
     draw_side_panel(app_state)
@@ -271,7 +277,92 @@ draw_artist_list :: proc(app_state: ^App_State) {
     start := i32(app_state.side_panel_scroll_offset / SIDE_PANEL_ROW_HEIGHT)
     assert(start >= 0)
 
-    for artist in app_state.artist_list[start:] {
+    for &list_item in app_state.artist_list_new[start:] {
+        if pos_y >= end_y {
+            break
+        }
+
+        artist_item_bounds := rl.Rectangle{
+            x = 0,
+            y = pos_y,
+            width = app_state.side_panel_option_content_rect.width,
+            height = SIDE_PANEL_ROW_HEIGHT
+        }
+
+        if list_item.artist_name == app_state.current_selected_artist || (list_item.artist_name == ALL_ARTISTS_OPTION && app_state.current_selected_artist == nil) {
+            rl.DrawRectangleRec(artist_item_bounds, rl.WHITE)
+        }
+
+        // center text
+        txt_y := center_text_y(app_state.fonts[FONT_20], artist_item_bounds)
+
+        list_item_text := fmt.ctprintf("%s (%i)", list_item.artist_name, len(list_item.artist_albums))
+
+        txt_left_padding : f32 = 20
+        rl.DrawTextEx(
+            app_state.fonts[FONT_20],
+            list_item_text,
+            {artist_item_bounds.x + txt_left_padding, txt_y},
+            FONT_20, 0, TEXT_COLOR)
+
+        pos_y += artist_item_bounds.height
+
+        if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_option_content_rect) && app_state.active_viewport == .Main {
+            if rl.CheckCollisionPointRec(rl.GetMousePosition(), artist_item_bounds) {
+                if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
+                    list_item.is_expanded = !list_item.is_expanded // @todo: will have a separate button later
+
+                    if app_state.selected_album != nil {
+                        app_state.selected_album = nil
+                        app_state.rebuild_rows = true
+                    }
+
+                    // clicked on already active artist => Do nothing
+                    if list_item.artist_name == app_state.current_selected_artist do continue
+
+                    if list_item.artist_name == ALL_ARTISTS_OPTION {
+                        app_state.current_selected_artist = nil
+                    } else {
+                        app_state.current_selected_artist = list_item.artist_name
+                    }
+                    app_state.rebuild_rows = true
+                }
+            }
+        }
+
+        // @todo: testing
+        if list_item.is_expanded {
+            for artist_album in list_item.artist_albums {
+                artist_album_bounds := rl.Rectangle{
+                    x = 10, // small offset
+                    y = pos_y,
+                    width = app_state.side_panel_option_content_rect.width,
+                    height = SIDE_PANEL_ROW_HEIGHT
+                }
+
+                txt_y = center_text_y(app_state.fonts[FONT_20], artist_album_bounds)
+                rl.DrawTextEx(
+                    app_state.fonts[FONT_20],
+                    artist_album.title,
+                    {artist_album_bounds.x + txt_left_padding, txt_y},
+                    FONT_20, 0, TEXT_COLOR)
+
+                pos_y += artist_item_bounds.height
+
+                if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_option_content_rect) && app_state.active_viewport == .Main {
+                    if rl.CheckCollisionPointRec(rl.GetMousePosition(), artist_album_bounds) {
+                        if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
+                            app_state.selected_album = artist_album
+                            fmt.println("====> clicked on album: ", artist_album.title)
+                            app_state.rebuild_rows = true
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /*for artist in app_state.artist_list[start:] {
         if pos_y >= end_y {
             break
         }
@@ -314,7 +405,7 @@ draw_artist_list :: proc(app_state: ^App_State) {
                 }
             }
         }
-    }
+    }*/
 
     wheel := rl.GetMouseWheelMove()
     if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_option_content_rect) && app_state.active_viewport == .Main {
@@ -821,6 +912,8 @@ handle_shuffle_pressed :: proc(app_state: ^App_State) {
 }
 
 handle_play_pause :: proc(app_state: ^App_State) {
+    fmt.println("=======>", app_state.artist_list_new)
+
     if app_state.audio_state == .Playing {
         stop_response := ma.sound_stop(app_state.ma_sound)
         if stop_response == .SUCCESS {

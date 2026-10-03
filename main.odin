@@ -187,7 +187,9 @@ App_State :: struct {
 
     // filtering
     artist_list: [dynamic]cstring,
+    artist_list_new: [dynamic]Artist_List_Item,
     current_selected_artist: cstring, // nil means show all the tracks
+    selected_album: ^Album, // @todo
 
     // @todo: not implemented
     // ALSO: remove highlight after user interacts with the application in any way
@@ -320,7 +322,7 @@ main :: proc() {
 		}
 	}
 
-    log_dir, err := os.user_log_dir(context.temp_allocator)
+    /*log_dir, err := os.user_log_dir(context.temp_allocator)
     assert(err == nil)
 
     log_path, _ := filepath.join({log_dir, "music_player_log.txt"}, context.temp_allocator)
@@ -340,7 +342,7 @@ main :: proc() {
         } else {
             log.destroy_console_logger(logger)
         }
-    }
+    }*/
 
     rl.SetConfigFlags({.WINDOW_RESIZABLE})
 
@@ -567,6 +569,11 @@ destroy_state :: proc(app_state: ^App_State) {
 
     delete(app_state.rows)
     delete(app_state.artist_list)
+
+    for x in app_state.artist_list_new {
+        delete(x.artist_albums)
+    }
+    delete(app_state.artist_list_new)
 
     for entry in app_state.album_art_cache.entries {
         if entry == nil do continue
@@ -864,6 +871,29 @@ init_library :: proc(app_state: ^App_State) {
     scan_library_and_create_tracks(app_state, string(app_state.library_path))
     create_albums(app_state)
 
+    tmp_artist_list : map[cstring]i32
+    defer delete(tmp_artist_list)
+
+    for &album in app_state.albums {
+        list_item_idx, artist_exists := tmp_artist_list[album.artist]
+        if artist_exists {
+            item := &app_state.artist_list_new[list_item_idx]
+            append(&item.artist_albums, &album)
+        } else {
+            album_list := make([dynamic]^Album)
+            append(&album_list, &album)
+
+            new_item := Artist_List_Item{
+                artist_name = album.artist
+            }
+            new_item.artist_albums = album_list
+
+            idx := len(app_state.artist_list_new)
+            tmp_artist_list[album.artist] = i32(idx)
+            append(&app_state.artist_list_new, new_item)
+        }
+    }
+
     app_state.artist_trigram_inverted_index = build_trigram_inverted_index(app_state.artist_list)
     app_state.album_trigram_inverted_index = build_album_trigram_inverted_index(app_state.albums)
 }
@@ -1006,6 +1036,10 @@ build_rows :: proc(app_state: ^App_State) {
             if album.artist != app_state.current_selected_artist do continue
         }
 
+        if app_state.selected_album != nil {
+            if &album != app_state.selected_album do continue
+        }
+
         album_title_row := new(Row)
         album_title_row.is_album_title_row = true
         album_title_row.album_idx = i32(album_idx)
@@ -1073,7 +1107,16 @@ build_queue :: proc(app_state: ^App_State) {
     clear(&app_state.queue)
 
     filtered_by_artist := app_state.current_selected_artist != nil
-    for album, album_idx in app_state.albums {
+    filtered_by_album := app_state.selected_album != nil
+
+    for &album, album_idx in app_state.albums {
+        if filtered_by_album {
+            if &album == app_state.selected_album {
+                append(&app_state.queue, ..album.tracks[:])
+            }
+
+            continue
+        }
         if filtered_by_artist {
             if album.artist == app_state.current_selected_artist {
                 append(&app_state.queue, ..album.tracks[:])

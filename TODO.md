@@ -1,4 +1,5 @@
 # TODO
+- [ ] in artist list list all artits albums
 - [ ] playlist creation ({LIBRARY_PATH}/.mppl/mppl0 etc)
 - [ ] What happens if user does not have libsystemd-dev installed on their machine
 - [x] Taglib: WAV file support
