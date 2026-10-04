@@ -104,11 +104,11 @@ update_search_results :: proc(app_state: ^App_State) {
             artist_indices, found := app_state.command_palette.artist_trigram_inverted_index[it]
             if found {
                 for artist_idx in artist_indices {
-                    artist := app_state.artist_list[artist_idx]
+                    artist_list_item := app_state.artist_list[artist_idx]
 
                     result_exists := false
                     for row in results[:] {
-                        if row.type == .Artist && row.artist_name == artist {
+                        if row.type == .Artist && row.artist_name == artist_list_item.artist_name {
                             result_exists = true
                             break
                         }
@@ -116,7 +116,7 @@ update_search_results :: proc(app_state: ^App_State) {
 
                     if result_exists do continue
 
-                    artist_lower := strings.to_lower(string(artist))
+                    artist_lower := strings.to_lower(string(artist_list_item.artist_name))
                     defer delete(artist_lower)
 
                     score := similarity(input_lower, artist_lower)
@@ -124,7 +124,7 @@ update_search_results :: proc(app_state: ^App_State) {
 
                     result_row := Search_Result_Row{
                         type = .Artist,
-                        artist_name = artist,
+                        artist_name = artist_list_item.artist_name,
                         weight = score
                     }
                     append(&results, result_row)
@@ -185,11 +185,11 @@ build_album_trigram_inverted_index :: proc(data: [dynamic]Album) -> map[string][
     return trigram_index
 }
 
-build_trigram_inverted_index :: proc(data: [dynamic]cstring) -> map[string][dynamic]i32 {
+build_artist_trigram_inverted_index :: proc(data: [dynamic]Artist_List_Item) -> map[string][dynamic]i32 {
     trigram_index : map[string][dynamic]i32
 
     for x, idx in data {
-        build_trigram_from_string_and_add_to_index(&trigram_index, string(x), i32(idx))
+        build_trigram_from_string_and_add_to_index(&trigram_index, string(x.artist_name), i32(idx))
     }
 
     return trigram_index
@@ -419,21 +419,16 @@ draw_command_palette :: proc(app_state: ^App_State) {
                             return
                         }
 
-                        if value.artist_name == ALL_ARTISTS_OPTION {
-                            app_state.current_selected_artist = nil
-                        } else {
-                            app_state.current_selected_artist = value.artist_name
-                        }
-                        app_state.rebuild_rows = true
-
+                        reset_filters(app_state)
+                        app_state.current_selected_artist = value.artist_name
                     } else if value.type == .Album {
-                        if value.album.artist == app_state.current_selected_artist {
+                        if value.album == app_state.selected_album {
                             close_command_palette(app_state)
                             return
                         }
 
-                        app_state.current_selected_artist = value.album.artist
-                        app_state.rebuild_rows = true
+                        reset_filters(app_state)
+                        app_state.selected_album = value.album
                     } else if value.type == .Command {
                         if value.cmd == .Set_Library {
                             // library path change

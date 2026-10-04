@@ -271,15 +271,22 @@ draw_playlist_list :: proc(app_state: ^App_State) {
 
 @private
 draw_artist_list :: proc(app_state: ^App_State) {
-    pos_y : f32 = app_state.side_panel_option_content_rect.y
-    end_y := app_state.side_panel_option_content_rect.height + app_state.side_panel_option_content_rect.y
+    pos_y : f32 = app_state.side_panel_option_content_rect.y - app_state.side_panel_scroll_offset
+    end_y := app_state.side_panel_option_content_rect.height + app_state.side_panel_option_content_rect.y - SIDE_PANEL_ROW_HEIGHT
 
     start := i32(app_state.side_panel_scroll_offset / SIDE_PANEL_ROW_HEIGHT)
     assert(start >= 0)
 
-    for &list_item in app_state.artist_list_new[start:] {
-        if pos_y >= end_y {
+    for &list_item in app_state.artist_list {
+        /*if pos_y >= end_y {
             break
+        }*/
+
+        expand_btn_bounds := rl.Rectangle{
+            x = 0,
+            y = pos_y,
+            width = 30,
+            height = SIDE_PANEL_ROW_HEIGHT
         }
 
         artist_item_bounds := rl.Rectangle{
@@ -296,21 +303,66 @@ draw_artist_list :: proc(app_state: ^App_State) {
         // center text
         txt_y := center_text_y(app_state.fonts[FONT_20], artist_item_bounds)
 
+        rl.DrawTextEx(
+            app_state.fonts[FONT_20],
+            ">",
+            {expand_btn_bounds.x + 10, txt_y},
+            FONT_20, 0, TEXT_COLOR)
+
         list_item_text := fmt.ctprintf("%s (%i)", list_item.artist_name, len(list_item.artist_albums))
 
-        txt_left_padding : f32 = 20
+        txt_left_padding : f32 = 30
         rl.DrawTextEx(
             app_state.fonts[FONT_20],
             list_item_text,
-            {artist_item_bounds.x + txt_left_padding, txt_y},
+            {artist_item_bounds.x + expand_btn_bounds.width, txt_y},
             FONT_20, 0, TEXT_COLOR)
 
         pos_y += artist_item_bounds.height
 
+
+        if list_item.is_expanded {
+            for artist_album in list_item.artist_albums {
+                artist_album_bounds := rl.Rectangle{
+                    x = 30, // small offset
+                    y = pos_y,
+                    width = app_state.side_panel_option_content_rect.width,
+                    height = SIDE_PANEL_ROW_HEIGHT
+                }
+
+                // highlight
+                if artist_album == app_state.selected_album {
+                    rl.DrawRectangleRec(artist_album_bounds, rl.WHITE)
+                }
+
+                txt_y = center_text_y(app_state.fonts[FONT_20], artist_album_bounds)
+                rl.DrawTextEx(
+                    app_state.fonts[FONT_20],
+                    artist_album.title,
+                    {artist_album_bounds.x + 10, txt_y},
+                    FONT_20, 0, TEXT_COLOR)
+
+                pos_y += artist_item_bounds.height
+
+                if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_option_content_rect) && app_state.active_viewport == .Main {
+                    if rl.CheckCollisionPointRec(rl.GetMousePosition(), artist_album_bounds) {
+                        if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
+                            app_state.current_selected_artist = nil
+                            app_state.selected_album = artist_album
+                            app_state.rebuild_rows = true
+                        }
+                    }
+                }
+            }
+        }
+
         if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_option_content_rect) && app_state.active_viewport == .Main {
             if rl.CheckCollisionPointRec(rl.GetMousePosition(), artist_item_bounds) {
                 if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
-                    list_item.is_expanded = !list_item.is_expanded // @todo: will have a separate button later
+                    if rl.CheckCollisionPointRec(rl.GetMousePosition(), expand_btn_bounds) {
+                        list_item.is_expanded = !list_item.is_expanded
+                        continue
+                    }
 
                     if app_state.selected_album != nil {
                         app_state.selected_album = nil
@@ -329,56 +381,23 @@ draw_artist_list :: proc(app_state: ^App_State) {
                 }
             }
         }
-
-        // @todo: testing
-        if list_item.is_expanded {
-            for artist_album in list_item.artist_albums {
-                artist_album_bounds := rl.Rectangle{
-                    x = 10, // small offset
-                    y = pos_y,
-                    width = app_state.side_panel_option_content_rect.width,
-                    height = SIDE_PANEL_ROW_HEIGHT
-                }
-
-                // highlight
-                if artist_album == app_state.selected_album {
-                    rl.DrawRectangleRec(artist_album_bounds, rl.WHITE)
-                }
-
-                txt_y = center_text_y(app_state.fonts[FONT_20], artist_album_bounds)
-                rl.DrawTextEx(
-                    app_state.fonts[FONT_20],
-                    artist_album.title,
-                    {artist_album_bounds.x + txt_left_padding, txt_y},
-                    FONT_20, 0, TEXT_COLOR)
-
-
-                pos_y += artist_item_bounds.height
-
-                if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_option_content_rect) && app_state.active_viewport == .Main {
-                    if rl.CheckCollisionPointRec(rl.GetMousePosition(), artist_album_bounds) {
-                        if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
-                            app_state.current_selected_artist = nil
-                            app_state.selected_album = artist_album
-                            app_state.rebuild_rows = true
-                        }
-                    }
-                }
-            }
-        }
     }
 
     wheel := rl.GetMouseWheelMove()
     if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_option_content_rect) && app_state.active_viewport == .Main {
         if wheel < 0 { // scroll down
-            content_height := len(app_state.artist_list) * SIDE_PANEL_ROW_HEIGHT
+            content_height := get_artist_list_content_height(app_state.artist_list)
             if f32(content_height) <= app_state.side_panel_option_content_rect.height do return
-            
-            app_state.side_panel_scroll_offset = app_state.side_panel_scroll_offset + (SIDE_PANEL_ROW_HEIGHT * SCROLL_INCREMENT)
-            if app_state.side_panel_scroll_offset >= (f32(len(app_state.artist_list) + 1) * SIDE_PANEL_ROW_HEIGHT) - app_state.side_panel_option_content_rect.height {
-                app_state.side_panel_scroll_offset = (f32(len(app_state.artist_list) + 1) * SIDE_PANEL_ROW_HEIGHT) - app_state.side_panel_option_content_rect.height
-            }
 
+            content_off_screen := f32(content_height) - app_state.side_panel_scroll_offset - app_state.side_panel_option_content_rect.height
+            if content_off_screen > 0 {
+                scroll_offset := app_state.side_panel_scroll_offset + (SIDE_PANEL_ROW_HEIGHT * SCROLL_INCREMENT)
+                if scroll_offset > content_off_screen {
+                    app_state.side_panel_scroll_offset += content_off_screen
+                } else {
+                    app_state.side_panel_scroll_offset = scroll_offset
+                }
+            }
         } else if wheel > 0 {
             app_state.side_panel_scroll_offset = app_state.side_panel_scroll_offset - (SIDE_PANEL_ROW_HEIGHT * SCROLL_INCREMENT) // five rows
             if app_state.side_panel_scroll_offset < 0 {
@@ -386,6 +405,18 @@ draw_artist_list :: proc(app_state: ^App_State) {
             }
         }
     }
+}
+
+get_artist_list_content_height :: proc(artist_list: [dynamic]Artist_List_Item) -> i32 {
+    result := len(artist_list) * SIDE_PANEL_ROW_HEIGHT
+
+    for item in artist_list {
+        if item.is_expanded {
+            result += (SIDE_PANEL_ROW_HEIGHT * len(item.artist_albums))
+        }
+    }
+
+    return i32(result)
 }
 
 @private
@@ -403,7 +434,7 @@ draw_side_panel :: proc(app_state: ^App_State) {
         }
 
         // highlight the option
-        if app_state.selected_side_panel_option == .Artist_List {
+        if app_state.selected_side_panel_option == .Music {
             rl.DrawRectangleRec(artists_option_bounds, HIGHLIGHT_COLOR)
         }
 
@@ -411,7 +442,7 @@ draw_side_panel :: proc(app_state: ^App_State) {
 
         rl.DrawTextEx(
             app_state.fonts[FONT_20],
-            "Artists",
+            "Music",
             {app_state.side_panel_rect.x + 20, txt_y},
             FONT_20,
             0,
@@ -443,7 +474,8 @@ draw_side_panel :: proc(app_state: ^App_State) {
         if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.side_panel_options_rect) {
             if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
                 if rl.CheckCollisionPointRec(rl.GetMousePosition(), artists_option_bounds) {
-                    app_state.selected_side_panel_option = .Artist_List
+                    app_state.selected_side_panel_option = .Music
+                    reset_filters(app_state)
                 } else if rl.CheckCollisionPointRec(rl.GetMousePosition(), playlists_option_bounds) {
                     app_state.selected_side_panel_option = .Playlists
                 }
@@ -465,7 +497,7 @@ draw_side_panel :: proc(app_state: ^App_State) {
         i32(app_state.side_panel_option_content_rect.width),
         i32(app_state.side_panel_option_content_rect.height))
 
-    if app_state.selected_side_panel_option == .Artist_List {
+    if app_state.selected_side_panel_option == .Music {
         draw_artist_list(app_state)
     } else if app_state.selected_side_panel_option == .Playlists {
         draw_playlist_list(app_state)
@@ -873,8 +905,6 @@ handle_shuffle_pressed :: proc(app_state: ^App_State) {
 }
 
 handle_play_pause :: proc(app_state: ^App_State) {
-    fmt.println("=======>", app_state.artist_list_new)
-
     if app_state.audio_state == .Playing {
         stop_response := ma.sound_stop(app_state.ma_sound)
         if stop_response == .SUCCESS {

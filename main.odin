@@ -6,7 +6,6 @@ import "core:fmt"
 import "core:math/rand"
 import "core:log"
 import "core:strings"
-import "core:slice"
 import "core:sort"
 import rl "vendor:raylib"
 import ma "vendor:miniaudio"
@@ -185,9 +184,7 @@ App_State :: struct {
     audio_state: Audio_State,
     currently_playing_track: ^Track,
 
-    // filtering
-    artist_list: [dynamic]cstring,
-    artist_list_new: [dynamic]Artist_List_Item,
+    artist_list: [dynamic]Artist_List_Item,
     current_selected_artist: cstring, // nil means show all the tracks
     selected_album: ^Album, // @todo
 
@@ -242,9 +239,8 @@ Album :: struct {
 }
 
 Side_Panel_Option :: enum i32 {
-    Artist_List = 0,
+    Music = 0,
     Playlists = 1,
-    All_Music = 2 // @todo: remove all artists option from artist list and add it to the side_panel options instead. As "All Music"
 }
 
 @require_results
@@ -257,7 +253,7 @@ init_state :: proc() -> ^App_State {
     app_state.is_library_path_set = false
     app_state.ma_sound = nil
     app_state.audio_state = .Stopped
-    app_state.selected_side_panel_option = .Artist_List // @todo: All_Music once implemented
+    app_state.selected_side_panel_option = .Music
     app_state.rebuild_rows = true
 
     load_assets(app_state)
@@ -322,7 +318,7 @@ main :: proc() {
 		}
 	}
 
-    /*log_dir, err := os.user_log_dir(context.temp_allocator)
+    log_dir, err := os.user_log_dir(context.temp_allocator)
     assert(err == nil)
 
     log_path, _ := filepath.join({log_dir, "music_player_log.txt"}, context.temp_allocator)
@@ -342,7 +338,7 @@ main :: proc() {
         } else {
             log.destroy_console_logger(logger)
         }
-    }*/
+    }
 
     rl.SetConfigFlags({.WINDOW_RESIZABLE})
 
@@ -433,7 +429,6 @@ worker :: proc(app_state: ^App_State) {
     sync.mutex_unlock(&app_state.mutex)
 
     if app_state.is_library_path_set {
-        append(&app_state.artist_list, ALL_ARTISTS_OPTION)
         init_library(app_state)
         build_rows(app_state) // for ui
         build_queue(app_state)
@@ -467,7 +462,6 @@ update_main :: proc(app_state: ^App_State) {
         reset_playback(app_state)
         reset_library(app_state)
 
-        append(&app_state.artist_list, ALL_ARTISTS_OPTION)
         init_library(app_state)
 
         build_rows(app_state) // for ui
@@ -568,12 +562,11 @@ destroy_state :: proc(app_state: ^App_State) {
     delete(app_state.album_trigram_inverted_index)
 
     delete(app_state.rows)
-    delete(app_state.artist_list)
 
-    for x in app_state.artist_list_new {
+    for x in app_state.artist_list {
         delete(x.artist_albums)
     }
-    delete(app_state.artist_list_new)
+    delete(app_state.artist_list)
 
     for entry in app_state.album_art_cache.entries {
         if entry == nil do continue
@@ -877,7 +870,7 @@ init_library :: proc(app_state: ^App_State) {
     for &album in app_state.albums {
         list_item_idx, artist_exists := tmp_artist_list[album.artist]
         if artist_exists {
-            item := &app_state.artist_list_new[list_item_idx]
+            item := &app_state.artist_list[list_item_idx]
             append(&item.artist_albums, &album)
         } else {
             album_list := make([dynamic]^Album)
@@ -888,13 +881,13 @@ init_library :: proc(app_state: ^App_State) {
             }
             new_item.artist_albums = album_list
 
-            idx := len(app_state.artist_list_new)
+            idx := len(app_state.artist_list)
             tmp_artist_list[album.artist] = i32(idx)
-            append(&app_state.artist_list_new, new_item)
+            append(&app_state.artist_list, new_item)
         }
     }
 
-    app_state.artist_trigram_inverted_index = build_trigram_inverted_index(app_state.artist_list)
+    app_state.artist_trigram_inverted_index = build_artist_trigram_inverted_index(app_state.artist_list)
     app_state.album_trigram_inverted_index = build_album_trigram_inverted_index(app_state.albums)
 }
 
@@ -986,10 +979,6 @@ create_albums :: proc(app_state: ^App_State) {
         album := &app_state.albums[album_idx]
         append(&album.tracks, &it)
         it.album_idx = album_idx
-
-        if !slice.contains(app_state.artist_list[:], album.artist) {
-            append(&app_state.artist_list, album.artist)
-        }
     }
 
     for a in app_state.albums {
@@ -1126,6 +1115,7 @@ build_queue :: proc(app_state: ^App_State) {
             continue
         }
 
+        // else: add all the tracks to queue
         append(&app_state.queue, ..album.tracks[:])
     }
 
@@ -1140,7 +1130,9 @@ shuffle_queue :: proc(app_state: ^App_State) {
     for i := len(app_state.queue) - 1; i >= 1; i -= 1 {
         j := rand.int31_max(i32(len(app_state.queue)))
 
-        // currently playing track should be at the beginning of the queue when shuffled
+        // Currently playing track should be at the beginning of the queue when shuffled
+        // to avoid a situation where after shuffleing the currently playing track is at the end of the queue.
+        // Shuffle should always play the shuffled queue from the top
         if app_state.currently_playing_track != nil && app_state.queue[i].file_path == app_state.currently_playing_track.file_path {
             app_state.queue[0], app_state.queue[i] = app_state.queue[i], app_state.queue[0] 
         } else if app_state.currently_playing_track != nil && app_state.queue[j].file_path == app_state.currently_playing_track.file_path {
@@ -1255,6 +1247,13 @@ process_album_art_queue :: proc(app_state: ^App_State) {
     }
 
     clear(&app_state.album_art_load_queue)
+}
+
+// Clear player track filtering and triggers a rows rebuild
+reset_filters :: proc(app_state: ^App_State) {
+    app_state.current_selected_artist = nil
+    app_state.selected_album = nil
+    app_state.rebuild_rows = true
 }
 
 // Remove stale cache entries
