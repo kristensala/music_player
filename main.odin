@@ -188,10 +188,6 @@ App_State :: struct {
     current_selected_artist: cstring, // nil means show all the tracks
     selected_album: ^Album, // @todo
 
-    // @todo: not implemented
-    // ALSO: remove highlight after user interacts with the application in any way
-    highlighted_track_after_search: ^Track,
-
     album_art_cache: Album_Art_Cache,
     album_art_load_queue: [dynamic]Album_Idx, // ref album idx
     default_album_cover_texture: rl.Texture2D,
@@ -303,21 +299,6 @@ init_state :: proc() -> ^App_State {
 }
 
 main :: proc() {
-    when ODIN_DEBUG {
-		track: mem.Tracking_Allocator
-		mem.tracking_allocator_init(&track, context.allocator)
-		context.allocator = mem.tracking_allocator(&track)
-
-		defer {
-			if len(track.allocation_map) > 0 {
-				for _, entry in track.allocation_map {
-					fmt.eprintf("%v leaked %v bytes\n", entry.location, entry.size)
-				}
-			}
-			mem.tracking_allocator_destroy(&track)
-		}
-	}
-
     log_dir, err := os.user_log_dir(context.temp_allocator)
     assert(err == nil)
 
@@ -353,12 +334,6 @@ main :: proc() {
 
     app_state := init_state()
 
-    /*if app_state.is_library_path_set {
-        append(&app_state.artist_list, ALL_ARTISTS_OPTION)
-        init_library(app_state)
-        build_rows(app_state) // for ui
-        build_queue(app_state)
-    }*/
     scanner := thread.create_and_start_with_poly_data(app_state, worker)
 
     // @nocheckin: testing
@@ -379,7 +354,6 @@ main :: proc() {
     }
     defer ma.engine_uninit(&app_state.ma_engine)
 
-
     was_focused := true
     for !rl.WindowShouldClose() {
         // hack to lower CPU usage when window is not focused
@@ -393,7 +367,6 @@ main :: proc() {
         update_layout(app_state)
 
         rl.BeginDrawing()
-
         rl.ClearBackground(BACKGROUND_COLOR)
 
         draw_player(app_state)
@@ -560,7 +533,6 @@ destroy_state :: proc(app_state: ^App_State) {
         delete(key)
     }
     delete(app_state.album_trigram_inverted_index)
-
     delete(app_state.rows)
 
     for x in app_state.artist_list {
@@ -1382,3 +1354,17 @@ dbus_init :: proc() -> sdbus.Bus {
     return bus
 }
 
+/*
+   - ext: musicplayer.mpidx
+   - Magic bit: MPIDX
+   - Library path: home/salakris/Music
+   - Created at time
+   - Track info: path_in_library; title; album; artist; album_artist;
+ */
+create_or_update_library_index_file :: proc() {
+    // @todo
+}
+
+read_library_index :: proc() {
+    // @todo
+}
