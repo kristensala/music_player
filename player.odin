@@ -969,6 +969,14 @@ handle_main_keyboard_events :: proc(app_state: ^App_State) {
 
         handle_play_pause(app_state)
     }
+    
+    if rl.IsKeyPressed(rl.KeyboardKey.R) {
+        handle_repeat_pressed(app_state)
+    }
+
+    if rl.IsKeyPressed(rl.KeyboardKey.S) {
+        handle_shuffle_pressed(app_state)
+    }
 
     if rl.IsKeyDown(rl.KeyboardKey.LEFT_CONTROL) {
         if rl.IsKeyPressed(rl.KeyboardKey.P) {
