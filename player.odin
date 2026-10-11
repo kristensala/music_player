@@ -296,7 +296,7 @@ draw_artist_list :: proc(app_state: ^App_State) {
             height = SIDE_PANEL_ROW_HEIGHT
         }
 
-        if list_item.artist_name == app_state.current_selected_artist || (list_item.artist_name == ALL_ARTISTS_OPTION && app_state.current_selected_artist == nil) {
+        if list_item.artist_name == app_state.current_selected_artist {
             rl.DrawRectangleRec(artist_item_bounds, rl.WHITE)
         }
 
@@ -372,11 +372,7 @@ draw_artist_list :: proc(app_state: ^App_State) {
                     // clicked on already active artist => Do nothing
                     if list_item.artist_name == app_state.current_selected_artist do continue
 
-                    if list_item.artist_name == ALL_ARTISTS_OPTION {
-                        app_state.current_selected_artist = nil
-                    } else {
-                        app_state.current_selected_artist = list_item.artist_name
-                    }
+                    app_state.current_selected_artist = list_item.artist_name
                     app_state.rebuild_rows = true
                 }
             }

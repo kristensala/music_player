@@ -36,7 +36,6 @@ FONT_20                    :: 20
 FONT_30                    :: 30
 
 CACHE_MAX_CAPACITY         :: 15
-ALL_ARTISTS_OPTION         :: "All Artists"
 CONFIG_LIBRARY_PATH_PREFIX : string = "LIBRARY_PATH="
 EMPTY_IDX :: -1
 
@@ -302,7 +301,7 @@ main :: proc() {
     log_dir, err := os.user_log_dir(context.temp_allocator)
     assert(err == nil)
 
-    log_path, _ := filepath.join({log_dir, "music_player_log.txt"}, context.temp_allocator)
+    log_path, _ := filepath.join({log_dir, "music_player.log"}, context.temp_allocator)
     logh, logh_err := os.open(log_path, {.Create, .Trunc, .Read, .Write })
 
     if logh_err == os.ERROR_NONE {
@@ -333,7 +332,6 @@ main :: proc() {
     defer nfd.Quit()
 
     app_state := init_state()
-
     scanner := thread.create_and_start_with_poly_data(app_state, worker)
 
     // @nocheckin: testing
@@ -1325,7 +1323,8 @@ trigger_notification :: proc(app_state: ^App_State) {
     if app_state.currently_playing_track == nil do return
 
     when ODIN_OS == .Linux {
-        notification_id, err := notify.send_notification(app_state.bus, 
+        notification_id, err := notify.send_notification(
+            app_state.bus, 
             get_track_album_cover_path(app_state, app_state.currently_playing_track),
             app_state.currently_playing_track.title,
             app_state.currently_playing_track.artist,
@@ -1355,11 +1354,12 @@ dbus_init :: proc() -> sdbus.Bus {
 }
 
 /*
+   @note(ksala): move this to a separate package
    - ext: musicplayer.mpidx
    - Magic bit: MPIDX
    - Library path: home/salakris/Music
    - Created at time
-   - Track info: path_in_library; title; album; artist; album_artist;
+   - Track info: path_in_library; title; album; artist; album_artist; duration?
  */
 create_or_update_library_index_file :: proc() {
     // @todo
