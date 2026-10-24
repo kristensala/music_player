@@ -9,10 +9,10 @@ import "core:strings"
 import "core:sort"
 import rl "vendor:raylib"
 import ma "vendor:miniaudio"
-import "core:mem"
 import "core:path/filepath"
 import "core:os"
 import "core:sync"
+import "core:time"
 import "core:thread"
 import tl "taglib"
 import "nfd"
@@ -831,8 +831,12 @@ play_selected_track :: proc(app_state: ^App_State, selected_track: ^Track) -> bo
 
 @(private = "file")
 init_library :: proc(app_state: ^App_State) {
-    scan_library_and_create_tracks(app_state, string(app_state.library_path))
-    create_albums(app_state)
+    ok := build_library_from_cache(app_state)
+    if !ok {
+        scan_library_and_create_tracks(app_state, string(app_state.library_path))
+        create_albums(app_state)
+        write_library_cache_file(app_state)
+    }
 
     tmp_artist_list : map[cstring]i32
     defer delete(tmp_artist_list)
@@ -859,6 +863,149 @@ init_library :: proc(app_state: ^App_State) {
 
     app_state.artist_trigram_inverted_index = build_artist_trigram_inverted_index(app_state.artist_list)
     app_state.album_trigram_inverted_index = build_album_trigram_inverted_index(app_state.albums)
+}
+
+@(require_results)
+get_library_cache_path :: proc() -> (path: string, err: os.Error) {
+    cache_dir, cache_dir_error := os.user_cache_dir(context.allocator)
+    if cache_dir_error != nil {
+        return "", cache_dir_error
+    }
+    defer delete(cache_dir)
+
+    library_cache_path, cache_path_err := filepath.join({cache_dir, "music_player.librarycache"}, context.temp_allocator)
+    if cache_path_err != nil {
+        panic(fmt.tprintf("Join error: ", cache_path_err))
+    }
+
+    return library_cache_path, nil
+}
+
+@(require_results)
+build_library_from_cache :: proc(app_state: ^App_State) -> (ok: bool) {
+    file_info, err := os.stat(string(app_state.library_path), context.temp_allocator)
+    if err != nil {
+        log.errorf("Failed to get library directory file info: %v", err)
+        return false
+    }
+
+    library_cache_path, library_cache_path_err := get_library_cache_path()
+    if library_cache_path_err != nil {
+        return false
+    }
+
+    if !os.exists(library_cache_path) {
+        return false
+    }
+
+    cache_file_data, cache_file_err := os.read_entire_file(library_cache_path, context.allocator)
+    if cache_file_err != nil {
+        fmt.println("Could not read cache file:", cache_file_err)
+        return false
+    }
+    defer delete(cache_file_data)
+
+    new_track: Track
+
+    it := string(cache_file_data)
+    for line in strings.split_lines_iterator(&it) {
+        if strings.has_prefix(line, "#time=") {
+            value := line[len("#time="):]
+            cache_updated_at, consumed := time.rfc3339_to_time_utc(value)
+
+            diff := time.diff(file_info.modification_time, cache_updated_at)
+            if diff < 0 {
+                log.info("Reading cache: library path has been modified. Rewrite cache file")
+                return false
+            }
+        }
+
+        if strings.has_prefix(line, "#library_path=") {
+            value := line[len("#library_path="):]
+            if value != string(app_state.library_path) {
+                log.info("Reading cache: library path has changed")
+                return false
+            }
+        }
+
+        if line == "#track" {
+            if len(new_track.file_path) > 0 {
+                append(&app_state.tracks, new_track)
+            }
+
+            new_track = Track{}
+            continue
+        }
+
+        // create track from cache file
+        if strings.has_prefix(line, "title=") {
+            new_track.title = strings.clone_to_cstring(line[len("title="):])
+        } else if strings.has_prefix(line, "artist=") {
+            new_track.artist = strings.clone_to_cstring(line[len("artist="):])
+        } else if strings.has_prefix(line, "album=") {
+            new_track.album_title = strings.clone_to_cstring(line[len("album="):])
+        } else if strings.has_prefix(line, "album_artist=") {
+            new_track.album_artist = strings.clone_to_cstring(line[len("album_artist="):])
+        } else if strings.has_prefix(line, "path=") {
+            new_track.file_path = strings.clone_to_cstring(line[len("path="):])
+        } else if strings.has_prefix(line, "file_name=") {
+            new_track.file_name = strings.clone_to_cstring(line[len("file_name="):])
+        }
+
+    }
+
+    create_albums(app_state)
+    return true
+}
+
+@(private="file")
+write_library_cache_file :: proc(app_state: ^App_State) {
+    string_builder := strings.builder_make()
+    defer strings.builder_destroy(&string_builder)
+
+    t := time.now()
+    current_time, ok := time.time_to_rfc3339(t, allocator = context.temp_allocator)
+
+    ttime := fmt.tprintf("#time=%v\n", current_time)
+    strings.write_string(&string_builder, ttime)
+
+    tpath := fmt.tprintf("#library_path=%v\n\n", app_state.library_path)
+    strings.write_string(&string_builder, tpath)
+
+    for album in app_state.albums {
+        for track in album.tracks {
+            strings.write_string(&string_builder, "#track\n")
+
+            ttitle := fmt.tprintf("title=%v\n", track.title)
+            strings.write_string(&string_builder, ttitle)
+
+            tartist := fmt.tprintf("artist=%v\n", track.artist)
+            strings.write_string(&string_builder, tartist)
+
+            talbum := fmt.tprintf("album=%v\n", album.title)
+            strings.write_string(&string_builder, talbum)
+
+            talbum_artist := fmt.tprintf("album_artist=%v\n", track.album_artist)
+            strings.write_string(&string_builder, talbum_artist)
+
+            tfile_name := fmt.tprintf("file_name=%v\n", track.file_name)
+            strings.write_string(&string_builder, tfile_name)
+
+            tpath := fmt.tprintf("path=%v\n", track.file_path)
+            strings.write_string(&string_builder, tpath)
+        }
+    }
+
+    library_cache_path, library_cache_path_err := get_library_cache_path()
+    if library_cache_path_err != nil {
+        log.errorf("Failed to get library cache path: %v", library_cache_path_err)
+        return
+    }
+
+    err := os.write_entire_file(library_cache_path, string_builder.buf[:])
+    if err != nil {
+        fmt.println("Failed to write cache file: ", err)
+    }
 }
 
 @(private = "file")
@@ -980,8 +1127,6 @@ find_album_cover :: proc(dir: string) -> cstring {
     return nil
 }
 
-// @todo: set position y of each row here
-// so I can draw the rows based on the pre-calculated pos_y
 @(private = "file")
 build_rows :: proc(app_state: ^App_State) {
     // @todo: do not clear until new rows are built
