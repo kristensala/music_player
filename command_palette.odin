@@ -23,6 +23,8 @@ Command_Palette :: struct {
     command_palette_scroll_index: i32
 }
 
+// word as a token, instead char as a token
+// compares how many words(not chars) you have to rearrange/insert/delete to get the result
 token_level_dl :: proc(s1: []string, s2: []string) -> int {
     rows := len(s1) + 1
     cols := len(s2) + 1
