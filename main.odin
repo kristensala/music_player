@@ -951,7 +951,11 @@ build_library_from_cache :: proc(app_state: ^App_State) -> (ok: bool) {
         } else if strings.has_prefix(line, "file_name=") {
             new_track.file_name = strings.clone_to_cstring(line[len("file_name="):])
         }
+    }
 
+    // add the last track
+    if len(new_track.file_path) > 0 {
+        append(&app_state.tracks, new_track)
     }
 
     create_albums(app_state)
