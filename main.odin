@@ -1502,18 +1502,3 @@ dbus_init :: proc() -> sdbus.Bus {
     return bus
 }
 
-/*
-   @note(ksala): move this to a separate package
-   - ext: musicplayer.mpidx
-   - Magic bit: MPIDX
-   - Library path: home/salakris/Music
-   - Created at time
-   - Track info: path_in_library; title; album; artist; album_artist; duration?
- */
-create_or_update_library_index_file :: proc() {
-    // @todo
-}
-
-read_library_index :: proc() {
-    // @todo
-}
