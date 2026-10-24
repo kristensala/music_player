@@ -4,6 +4,7 @@
 ![Command palette](/images/command_palette.png)
 
 *Development is done on a Linux machine*
+*odin version dev-2026-07-nightly:819fdc7*
 
 ## Info
 - `Ctrl-p` opens command palette
