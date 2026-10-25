@@ -2,6 +2,7 @@ package main
 
 import "core:fmt"
 import "core:sort"
+import "core:os"
 import "core:strings"
 import "core:unicode/utf8"
 import rl "vendor:raylib"
@@ -486,6 +487,13 @@ draw_command_palette :: proc(app_state: ^App_State) {
 
                                 app_state.is_library_path_set = true
                                 app_state.rescan_library = true
+                            }
+                        }
+                        if value.cmd == .Delete_Library_Cache_File {
+                            library_cache_file, err := get_library_cache_path()
+                            if err == nil {
+                                // @todo: handle error
+                                os.remove(library_cache_file)
                             }
                         }
                     }
