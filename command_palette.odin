@@ -12,9 +12,9 @@ TRIGRAM_LENGTH :: 3
 
 Command_Palette :: struct {
     caret: Caret,
-    command_palette_rect: rl.Rectangle,
+    rect: rl.Rectangle,
 
-    command_palette_input: [dynamic]rune,
+    input: [dynamic]rune,
     search_results: [dynamic]Search_Result_Row,
     selected_row_idx: i32,
 
@@ -22,7 +22,9 @@ Command_Palette :: struct {
     artist_trigram_inverted_index: map[string][dynamic]i32,
     //track_trigram_inverted_index: map[string][dynamic]i32,
 
-    command_palette_scroll_index: i32,
+    scroll_index: i32,
+
+    search_logo_texture: rl.Texture2D
 }
 
 // word as a token, instead char as a token
@@ -108,10 +110,10 @@ similarity :: proc(s1: string, s2: string) -> f64 {
 update_search_results :: proc(app_state: ^App_State) {
     app_state.command_palette.selected_row_idx = EMPTY_IDX
 
-    input := utf8.runes_to_string(app_state.command_palette_input[:], context.temp_allocator)
+    input := utf8.runes_to_string(app_state.command_palette.input[:], context.temp_allocator)
 
     if len(input) == 0 {
-        clear(&app_state.search_results)
+        clear(&app_state.command_palette.search_results)
         return
     }
 
@@ -219,8 +221,8 @@ update_search_results :: proc(app_state: ^App_State) {
         return 0
     })
 
-    clear(&app_state.search_results)
-    append(&app_state.search_results, ..results[:])
+    clear(&app_state.command_palette.search_results)
+    append(&app_state.command_palette.search_results, ..results[:])
 }
 
 build_album_trigram_inverted_index :: proc(data: [dynamic]Album) -> map[string][dynamic]i32 {
@@ -286,12 +288,12 @@ build_trigram_from_string_and_add_to_index :: proc(trigram_index: ^map[string][d
 
 close_command_palette :: proc(app_state: ^App_State) {
     app_state.active_viewport = .Main
-    app_state.command_palette_scroll_index = 0
+    app_state.command_palette.scroll_index = 0
     app_state.command_palette.caret.col_idx = 0
     app_state.command_palette.caret.pos.x = 0
     app_state.command_palette.selected_row_idx = EMPTY_IDX
 
-    clear(&app_state.command_palette.command_palette_input)
+    clear(&app_state.command_palette.input)
     clear(&app_state.command_palette.search_results)
 }
 
@@ -319,14 +321,14 @@ handle_command_palette_keyboard_events :: proc(app_state: ^App_State) {
     }
 
     if rl.IsKeyPressed(rl.KeyboardKey.BACKSPACE) {
-        app_state.command_palette_scroll_index = 0
+        app_state.command_palette.scroll_index = 0
 
-        if len(app_state.command_palette_input) > 0 {
-            pop(&app_state.command_palette_input)
+        if len(app_state.command_palette.input) > 0 {
+            pop(&app_state.command_palette.input)
 
             // update caret position
             {
-                input := utf8.runes_to_string(app_state.command_palette_input[:])
+                input := utf8.runes_to_string(app_state.command_palette.input[:])
                 cinput := strings.clone_to_cstring(input)
                 text_measurement := rl.MeasureTextEx(app_state.fonts[FONT_20], cinput, FONT_20, 0)
                 delete(cinput)
@@ -343,7 +345,7 @@ handle_command_palette_keyboard_events :: proc(app_state: ^App_State) {
     // ability to navigate in results with arrow keys
     input := rl.GetCharPressed()
     if input > 0 {
-        app_state.command_palette_scroll_index = 0
+        app_state.command_palette.scroll_index = 0
 
         // update caret position
         {
@@ -352,8 +354,8 @@ handle_command_palette_keyboard_events :: proc(app_state: ^App_State) {
             app_state.command_palette.caret.pos.x += f32(glyph_info.advanceX)
         }
 
-        append(&app_state.command_palette_input, input)
-        if len(app_state.command_palette_input) == 0 do return
+        append(&app_state.command_palette.input, input)
+        if len(app_state.command_palette.input) == 0 do return
 
         update_search_results(app_state)
     }
@@ -382,14 +384,14 @@ draw_command_palette :: proc(app_state: ^App_State) {
                 panel_height + 5
             }, rl.Fade(rl.BLACK, 0.5))
 
-        app_state.command_palette_rect = rl.Rectangle{
+        app_state.command_palette.rect = rl.Rectangle{
             x = f32(rl.GetScreenWidth() / 2 - (width / 2)),
             y = 200,
             height = panel_height,
             width = width
         }
 
-        rl.DrawRectangleRec(app_state.command_palette_rect, rl.WHITE)
+        rl.DrawRectangleRec(app_state.command_palette.rect, rl.WHITE)
     }
 
     // input
@@ -398,33 +400,33 @@ draw_command_palette :: proc(app_state: ^App_State) {
         INPUT_Y_OFFSET :: 20
 
         rl.DrawTexture(
-            app_state.search_logo_texture,
-            i32(app_state.command_palette_rect.x + 20), i32(app_state.command_palette_rect.y + 15),
+            app_state.command_palette.search_logo_texture,
+            i32(app_state.command_palette.rect.x + 20), i32(app_state.command_palette.rect.y + 15),
             rl.WHITE)
 
-        input := utf8.runes_to_string(app_state.command_palette_input[:], context.temp_allocator)
-        cinput := fmt.ctprintf("%s", app_state.command_palette_input)
+        input := utf8.runes_to_string(app_state.command_palette.input[:], context.temp_allocator)
+        cinput := fmt.ctprintf("%s", app_state.command_palette.input)
 
         // Input placeholder
         if len(input) == 0 {
             rl.DrawTextEx(
                 app_state.fonts[FONT_20],
                 "Search or type '/' for commands",
-                {app_state.command_palette_rect.x + INPUT_X_OFFSET, app_state.command_palette_rect.y + INPUT_Y_OFFSET},
+                {app_state.command_palette.rect.x + INPUT_X_OFFSET, app_state.command_palette.rect.y + INPUT_Y_OFFSET},
                 FONT_20, 0, rl.DARKGRAY)
         }
 
         rl.DrawTextEx(
             app_state.fonts[FONT_20],
             cinput,
-            {app_state.command_palette_rect.x + INPUT_X_OFFSET, app_state.command_palette_rect.y + INPUT_Y_OFFSET},
+            {app_state.command_palette.rect.x + INPUT_X_OFFSET, app_state.command_palette.rect.y + INPUT_Y_OFFSET},
             FONT_20, 0, TEXT_COLOR)
 
         // input caret
         {
             app_state.command_palette.caret.rect = rl.Rectangle{
-                x = app_state.command_palette_rect.x + INPUT_X_OFFSET + app_state.command_palette.caret.pos.x, 
-                y = app_state.command_palette_rect.y + INPUT_Y_OFFSET,
+                x = app_state.command_palette.rect.x + INPUT_X_OFFSET + app_state.command_palette.caret.pos.x, 
+                y = app_state.command_palette.rect.y + INPUT_Y_OFFSET,
                 height = 20,
                 width = 2
             }
@@ -433,48 +435,48 @@ draw_command_palette :: proc(app_state: ^App_State) {
         }
 
         rl.DrawLineEx(
-            {app_state.command_palette_rect.x, app_state.command_palette_rect.y + 60},
-            {app_state.command_palette_rect.x + app_state.command_palette_rect.width, app_state.command_palette_rect.y + 60},
+            {app_state.command_palette.rect.x, app_state.command_palette.rect.y + 60},
+            {app_state.command_palette.rect.x + app_state.command_palette.rect.width, app_state.command_palette.rect.y + 60},
             1.0,
             rl.BLACK)
     }
 
     rl.BeginScissorMode(
-        i32(app_state.command_palette_rect.x),
-        i32(app_state.command_palette_rect.y),
-        i32(app_state.command_palette_rect.width),
-        i32(app_state.command_palette_rect.height))
+        i32(app_state.command_palette.rect.x),
+        i32(app_state.command_palette.rect.y),
+        i32(app_state.command_palette.rect.width),
+        i32(app_state.command_palette.rect.height))
 
     // search results
     {
         search_result_offset_y :: 70
 
-        search_content_height := app_state.command_palette_rect.height - search_result_offset_y
+        search_content_height := app_state.command_palette.rect.height - search_result_offset_y
         total_possible_rows_to_render := i32(search_content_height / SEARCH_PANEL_ROW_HEIGHT)
-        last_row_visible := i32(len(app_state.search_results)) < total_possible_rows_to_render ? i32(len(app_state.search_results)) : total_possible_rows_to_render
+        last_row_visible := i32(len(app_state.command_palette.search_results)) < total_possible_rows_to_render ? i32(len(app_state.command_palette.search_results)) : total_possible_rows_to_render
 
-        if last_row_visible < i32(len(app_state.search_results)) {
-            last_row_visible += app_state.command_palette_scroll_index
+        if last_row_visible < i32(len(app_state.command_palette.search_results)) {
+            last_row_visible += app_state.command_palette.scroll_index
         }
 
-        if len(app_state.search_results) > 0 {
+        if len(app_state.command_palette.search_results) > 0 {
             wheel := rl.GetMouseWheelMove()
-            if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.command_palette_rect){
+            if rl.CheckCollisionPointRec(rl.GetMousePosition(), app_state.command_palette.rect){
                 if wheel < 0 { // scroll down
-                    if i32(len(app_state.search_results)) > last_row_visible {
-                        app_state.command_palette_scroll_index += 1
+                    if i32(len(app_state.command_palette.search_results)) > last_row_visible {
+                        app_state.command_palette.scroll_index += 1
                     }
                 } else if wheel > 0 {
-                    if app_state.command_palette_scroll_index > 0 {
-                        app_state.command_palette_scroll_index -= 1
+                    if app_state.command_palette.scroll_index > 0 {
+                        app_state.command_palette.scroll_index -= 1
                     }
                 }
             }
         }
 
-        y := app_state.command_palette_rect.y + search_result_offset_y
-        for value, idx in app_state.command_palette.search_results[app_state.command_palette_scroll_index:last_row_visible] {
-            bounds := rl.Rectangle{app_state.command_palette_rect.x, y, app_state.command_palette_rect.width, 30}
+        y := app_state.command_palette.rect.y + search_result_offset_y
+        for value, idx in app_state.command_palette.search_results[app_state.command_palette.scroll_index:last_row_visible] {
+            bounds := rl.Rectangle{app_state.command_palette.rect.x, y, app_state.command_palette.rect.width, 30}
 
             if i32(idx) == app_state.command_palette.selected_row_idx {
                 rl.DrawRectangleRec(bounds, HIGHLIGHT_COLOR)
@@ -495,51 +497,51 @@ draw_command_palette :: proc(app_state: ^App_State) {
                 rl.DrawTextEx(
                     app_state.fonts[FONT_20],
                     "ARTIST",
-                    {app_state.command_palette_rect.x + 20, txt_y},
+                    {app_state.command_palette.rect.x + 20, txt_y},
                     FONT_20, 0, rl.GRAY)
 
                 rl.DrawTextEx(
                     app_state.fonts[FONT_20],
                     value.artist_name,
-                    {app_state.command_palette_rect.x + 100, txt_y},
+                    {app_state.command_palette.rect.x + 100, txt_y},
                     FONT_20, 0, TEXT_COLOR)
 
                 // @temp: remove later
                 rl.DrawTextEx(
                     app_state.fonts[FONT_20],
                     fmt.ctprintf("%f", value.weight),
-                    {app_state.command_palette_rect.x + 500, txt_y},
+                    {app_state.command_palette.rect.x + 500, txt_y},
                     FONT_20, 0, rl.GRAY)
             } else if value.type == .Album {
                 rl.DrawTextEx(
                     app_state.fonts[FONT_20],
                     "ALBUM",
-                    {app_state.command_palette_rect.x + 20, txt_y},
+                    {app_state.command_palette.rect.x + 20, txt_y},
                     FONT_20, 0, rl.GRAY)
 
                 rl.DrawTextEx(
                     app_state.fonts[FONT_20],
                     value.album.title,
-                    {app_state.command_palette_rect.x + 100, txt_y},
+                    {app_state.command_palette.rect.x + 100, txt_y},
                     FONT_20, 0, TEXT_COLOR)
 
                 // @temp: remove later
                 rl.DrawTextEx(
                     app_state.fonts[FONT_20],
                     fmt.ctprintf("%f", value.weight),
-                    {app_state.command_palette_rect.x + 500, txt_y},
+                    {app_state.command_palette.rect.x + 500, txt_y},
                     FONT_20, 0, rl.GRAY)
             } else if value.type == .Command {
                 rl.DrawTextEx(
                     app_state.fonts[FONT_20],
                     "CMD",
-                    {app_state.command_palette_rect.x + 20, txt_y},
+                    {app_state.command_palette.rect.x + 20, txt_y},
                     FONT_20, 0, rl.GRAY)
 
                 rl.DrawTextEx(
                     app_state.fonts[FONT_20],
                     COMMANDS[value.cmd],
-                    {app_state.command_palette_rect.x + 100, txt_y},
+                    {app_state.command_palette.rect.x + 100, txt_y},
                     FONT_20, 0, TEXT_COLOR)
             }
 

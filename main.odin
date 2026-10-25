@@ -52,23 +52,22 @@ Row :: struct {
 }
 
 Side_Panel :: struct {
-    side_panel_rect: rl.Rectangle,
-    side_panel_scroll_offset: f32,
+    rect: rl.Rectangle,
+    scroll_offset: f32,
 
-    side_panel_options_rect: rl.Rectangle,
-    side_panel_option_content_rect: rl.Rectangle,
+    options_rect: rl.Rectangle,
+    option_content_rect: rl.Rectangle,
 
-    side_panel_options: [2]Side_Panel_Option,
-    selected_side_panel_option: Side_Panel_Option
+    options: [2]Side_Panel_Option,
+    selected_option: Side_Panel_Option
 }
 
 Main_Panel :: struct {
-    main_panel_scroll_bar_rect: rl.Rectangle,
+    rect: rl.Rectangle,
+    scroll_offset: f32,
 
-    main_panel_rect: rl.Rectangle,
-    main_panel_scroll_offset: f32,
-
-    main_panel_header_rect: rl.Rectangle,
+    scroll_bar_rect: rl.Rectangle,
+    header_rect: rl.Rectangle,
 
     rows: [dynamic]^Row,
     rebuild_rows: bool,
@@ -80,7 +79,7 @@ Main_Panel :: struct {
 }
 
 Playback_Controls_Panel :: struct {
-    playback_controls_panel_rect: rl.Rectangle,
+    rect: rl.Rectangle,
 
     play_button_texture: rl.Texture2D,
     pause_button_texture: rl.Texture2D,
@@ -92,7 +91,6 @@ Playback_Controls_Panel :: struct {
     repeat_queue_button_texture: rl.Texture2D,
     shuffle_off_button_texture: rl.Texture2D,
     shuffle_on_button_texture: rl.Texture2D,
-    search_logo_texture: rl.Texture2D
 }
 
 Caret :: struct {
@@ -156,11 +154,11 @@ App_State :: struct {
     playback_mode: Playback_Mode,
     is_shuffle_play: bool,
 
-    using main_panel              : Main_Panel,
-    using side_panel              : Side_Panel,
-    using playback_controls_panel : Playback_Controls_Panel,
-    using create_playlist_modal   : Create_Playlist_Modal,
-    using command_palette         : Command_Palette,
+    main_panel              : Main_Panel,
+    side_panel              : Side_Panel,
+    playback_controls_panel : Playback_Controls_Panel,
+    create_playlist_modal   : Create_Playlist_Modal,
+    command_palette         : Command_Palette,
 
     fonts: map[i32]rl.Font,
 
@@ -250,8 +248,8 @@ init_state :: proc() -> ^App_State {
     app_state.is_library_path_set = false
     app_state.ma_sound = nil
     app_state.audio_state = .Stopped
-    app_state.selected_side_panel_option = .Music
-    app_state.rebuild_rows = true
+    app_state.side_panel.selected_option = .Music
+    app_state.main_panel.rebuild_rows = true
 
     load_assets(app_state)
     if !load_config(app_state) do panic("Failed to load config")
@@ -260,37 +258,37 @@ init_state :: proc() -> ^App_State {
     assert(err == nil)
     app_state.playlist_path = playlist_path*/
 
-    app_state.side_panel_rect = rl.Rectangle{0, 0, 350, 0}
+    app_state.side_panel.rect = rl.Rectangle{0, 0, 350, 0}
 
-    app_state.side_panel_options_rect = rl.Rectangle{
-        x = app_state.side_panel_rect.x,
-        y = app_state.side_panel_rect.y,
+    app_state.side_panel.options_rect = rl.Rectangle{
+        x = app_state.side_panel.rect.x,
+        y = app_state.side_panel.rect.y,
         height = 100,
-        width = app_state.side_panel_rect.width,
+        width = app_state.side_panel.rect.width,
     }
-    app_state.side_panel_option_content_rect = rl.Rectangle{
-        x = app_state.side_panel_rect.x,
-        y = app_state.side_panel_rect.y + app_state.side_panel_options_rect.height,
-        width = app_state.side_panel_rect.width,
+    app_state.side_panel.option_content_rect = rl.Rectangle{
+        x = app_state.side_panel.rect.x,
+        y = app_state.side_panel.rect.y + app_state.side_panel.options_rect.height,
+        width = app_state.side_panel.rect.width,
     }
 
 
-    app_state.main_panel_header_rect = rl.Rectangle{
-        x = app_state.side_panel_rect.width,
+    app_state.main_panel.header_rect = rl.Rectangle{
+        x = app_state.side_panel.rect.width,
         y = 0,
         height = ROW_HEIGHT,
     }
 
-    app_state.main_panel_rect = rl.Rectangle{
-        x = app_state.side_panel_rect.width,
-        y = app_state.main_panel_header_rect.height
+    app_state.main_panel.rect = rl.Rectangle{
+        x = app_state.side_panel.rect.width,
+        y = app_state.main_panel.header_rect.height
     }
 
-    app_state.playback_controls_panel_rect = rl.Rectangle{ x = 0, height = 185 }
+    app_state.playback_controls_panel.rect = rl.Rectangle{ x = 0, height = 185 }
 
-    app_state.artist_column_width = 500
-    app_state.album_column_width = 500
-    app_state.title_column_width = 500
+    app_state.main_panel.artist_column_width = 500
+    app_state.main_panel.album_column_width = 500
+    app_state.main_panel.title_column_width = 500
 
     when ODIN_OS == .Linux {
         app_state.bus = dbus_init()
@@ -371,7 +369,7 @@ main :: proc() {
 
         draw_player(app_state)
 
-        if app_state.is_create_playlist_modal_open {
+        if app_state.create_playlist_modal.is_open {
             draw_create_playlist_modal(app_state)
         }
 
@@ -424,7 +422,7 @@ update_main :: proc(app_state: ^App_State) {
         trigger_notification(app_state)
     }
 
-    if app_state.rebuild_rows {
+    if app_state.main_panel.rebuild_rows {
         build_rows(app_state)
     }
 
@@ -455,7 +453,7 @@ update_main :: proc(app_state: ^App_State) {
         app_state.rebuild_queue = false
     }
 
-    if app_state.is_create_playlist_modal_open {
+    if app_state.create_playlist_modal.is_open {
         app_state.active_viewport = .Create_Playlist_Modal
     }
 }
@@ -479,7 +477,7 @@ player_repeat_one :: proc(app_state: ^App_State) {
 @(private = "file")
 reset_library :: proc(app_state: ^App_State) {
     ma.sound_uninit(app_state.ma_sound)
-    clear(&app_state.rows)
+    clear(&app_state.main_panel.rows)
     clear(&app_state.artist_list)
 
     for entry in app_state.album_art_cache.entries {
@@ -522,18 +520,18 @@ destroy_state :: proc(app_state: ^App_State) {
 
     ma.sound_uninit(app_state.ma_sound)
 
-    for key, value in app_state.artist_trigram_inverted_index {
+    for key, value in app_state.command_palette.artist_trigram_inverted_index {
         delete(value)
         delete(key)
     }
-    delete(app_state.artist_trigram_inverted_index)
+    delete(app_state.command_palette.artist_trigram_inverted_index)
 
-    for key, value in app_state.album_trigram_inverted_index {
+    for key, value in app_state.command_palette.album_trigram_inverted_index {
         delete(value)
         delete(key)
     }
-    delete(app_state.album_trigram_inverted_index)
-    delete(app_state.rows)
+    delete(app_state.command_palette.album_trigram_inverted_index)
+    delete(app_state.main_panel.rows)
 
     for x in app_state.artist_list {
         delete(x.artist_albums)
@@ -562,16 +560,16 @@ destroy_state :: proc(app_state: ^App_State) {
     delete(app_state.tracks)
 
     rl.UnloadTexture(app_state.default_album_cover_texture)
-    rl.UnloadTexture(app_state.play_button_texture)
-    rl.UnloadTexture(app_state.pause_button_texture)
-    rl.UnloadTexture(app_state.next_button_texture)
-    rl.UnloadTexture(app_state.previous_button_texture)
-    rl.UnloadTexture(app_state.repeat_button_texture)
-    rl.UnloadTexture(app_state.repeat_one_button_texture)
-    rl.UnloadTexture(app_state.repeat_queue_button_texture)
-    rl.UnloadTexture(app_state.shuffle_on_button_texture)
-    rl.UnloadTexture(app_state.shuffle_off_button_texture)
-    rl.UnloadTexture(app_state.search_logo_texture)
+    rl.UnloadTexture(app_state.playback_controls_panel.play_button_texture)
+    rl.UnloadTexture(app_state.playback_controls_panel.pause_button_texture)
+    rl.UnloadTexture(app_state.playback_controls_panel.next_button_texture)
+    rl.UnloadTexture(app_state.playback_controls_panel.previous_button_texture)
+    rl.UnloadTexture(app_state.playback_controls_panel.repeat_button_texture)
+    rl.UnloadTexture(app_state.playback_controls_panel.repeat_one_button_texture)
+    rl.UnloadTexture(app_state.playback_controls_panel.repeat_queue_button_texture)
+    rl.UnloadTexture(app_state.playback_controls_panel.shuffle_on_button_texture)
+    rl.UnloadTexture(app_state.playback_controls_panel.shuffle_off_button_texture)
+    rl.UnloadTexture(app_state.command_palette.search_logo_texture)
 
     for key, value in app_state.fonts {
         rl.UnloadFont(value)
@@ -582,11 +580,11 @@ destroy_state :: proc(app_state: ^App_State) {
     delete(app_state.library_path)
 
     //delete(app_state.playlist_path)
-    delete(app_state.create_playlist_modal_input)
+    delete(app_state.create_playlist_modal.input)
     delete(app_state.queue)
 
-    delete(app_state.command_palette_input)
-    delete(app_state.search_results)
+    delete(app_state.command_palette.input)
+    delete(app_state.command_palette.search_results)
     delete(app_state.config_path)
 
     free(app_state)
@@ -618,7 +616,7 @@ load_assets :: proc(app_state: ^App_State) {
     {
         play_btn_img := rl.LoadImageFromMemory(".png", raw_data(PLAY_IMG_DATA), i32(len(PLAY_IMG_DATA)))
         rl.ImageResize(&play_btn_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
-        app_state.play_button_texture = rl.LoadTextureFromImage(play_btn_img)
+        app_state.playback_controls_panel.play_button_texture = rl.LoadTextureFromImage(play_btn_img)
         rl.UnloadImage(play_btn_img)
     }
 
@@ -626,7 +624,7 @@ load_assets :: proc(app_state: ^App_State) {
     {
         pause_btn_img := rl.LoadImageFromMemory(".png", raw_data(PAUSE_IMG_DATA), i32(len(PAUSE_IMG_DATA)))
         rl.ImageResize(&pause_btn_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
-        app_state.pause_button_texture =  rl.LoadTextureFromImage(pause_btn_img)
+        app_state.playback_controls_panel.pause_button_texture =  rl.LoadTextureFromImage(pause_btn_img)
         rl.UnloadImage(pause_btn_img)
     }
 
@@ -634,7 +632,7 @@ load_assets :: proc(app_state: ^App_State) {
     {
         next_btn_img := rl.LoadImageFromMemory(".png", raw_data(NEXT_IMG_DATA), i32(len(NEXT_IMG_DATA)))
         rl.ImageResize(&next_btn_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
-        app_state.next_button_texture =  rl.LoadTextureFromImage(next_btn_img)
+        app_state.playback_controls_panel.next_button_texture =  rl.LoadTextureFromImage(next_btn_img)
         rl.UnloadImage(next_btn_img)
     }
 
@@ -642,7 +640,7 @@ load_assets :: proc(app_state: ^App_State) {
     {
         prev_btn_img := rl.LoadImageFromMemory(".png", raw_data(PREVIOUS_IMG_DATA), i32(len(PREVIOUS_IMG_DATA)))
         rl.ImageResize(&prev_btn_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
-        app_state.previous_button_texture =  rl.LoadTextureFromImage(prev_btn_img)
+        app_state.playback_controls_panel.previous_button_texture =  rl.LoadTextureFromImage(prev_btn_img)
         rl.UnloadImage(prev_btn_img)
     }
 
@@ -650,7 +648,7 @@ load_assets :: proc(app_state: ^App_State) {
     {
         repeat_btn_img := rl.LoadImageFromMemory(".png", raw_data(REPEAT_IMG_DATA), i32(len(REPEAT_IMG_DATA)))
         rl.ImageResize(&repeat_btn_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
-        app_state.repeat_button_texture =  rl.LoadTextureFromImage(repeat_btn_img)
+        app_state.playback_controls_panel.repeat_button_texture =  rl.LoadTextureFromImage(repeat_btn_img)
         rl.UnloadImage(repeat_btn_img)
     }
 
@@ -658,7 +656,7 @@ load_assets :: proc(app_state: ^App_State) {
     {
         repeat_one_btn_img := rl.LoadImageFromMemory(".png", raw_data(REPEAT_ONE_IMG_DATA), i32(len(REPEAT_ONE_IMG_DATA)))
         rl.ImageResize(&repeat_one_btn_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
-        app_state.repeat_one_button_texture =  rl.LoadTextureFromImage(repeat_one_btn_img)
+        app_state.playback_controls_panel.repeat_one_button_texture =  rl.LoadTextureFromImage(repeat_one_btn_img)
         rl.UnloadImage(repeat_one_btn_img)
     }
 
@@ -666,7 +664,7 @@ load_assets :: proc(app_state: ^App_State) {
     {
         repeat_queue_img := rl.LoadImageFromMemory(".png", raw_data(REPEAT_QUEUE_IMG_DATA), i32(len(REPEAT_QUEUE_IMG_DATA)))
         rl.ImageResize(&repeat_queue_img, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
-        app_state.repeat_queue_button_texture =  rl.LoadTextureFromImage(repeat_queue_img)
+        app_state.playback_controls_panel.repeat_queue_button_texture =  rl.LoadTextureFromImage(repeat_queue_img)
         rl.UnloadImage(repeat_queue_img)
     }
 
@@ -674,21 +672,21 @@ load_assets :: proc(app_state: ^App_State) {
     {
         shuffle_queue := rl.LoadImageFromMemory(".png", raw_data(SHUFFLE_IMG_DATA), i32(len(SHUFFLE_IMG_DATA)))
         rl.ImageResize(&shuffle_queue, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
-        app_state.shuffle_off_button_texture =  rl.LoadTextureFromImage(shuffle_queue)
+        app_state.playback_controls_panel.shuffle_off_button_texture =  rl.LoadTextureFromImage(shuffle_queue)
         rl.UnloadImage(shuffle_queue)
     }
     // Shuffle on
     {
         shuffle_queue := rl.LoadImageFromMemory(".png", raw_data(SHUFFLE_ON_IMG_DATA), i32(len(SHUFFLE_ON_IMG_DATA)))
         rl.ImageResize(&shuffle_queue, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
-        app_state.shuffle_on_button_texture =  rl.LoadTextureFromImage(shuffle_queue)
+        app_state.playback_controls_panel.shuffle_on_button_texture =  rl.LoadTextureFromImage(shuffle_queue)
         rl.UnloadImage(shuffle_queue)
     }
     // Search logo
     {
         search_logo := rl.LoadImageFromMemory(".png", raw_data(SEARCH_IMG_DATA), i32(len(SEARCH_IMG_DATA)))
         rl.ImageResize(&search_logo, PLAYBACK_BUTTON_SIZE, PLAYBACK_BUTTON_SIZE)
-        app_state.search_logo_texture =  rl.LoadTextureFromImage(search_logo)
+        app_state.command_palette.search_logo_texture =  rl.LoadTextureFromImage(search_logo)
         rl.UnloadImage(search_logo)
     }
 }
@@ -863,8 +861,8 @@ init_library :: proc(app_state: ^App_State) {
         }
     }
 
-    app_state.artist_trigram_inverted_index = build_artist_trigram_inverted_index(app_state.artist_list)
-    app_state.album_trigram_inverted_index = build_album_trigram_inverted_index(app_state.albums)
+    app_state.command_palette.artist_trigram_inverted_index = build_artist_trigram_inverted_index(app_state.artist_list)
+    app_state.command_palette.album_trigram_inverted_index = build_album_trigram_inverted_index(app_state.albums)
 }
 
 @(require_results)
@@ -1136,9 +1134,9 @@ find_album_cover :: proc(dir: string) -> cstring {
 @(private = "file")
 build_rows :: proc(app_state: ^App_State) {
     // @todo: do not clear until new rows are built
-    clear(&app_state.rows)
-    app_state.rebuild_rows = false
-    app_state.main_panel_scroll_offset = 0
+    clear(&app_state.main_panel.rows)
+    app_state.main_panel.rebuild_rows = false
+    app_state.main_panel.scroll_offset = 0
 
     pos_y : i32 = MAIN_PANEL_PADDING_TOP
     for &album, album_idx in app_state.albums {
@@ -1156,7 +1154,7 @@ build_rows :: proc(app_state: ^App_State) {
         album_title_row.pos_y = pos_y
         pos_y += ROW_HEIGHT
 
-        append(&app_state.rows, album_title_row)
+        append(&app_state.main_panel.rows, album_title_row)
 
         album_content_height : i32 = 0
         for &track in album.tracks {
@@ -1168,7 +1166,7 @@ build_rows :: proc(app_state: ^App_State) {
 
             pos_y += ROW_HEIGHT
 
-            append(&app_state.rows, track_row)
+            append(&app_state.main_panel.rows, track_row)
 
             //content_height = pos_y + ROW_HEIGHT
             album_content_height += ROW_HEIGHT
@@ -1184,16 +1182,16 @@ build_rows :: proc(app_state: ^App_State) {
                 album_content_height += ROW_HEIGHT
                 pos_y += ROW_HEIGHT
 
-                append(&app_state.rows, dummy_row)
+                append(&app_state.main_panel.rows, dummy_row)
                 if album_content_height >= ALBUM_COVER_SIZE do break
             }
         }
 
     }
 
-    app_state.content_max_height = pos_y
+    app_state.main_panel.content_max_height = pos_y
 
-    assert(app_state.rebuild_rows == false)
+    assert(app_state.main_panel.rebuild_rows == false)
 }
 
 @(private = "file")
@@ -1374,7 +1372,7 @@ process_album_art_queue :: proc(app_state: ^App_State) {
 reset_filters :: proc(app_state: ^App_State) {
     app_state.current_selected_artist = nil
     app_state.selected_album = nil
-    app_state.rebuild_rows = true
+    app_state.main_panel.rebuild_rows = true
 }
 
 // Remove stale cache entries
@@ -1454,16 +1452,16 @@ get_album_cover_texture :: proc(app_state: ^App_State, album_idx: Album_Idx) -> 
 // Update layout after window has been drawn or resized
 @(private = "file")
 update_layout :: proc(app_state: ^App_State) {
-    app_state.side_panel_rect.height = app_state.main_panel_rect.height + app_state.main_panel_rect.y // @explain
-    app_state.side_panel_option_content_rect.height = app_state.side_panel_rect.height - app_state.side_panel_options_rect.height
+    app_state.side_panel.rect.height = app_state.main_panel.rect.height + app_state.main_panel.rect.y // @explain
+    app_state.side_panel.option_content_rect.height = app_state.side_panel.rect.height - app_state.side_panel.options_rect.height
 
-    app_state.main_panel_rect.height = f32(rl.GetScreenHeight()) - app_state.playback_controls_panel_rect.height
-    app_state.main_panel_rect.width = f32(rl.GetScreenWidth()) - app_state.side_panel_rect.width
+    app_state.main_panel.rect.height = f32(rl.GetScreenHeight()) - app_state.playback_controls_panel.rect.height
+    app_state.main_panel.rect.width = f32(rl.GetScreenWidth()) - app_state.side_panel.rect.width
 
-    app_state.main_panel_header_rect.width = f32(rl.GetScreenWidth()) - app_state.side_panel_rect.width
+    app_state.main_panel.header_rect.width = f32(rl.GetScreenWidth()) - app_state.side_panel.rect.width
 
-    app_state.playback_controls_panel_rect.width = f32(rl.GetScreenWidth())
-    app_state.playback_controls_panel_rect.y = app_state.main_panel_rect.height
+    app_state.playback_controls_panel.rect.width = f32(rl.GetScreenWidth())
+    app_state.playback_controls_panel.rect.y = app_state.main_panel.rect.height
 }
 
 @(private = "file")

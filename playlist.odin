@@ -19,10 +19,10 @@ Playlist :: struct {
 }
 
 Create_Playlist_Modal :: struct {
-    create_playlist_modal_rect: rl.Rectangle,
-    create_playlist_modal_input: [dynamic]rune,
+    rect: rl.Rectangle,
+    input: [dynamic]rune,
 
-    is_create_playlist_modal_open: bool
+    is_open: bool
 }
 
 init_playlists_from_playlist_files :: proc(app_state: ^App_State) {
@@ -184,17 +184,17 @@ draw_create_playlist_modal :: proc(app_state: ^App_State) {
 
     rl.DrawRectangleRec(rl.Rectangle{0, 0, f32(rl.GetScreenWidth()), f32(rl.GetScreenHeight())}, rl.Fade(rl.LIGHTGRAY, 0.5))
 
-    app_state.create_playlist_modal_rect = rl.Rectangle{
+    app_state.create_playlist_modal.rect = rl.Rectangle{
         x = f32(rl.GetScreenWidth() / 2 - 150),
         y = 200,
         height = 100,
         width = 300
     }
-    rl.DrawRectangleRec(app_state.create_playlist_modal_rect, rl.WHITE)
+    rl.DrawRectangleRec(app_state.create_playlist_modal.rect, rl.WHITE)
 
     input_bounds := rl.Rectangle{
-        x = app_state.create_playlist_modal_rect.x + (app_state.create_playlist_modal_rect.width / 2) - 100,
-        y = app_state.create_playlist_modal_rect.y + 10,
+        x = app_state.create_playlist_modal.rect.x + (app_state.create_playlist_modal.rect.width / 2) - 100,
+        y = app_state.create_playlist_modal.rect.y + 10,
         height = 30,
         width = 200
     }
@@ -207,13 +207,13 @@ handle_create_playlist_modal_keyboard_events :: proc(app_state: ^App_State) {
 
     input := rl.GetCharPressed()
     if input > 0 {
-        append(&app_state.create_playlist_modal_input, input)
+        append(&app_state.create_playlist_modal.input, input)
     }
 
     if rl.IsKeyPressed(rl.KeyboardKey.ESCAPE) {
-        clear(&app_state.create_playlist_modal_input)
+        clear(&app_state.create_playlist_modal.input)
 
-        app_state.is_create_playlist_modal_open = false
+        app_state.create_playlist_modal.is_open = false
         app_state.active_viewport = .Main
 
     }
