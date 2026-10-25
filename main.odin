@@ -121,7 +121,7 @@ Search_Result_Row :: struct {
 Active_Viewport :: enum i32 {
     Main                  = 0,
     Create_Playlist_Modal = 1,
-    Search                = 2
+    Command_Palette       = 2
 }
 
 Playback_Mode :: enum i32 {
@@ -160,6 +160,7 @@ App_State :: struct {
     create_playlist_modal   : Create_Playlist_Modal,
     command_palette         : Command_Palette,
 
+    // key = font size
     fonts: map[i32]rl.Font,
 
     config_path         : cstring,
@@ -373,7 +374,7 @@ main :: proc() {
             draw_create_playlist_modal(app_state)
         }
 
-        if app_state.active_viewport == .Search {
+        if app_state.active_viewport == .Command_Palette {
             draw_command_palette(app_state)
         }
 

@@ -874,7 +874,7 @@ handle_keyboard_events :: proc(app_state: ^App_State) {
         handle_main_keyboard_events(app_state)
     case .Create_Playlist_Modal:
         handle_create_playlist_modal_keyboard_events(app_state)
-    case .Search:
+    case .Command_Palette:
         handle_command_palette_keyboard_events(app_state)
     }
 }
@@ -980,7 +980,7 @@ handle_main_keyboard_events :: proc(app_state: ^App_State) {
 
     if rl.IsKeyDown(rl.KeyboardKey.LEFT_CONTROL) {
         if rl.IsKeyPressed(rl.KeyboardKey.P) {
-            app_state.active_viewport = .Search
+            app_state.active_viewport = .Command_Palette
         }
     }
 
