@@ -133,13 +133,13 @@ Playback_Mode :: enum i32 {
 }
 
 Command :: enum {
-    Set_Library,
+    Set_Library_Path,
     Create_Playlist,
     Delete_Library_Cache_File
 }
 
 COMMANDS := map[Command]cstring{
-    .Set_Library = "Change library path",
+    .Set_Library_Path = "Change library path",
     .Create_Playlist = "Create a new playlist",
     .Delete_Library_Cache_File = "Delete library cache"
 }

@@ -16,12 +16,13 @@ Command_Palette :: struct {
 
     command_palette_input: [dynamic]rune,
     search_results: [dynamic]Search_Result_Row,
+    selected_row_idx: i32,
 
     album_trigram_inverted_index: map[string][dynamic]i32,
     artist_trigram_inverted_index: map[string][dynamic]i32,
     //track_trigram_inverted_index: map[string][dynamic]i32,
 
-    command_palette_scroll_index: i32
+    command_palette_scroll_index: i32,
 }
 
 // word as a token, instead char as a token
@@ -105,6 +106,8 @@ similarity :: proc(s1: string, s2: string) -> f64 {
 }
 
 update_search_results :: proc(app_state: ^App_State) {
+    app_state.command_palette.selected_row_idx = EMPTY_IDX
+
     input := utf8.runes_to_string(app_state.command_palette_input[:], context.temp_allocator)
 
     if len(input) == 0 {
@@ -286,6 +289,7 @@ close_command_palette :: proc(app_state: ^App_State) {
     app_state.command_palette_scroll_index = 0
     app_state.command_palette.caret.col_idx = 0
     app_state.command_palette.caret.pos.x = 0
+    app_state.command_palette.selected_row_idx = EMPTY_IDX
 
     clear(&app_state.command_palette.command_palette_input)
     clear(&app_state.command_palette.search_results)
@@ -294,6 +298,24 @@ close_command_palette :: proc(app_state: ^App_State) {
 handle_command_palette_keyboard_events :: proc(app_state: ^App_State) {
     if rl.IsKeyPressed(rl.KeyboardKey.ESCAPE) {
         close_command_palette(app_state)
+    }
+
+    if rl.IsKeyPressed(rl.KeyboardKey.DOWN) {
+        if app_state.command_palette.selected_row_idx < i32(len(app_state.command_palette.search_results)) - 1 {
+            app_state.command_palette.selected_row_idx += 1
+        }
+    }
+    if rl.IsKeyPressed(rl.KeyboardKey.UP) {
+        if app_state.command_palette.selected_row_idx > 0 {
+            app_state.command_palette.selected_row_idx -= 1
+        }
+    }
+
+    if rl.IsKeyPressed(rl.KeyboardKey.ENTER) {
+        if app_state.command_palette.selected_row_idx != EMPTY_IDX {
+            value := app_state.command_palette.search_results[app_state.command_palette.selected_row_idx]
+            handle_search_selection(app_state, value)
+        }
     }
 
     if rl.IsKeyPressed(rl.KeyboardKey.BACKSPACE) {
@@ -451,53 +473,19 @@ draw_command_palette :: proc(app_state: ^App_State) {
         }
 
         y := app_state.command_palette_rect.y + search_result_offset_y
-        for value in app_state.search_results[app_state.command_palette_scroll_index:last_row_visible] {
+        for value, idx in app_state.command_palette.search_results[app_state.command_palette_scroll_index:last_row_visible] {
             bounds := rl.Rectangle{app_state.command_palette_rect.x, y, app_state.command_palette_rect.width, 30}
+
+            if i32(idx) == app_state.command_palette.selected_row_idx {
+                rl.DrawRectangleRec(bounds, HIGHLIGHT_COLOR)
+            }
 
             if rl.CheckCollisionPointRec(rl.GetMousePosition(), bounds) {
                 // highlight
                 rl.DrawRectangleRec(bounds, HIGHLIGHT_COLOR)
 
                 if rl.IsMouseButtonPressed(rl.MouseButton.LEFT) {
-                    if value.type == .Artist {
-                        if string(value.artist_name) == string(app_state.current_selected_artist) {
-                            close_command_palette(app_state)
-                            return
-                        }
-
-                        reset_filters(app_state)
-                        app_state.current_selected_artist = value.artist_name
-                    } else if value.type == .Album {
-                        if value.album == app_state.selected_album {
-                            close_command_palette(app_state)
-                            return
-                        }
-
-                        reset_filters(app_state)
-                        app_state.selected_album = value.album
-                    } else if value.type == .Command {
-                        if value.cmd == .Set_Library {
-                            // library path change
-                            out_path : cstring
-                            res := nfd.PickFolderU8(&out_path, "")
-                            if res == .Okay {
-                                app_state.library_path = strings.clone_to_cstring(string(out_path))
-                                // @todo: this blocks drawing -> should not block
-                                nfd.FreePathN(out_path)
-
-                                app_state.is_library_path_set = true
-                                app_state.rescan_library = true
-                            }
-                        }
-                        if value.cmd == .Delete_Library_Cache_File {
-                            library_cache_file, err := get_library_cache_path()
-                            if err == nil {
-                                // @todo: handle error
-                                os.remove(library_cache_file)
-                            }
-                        }
-                    }
-                    close_command_palette(app_state)
+                    handle_search_selection(app_state, value)
                 }
             }
 
@@ -560,4 +548,46 @@ draw_command_palette :: proc(app_state: ^App_State) {
     }
 
     rl.EndScissorMode()
+}
+
+handle_search_selection :: proc(app_state: ^App_State, value: Search_Result_Row) {
+    if value.type == .Artist {
+        if string(value.artist_name) == string(app_state.current_selected_artist) {
+            close_command_palette(app_state)
+            return
+        }
+
+        reset_filters(app_state)
+        app_state.current_selected_artist = value.artist_name
+    } else if value.type == .Album {
+        if value.album == app_state.selected_album {
+            close_command_palette(app_state)
+            return
+        }
+
+        reset_filters(app_state)
+        app_state.selected_album = value.album
+    } else if value.type == .Command {
+        if value.cmd == .Set_Library_Path {
+            // library path change
+            out_path : cstring
+            res := nfd.PickFolderU8(&out_path, "")
+            if res == .Okay {
+                app_state.library_path = strings.clone_to_cstring(string(out_path))
+                // @todo: this blocks drawing -> should not block
+                nfd.FreePathN(out_path)
+
+                app_state.is_library_path_set = true
+                app_state.rescan_library = true
+            }
+        }
+        if value.cmd == .Delete_Library_Cache_File {
+            library_cache_file, err := get_library_cache_path()
+            if err == nil {
+                // @todo: handle error
+                os.remove(library_cache_file)
+            }
+        }
+    }
+    close_command_palette(app_state)
 }
