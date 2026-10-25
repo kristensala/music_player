@@ -35,7 +35,7 @@ SEARCH_IMG_DATA :: #load("./assets/search.png")
 FONT_20                    :: 20
 FONT_30                    :: 30
 
-CACHE_MAX_CAPACITY         :: 15
+CACHE_MAX_CAPACITY         :: 30
 CONFIG_LIBRARY_PATH_PREFIX : string = "LIBRARY_PATH="
 EMPTY_IDX :: -1
 
@@ -333,7 +333,7 @@ main :: proc() {
     defer nfd.Quit()
 
     app_state := init_state()
-    scanner := thread.create_and_start_with_poly_data(app_state, worker)
+    scanner := thread.create_and_start_with_poly_data(app_state, init_library_worker)
 
     // @nocheckin: testing
     {
@@ -395,7 +395,7 @@ main :: proc() {
     }
 }
 
-worker :: proc(app_state: ^App_State) {
+init_library_worker :: proc(app_state: ^App_State) {
     sync.mutex_lock(&app_state.mutex)
     app_state.scanning = true
     sync.mutex_unlock(&app_state.mutex)
@@ -1327,7 +1327,7 @@ process_album_art_queue :: proc(app_state: ^App_State) {
                 free(oldest_cache_entry)
 
                 img := rl.LoadImage(album.cover_art_path)
-                rl.ImageResize(&img, 200, 200)
+                rl.ImageResize(&img, ALBUM_COVER_SIZE, ALBUM_COVER_SIZE)
                 texture := rl.LoadTextureFromImage(img)
                 rl.UnloadImage(img)
 
@@ -1341,7 +1341,7 @@ process_album_art_queue :: proc(app_state: ^App_State) {
                 app_state.album_art_cache.count += 1
             } else {
                 img := rl.LoadImage(album.cover_art_path)
-                rl.ImageResize(&img, 200, 200)
+                rl.ImageResize(&img, ALBUM_COVER_SIZE, ALBUM_COVER_SIZE)
                 texture := rl.LoadTextureFromImage(img)
                 rl.UnloadImage(img)
 
@@ -1380,7 +1380,7 @@ reset_filters :: proc(app_state: ^App_State) {
 // If entry has not been accessed in the last 1000 frame, remove it
 @(private = "file")
 invalidate_cache :: proc(app_state: ^App_State) {
-    stale_frame_count : u64 = 1000
+    stale_frame_count :: 1000
 
     entries_to_remove: [dynamic]i32
     defer delete(entries_to_remove)
